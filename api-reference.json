@@ -4,7 +4,8 @@
     "description": "Australian Commercial Real Estate & HVAC Building Management System API",
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
-    "database": "MongoDB Atlas - fulqrom-hub collection"
+    "database": "MongoDB Atlas - fulqrom-hub collection",
+    "lastUpdated": "2025-09-24T07:07:07.052Z"
   },
   "endpoints": {
     "health": {
@@ -33,7 +34,8 @@
           "buildings": "/api/buildings",
           "floors": "/api/floors",
           "assets": "/api/assets",
-          "building_tenants": "/api/building_tenants"
+          "building_tenants": "/api/building-tenants",
+          "documents": "/api/documents"
         }
       }
     },
@@ -41,37 +43,25 @@
       "list": {
         "method": "GET",
         "path": "/api/customers",
-        "description": "Get all customers with pagination and filtering",
-        "queryParams": {
-          "page": "integer (default: 1) - Page number",
-          "limit": "integer (default: 10, max: 100) - Items per page",
-          "is_active": "boolean - Filter by active status",
-          "state": "string - Australian state (NSW, VIC, QLD, WA, SA, TAS, ACT, NT)",
-          "search": "string (max: 200) - Search in organisation names",
-          "sortBy": "string (organisation.organisation_name|createdAt|updatedAt) - Sort field",
-          "sortOrder": "string (asc|desc) - Sort direction"
-        },
+        "description": "Get all customers",
+        "status": "IMPLEMENTED",
         "response": {
           "success": true,
-          "count": 8,
-          "totalCount": 8,
-          "totalPages": 1,
-          "currentPage": 1,
-          "hasNextPage": false,
-          "hasPrevPage": false,
-          "data": "Array of customer objects (see customer structure below)"
+          "count": "number",
+          "data": "Array of customer objects"
         }
       },
       "getById": {
         "method": "GET",
         "path": "/api/customers/:id",
         "description": "Get single customer by ObjectID",
+        "status": "IMPLEMENTED",
         "params": {
           "id": "MongoDB ObjectID (24-character hex string)"
         },
         "response": {
           "success": true,
-          "data": "Single customer object (see customer structure below)"
+          "data": "Single customer object"
         }
       },
       "create": {
@@ -81,7 +71,7 @@
         "status": "IMPLEMENTED",
         "requestBody": {
           "organisation": {
-            "organisation_name": "string (required)",
+            "organisation_name": "string (optional)",
             "email_domain": "string (optional)",
             "logo_url": "string (optional)",
             "notes": "string (optional)",
@@ -98,13 +88,13 @@
             "street": "string (optional)",
             "suburb": "string (optional)",
             "state": "string (optional)",
-            "postcode": "string (optional, 4 digits)"
+            "postcode": "string (optional)"
           },
           "postal_address": {
             "street": "string (optional)",
             "suburb": "string (optional)",
             "state": "string (optional)",
-            "postcode": "string (optional, 4 digits)"
+            "postcode": "string (optional)"
           },
           "contact_methods": "array (optional)",
           "metadata": "array (optional)",
@@ -119,20 +109,16 @@
       "update": {
         "method": "PUT",
         "path": "/api/customers/:id",
-        "description": "Update existing customer (PENDING IMPLEMENTATION)",
-        "status": "NOT_IMPLEMENTED",
+        "description": "Update existing customer",
+        "status": "IMPLEMENTED",
         "params": {
           "id": "MongoDB ObjectID (24-character hex string)"
         },
-        "requestBody": "Partial customer object"
-      },
-      "delete": {
-        "method": "DELETE",
-        "path": "/api/customers/:id",
-        "description": "Delete customer (PENDING IMPLEMENTATION)",
-        "status": "NOT_IMPLEMENTED",
-        "params": {
-          "id": "MongoDB ObjectID (24-character hex string)"
+        "requestBody": "Partial customer object",
+        "response": {
+          "success": true,
+          "message": "Customer updated successfully",
+          "data": "Updated customer object"
         }
       }
     },
@@ -140,120 +126,428 @@
       "list": {
         "method": "GET",
         "path": "/api/sites",
-        "description": "Get all sites",
+        "description": "Get all sites with filtering",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "status": "Filter by site status",
+          "manager": "Filter by manager name (case insensitive)",
+          "address": "Filter by address (case insensitive)",
+          "is_active": "boolean - Filter by active status"
+        },
         "response": {
           "success": true,
           "count": "number",
-          "data": "Array of site objects"
+          "data": "Array of site objects with populated customer info"
         }
       },
       "getById": {
         "method": "GET",
         "path": "/api/sites/:id",
-        "description": "Get single site by ID"
+        "description": "Get single site by ID",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": "Single site object with populated customer info"
+        }
       },
       "create": {
         "method": "POST",
         "path": "/api/sites",
-        "description": "Create new site"
+        "description": "Create new site",
+        "status": "IMPLEMENTED",
+        "requestBody": {
+          "site_name": "string",
+          "address": "string",
+          "status": "string (Active, Under Construction, Planning, Inactive)",
+          "customer_id": "ObjectId (reference to Customer)",
+          "manager": {
+            "name": "string",
+            "email": "string",
+            "phone": "string",
+            "title": "string"
+          },
+          "metadata": "array (optional)",
+          "is_active": "boolean (default: true)"
+        },
+        "response": {
+          "success": true,
+          "message": "Site created successfully",
+          "data": "Created site object"
+        }
       }
     },
     "buildings": {
       "list": {
         "method": "GET",
         "path": "/api/buildings",
-        "description": "Get all buildings"
+        "description": "Get all buildings with filtering and summary statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "category": "Filter by building category",
+          "building_type": "Filter by building type",
+          "building_grade": "Filter by building grade",
+          "status": "Filter by building status",
+          "is_active": "boolean - Filter by active status"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_buildings": "number",
+            "active_buildings": "number",
+            "under_construction": "number",
+            "total_floors": "number",
+            "total_assets": "number",
+            "avg_occupancy": "number"
+          },
+          "data": "Array of building objects with populated references"
+        }
       },
       "getById": {
         "method": "GET",
         "path": "/api/buildings/:id",
-        "description": "Get single building by ID"
+        "description": "Get single building by ID",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": "Single building object with populated references"
+        }
       },
       "create": {
         "method": "POST",
         "path": "/api/buildings",
-        "description": "Create new building"
+        "description": "Create new building",
+        "status": "IMPLEMENTED",
+        "requestBody": {
+          "building_name": "string",
+          "building_code": "string",
+          "site_id": "ObjectId (reference to Site)",
+          "customer_id": "ObjectId (reference to Customer)",
+          "building_manager_id": "ObjectId (reference to User)",
+          "category": "string (Retail, Office, Industrial, Mixed Use)",
+          "building_type": "string (Industrial, Commercial, Residential)",
+          "building_grade": "string (Grade A, Grade B, Grade C, Premium)",
+          "primary_use": "string",
+          "number_of_floors": "number",
+          "energy_rating": "number (0-100)",
+          "status": "string (Active, Inactive, Under Construction, Planning)",
+          "metadata": "array (optional)",
+          "is_active": "boolean (default: true)"
+        },
+        "response": {
+          "success": true,
+          "message": "Building created successfully",
+          "data": "Created building object with populated references"
+        }
       },
       "stats": {
         "method": "GET",
         "path": "/api/buildings/summary/stats",
-        "description": "Get building statistics"
+        "description": "Get building summary statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID"
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "totalBuildings": "number",
+            "activeBuildings": "number",
+            "underConstruction": "number",
+            "totalFloors": "number",
+            "totalAssets": "number",
+            "avgOccupancy": "number",
+            "avgEnergyRating": "number"
+          }
+        }
       },
       "byCategory": {
         "method": "GET",
         "path": "/api/buildings/by-category",
-        "description": "Group buildings by category"
+        "description": "Group buildings by category",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID"
+        },
+        "response": {
+          "success": true,
+          "data": "Array of category statistics with count, activeCount, avgOccupancy, totalAssets"
+        }
       }
     },
     "floors": {
       "list": {
         "method": "GET",
         "path": "/api/floors",
-        "description": "Get all floors"
+        "description": "Get all floors with filtering and summary statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID",
+          "floor_type": "Filter by floor type",
+          "occupancy_type": "Filter by occupancy type",
+          "access_control": "Filter by access control",
+          "status": "Filter by floor status",
+          "is_active": "boolean - Filter by active status"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_floors": "number",
+            "active_floors": "number",
+            "under_construction": "number",
+            "total_assets": "number",
+            "total_area": "number",
+            "avg_occupancy": "number"
+          },
+          "data": "Array of floor objects with populated references"
+        }
       },
       "getById": {
         "method": "GET",
         "path": "/api/floors/:id",
-        "description": "Get single floor by ID"
+        "description": "Get single floor by ID",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": "Single floor object with populated references"
+        }
       },
       "create": {
         "method": "POST",
         "path": "/api/floors",
-        "description": "Create new floor"
+        "description": "Create new floor",
+        "status": "IMPLEMENTED",
+        "requestBody": {
+          "site_id": "ObjectId (reference to Site)",
+          "building_id": "ObjectId (reference to Building)",
+          "customer_id": "ObjectId (reference to Customer)",
+          "floor_name": "string",
+          "floor_number": "string",
+          "floor_type": "string (Office, Lobby, Laboratory, Storage, Meeting, Executive)",
+          "occupancy_type": "string (Single Tenant, Multi Tenant, Mixed Use)",
+          "access_control": "string (Public, Private, Restricted, Secure)",
+          "floor_area": "number (square meters)",
+          "ceiling_height": "number (meters)",
+          "max_occupancy": "number",
+          "hvac_zones": "number",
+          "fire_compartment_id": "string",
+          "status": "string (Active, Under Construction, Planning, Inactive)",
+          "metadata": "array (optional)",
+          "is_active": "boolean (default: true)"
+        },
+        "response": {
+          "success": true,
+          "message": "Floor created successfully",
+          "data": "Created floor object with populated references"
+        }
       },
       "update": {
         "method": "PUT",
         "path": "/api/floors/:id",
-        "description": "Update floor"
+        "description": "Update floor",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": "Partial floor object",
+        "response": {
+          "success": true,
+          "message": "Floor updated successfully",
+          "data": "Updated floor object"
+        }
       },
       "byBuilding": {
         "method": "GET",
         "path": "/api/floors/by-building/:buildingId",
-        "description": "Get floors by building"
+        "description": "Get floors by building",
+        "status": "IMPLEMENTED",
+        "params": {
+          "buildingId": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_floors": "number",
+            "active_floors": "number",
+            "total_area": "number",
+            "total_assets": "number",
+            "avg_occupancy": "number"
+          },
+          "data": "Array of floor objects for the building"
+        }
       },
       "stats": {
         "method": "GET",
         "path": "/api/floors/summary/stats",
-        "description": "Get floor statistics"
+        "description": "Get floor statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID"
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "totalFloors": "number",
+            "activeFloors": "number",
+            "underConstruction": "number",
+            "totalArea": "number",
+            "totalAssets": "number",
+            "avgOccupancy": "number",
+            "avgCeilingHeight": "number"
+          }
+        }
       },
       "byType": {
         "method": "GET",
         "path": "/api/floors/by-type",
-        "description": "Group floors by type"
+        "description": "Group floors by type",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID"
+        },
+        "response": {
+          "success": true,
+          "data": "Array of floor type statistics"
+        }
       }
     },
     "assets": {
       "list": {
         "method": "GET",
         "path": "/api/assets",
-        "description": "Get all assets"
+        "description": "Get all assets with filtering and summary statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID",
+          "category": "Filter by asset category",
+          "status": "Filter by asset status",
+          "condition": "Filter by asset condition",
+          "manufacturer": "Filter by manufacturer (case insensitive)",
+          "warranty_expired": "boolean - Filter by warranty expiry status",
+          "is_active": "boolean - Filter by active status"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_assets": "number",
+            "operational": "number",
+            "warranty_expiring": "number",
+            "needs_maintenance": "number"
+          },
+          "data": "Array of asset objects with populated references"
+        }
       },
       "getById": {
         "method": "GET",
         "path": "/api/assets/:id",
-        "description": "Get single asset by ID"
+        "description": "Get single asset by ID",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": "Single asset object with populated references"
+        }
       },
       "create": {
         "method": "POST",
         "path": "/api/assets",
-        "description": "Create new asset"
+        "description": "Create new asset",
+        "status": "IMPLEMENTED",
+        "requestBody": {
+          "asset_name": "string",
+          "asset_id_tag": "string",
+          "site_id": "ObjectId (reference to Site)",
+          "building_id": "ObjectId (reference to Building)",
+          "floor_id": "ObjectId (reference to Floor)",
+          "building_tenant_id": "ObjectId (reference to Tenant)",
+          "customer_id": "ObjectId (reference to Customer)",
+          "location_description": "string",
+          "category": "string (HVAC, Security, Safety, Equipment)",
+          "type": "string",
+          "status": "string (Operational, Under Testing, Maintenance Required, Active)",
+          "condition": "string (Good, Excellent, New, Fair)",
+          "manufacturer": "string",
+          "model_number": "string",
+          "serial_number": "string",
+          "installation_date": "Date",
+          "warranty_expiry": "Date",
+          "metadata": "array (optional)",
+          "is_active": "boolean (default: true)"
+        },
+        "response": {
+          "success": true,
+          "message": "Asset created successfully",
+          "data": "Created asset object"
+        }
       },
       "update": {
         "method": "PUT",
         "path": "/api/assets/:id",
-        "description": "Update asset"
+        "description": "Update asset",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": "Partial asset object",
+        "response": {
+          "success": true,
+          "message": "Asset updated successfully",
+          "data": "Updated asset object"
+        }
       },
       "stats": {
         "method": "GET",
         "path": "/api/assets/summary/stats",
-        "description": "Get asset statistics"
+        "description": "Get asset statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID"
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "totalAssets": "number",
+            "operational": "number",
+            "warrantyExpiring": "number",
+            "needsMaintenance": "number"
+          }
+        }
       }
     },
     "building_tenants": {
       "list": {
         "method": "GET",
-        "path": "/api/building_tenants",
-        "description": "Get all building tenants",
+        "path": "/api/building-tenants",
+        "description": "Get all building tenants with filtering and summary statistics",
+        "status": "IMPLEMENTED",
         "queryParams": {
           "customer_id": "Filter by customer ID",
           "site_id": "Filter by site ID",
@@ -276,28 +570,37 @@
             "total_employees": "number",
             "total_parking_spaces": "number"
           },
-          "data": "Array of tenant objects"
+          "data": "Array of tenant objects with populated references"
         }
       },
       "getById": {
         "method": "GET",
-        "path": "/api/building_tenants/:id",
-        "description": "Get single tenant by ID"
+        "path": "/api/building-tenants/:id",
+        "description": "Get single tenant by ID",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": "Single tenant object with populated references"
+        }
       },
       "create": {
         "method": "POST",
-        "path": "/api/building_tenants",
+        "path": "/api/building-tenants",
         "description": "Create new tenant",
+        "status": "IMPLEMENTED",
         "requestBody": {
-          "customer_id": "ObjectId (required)",
-          "site_id": "ObjectId (optional)",
-          "building_id": "ObjectId (optional)",
-          "floor_id": "ObjectId (optional)",
+          "customer_id": "ObjectId (reference to Customer)",
+          "site_id": "ObjectId (reference to Site)",
+          "building_id": "ObjectId (reference to Building)",
+          "floor_id": "ObjectId (reference to Floor)",
           "tenant_legal_name": "string",
           "tenant_trading_name": "string",
           "abn": "string (11 digits)",
           "acn": "string (9 digits)",
-          "lease_type": "string (Commercial, Medical, Retail, etc.)",
+          "lease_type": "string",
           "lease_start_date": "Date",
           "lease_end_date": "Date",
           "occupied_area": "number",
@@ -313,128 +616,598 @@
           "industry_type": "string",
           "business_category": "string",
           "rental_rate": "number",
-          "tenant_status": "string (Active, Inactive, etc.)"
+          "tenant_status": "string (Active, Inactive, etc.)",
+          "emergency_contacts": "array (optional)",
+          "utilities_included": "array (optional)",
+          "services_included": "array (optional)",
+          "special_requirements": "string (optional)",
+          "is_active": "boolean (default: true)"
+        },
+        "response": {
+          "success": true,
+          "message": "Tenant created successfully",
+          "data": "Created tenant object with populated references"
         }
       },
       "update": {
         "method": "PUT",
-        "path": "/api/building_tenants/:id",
-        "description": "Update tenant"
+        "path": "/api/building-tenants/:id",
+        "description": "Update tenant",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": "Partial tenant object",
+        "response": {
+          "success": true,
+          "message": "Tenant updated successfully",
+          "data": "Updated tenant object"
+        }
       },
       "byBuilding": {
         "method": "GET",
-        "path": "/api/building_tenants/by-building/:buildingId",
-        "description": "Get tenants by building"
+        "path": "/api/building-tenants/by-building/:buildingId",
+        "description": "Get tenants by building",
+        "status": "IMPLEMENTED",
+        "params": {
+          "buildingId": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_tenants": "number",
+            "active_tenants": "number",
+            "total_occupied_area": "number",
+            "total_employees": "number",
+            "total_parking_spaces": "number"
+          },
+          "data": "Array of tenant objects for the building"
+        }
       },
       "stats": {
         "method": "GET",
-        "path": "/api/building_tenants/summary/stats",
-        "description": "Get tenant statistics"
+        "path": "/api/building-tenants/summary/stats",
+        "description": "Get tenant statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID"
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "totalTenants": "number",
+            "activeTenants": "number",
+            "leasesExpiringSoon": "number",
+            "totalOccupiedArea": "number",
+            "totalEmployees": "number",
+            "totalParkingSpaces": "number",
+            "avgRentalRate": "number"
+          }
+        }
       },
       "byIndustry": {
         "method": "GET",
-        "path": "/api/building_tenants/by-industry",
-        "description": "Group tenants by industry type"
-      }
-    },
-    "debug": {
-      "collections": {
-        "method": "GET",
-        "path": "/api/customers/debug/collections",
-        "description": "List available MongoDB collections",
+        "path": "/api/building-tenants/by-industry",
+        "description": "Group tenants by industry type",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID"
+        },
         "response": {
           "success": true,
-          "collections": ["customers"],
-          "currentModel": "customers"
+          "data": "Array of industry statistics"
+        }
+      }
+    },
+    "documents": {
+      "list": {
+        "method": "GET",
+        "path": "/api/documents",
+        "description": "Get all documents with filtering and summary statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID",
+          "floor_id": "Filter by floor ID",
+          "document_type": "Filter by document type",
+          "category": "Filter by document category",
+          "status": "Filter by document status",
+          "approval_status": "Filter by approval status",
+          "engineering_discipline": "Filter by engineering discipline",
+          "uploaded_by": "Filter by uploader name (case insensitive)",
+          "is_active": "boolean - Filter by active status",
+          "is_archived": "boolean - Filter by archived status",
+          "search": "Text search in document title, description, tags"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_documents": "number",
+            "approved_documents": "number",
+            "under_review_documents": "number",
+            "draft_documents": "number",
+            "archived_documents": "number",
+            "documents_by_type": "object",
+            "documents_by_category": "object"
+          },
+          "data": "Array of document objects with populated references"
+        }
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/documents/:id",
+        "description": "Get single document by ID",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": "Single document object with populated references"
+        }
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/documents",
+        "description": "Create new document",
+        "status": "IMPLEMENTED",
+        "requestBody": {
+          "document_title": "string",
+          "description": "string",
+          "version": "string (default: '1.0')",
+          "document_type": "string",
+          "category": "string",
+          "engineering_discipline": "string",
+          "customer_id": "ObjectId (reference to Customer)",
+          "site_id": "ObjectId (reference to Site)",
+          "building_id": "ObjectId (reference to Building)",
+          "floor_id": "ObjectId (reference to Floor)",
+          "asset_id": "ObjectId (reference to Asset)",
+          "location": "string",
+          "building_location": "string",
+          "floor_location": "string",
+          "status": "string (default: 'Draft')",
+          "approval_status": "string (default: 'Pending')",
+          "uploaded_by": "string",
+          "author_name": "string",
+          "files": "array of file objects",
+          "tags": "array of tag objects",
+          "access_level": "string (default: 'Internal')",
+          "confidentiality": "string (default: 'Standard')",
+          "review_required": "boolean (default: true)",
+          "project_number": "string",
+          "drawing_number": "string",
+          "specification_number": "string",
+          "compliance_standard": "string",
+          "regulatory_requirement": "string",
+          "is_active": "boolean (default: true)",
+          "is_archived": "boolean (default: false)"
+        },
+        "response": {
+          "success": true,
+          "message": "Document created successfully",
+          "data": "Created document object with populated references"
+        }
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/documents/:id",
+        "description": "Update document",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": "Partial document object",
+        "response": {
+          "success": true,
+          "message": "Document updated successfully",
+          "data": "Updated document object"
+        }
+      },
+      "byType": {
+        "method": "GET",
+        "path": "/api/documents/by-type/:type",
+        "description": "Get documents by type",
+        "status": "IMPLEMENTED",
+        "params": {
+          "type": "Document type string"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "document_type": "string",
+          "summary": {
+            "total_documents": "number",
+            "approved": "number",
+            "under_review": "number",
+            "draft": "number"
+          },
+          "data": "Array of document objects of the specified type"
+        }
+      },
+      "byBuilding": {
+        "method": "GET",
+        "path": "/api/documents/by-building/:buildingId",
+        "description": "Get documents by building",
+        "status": "IMPLEMENTED",
+        "params": {
+          "buildingId": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_documents": "number",
+            "approved": "number",
+            "under_review": "number",
+            "by_category": "object"
+          },
+          "data": "Array of document objects for the building"
+        }
+      },
+      "stats": {
+        "method": "GET",
+        "path": "/api/documents/summary/stats",
+        "description": "Get document statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID"
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "totalDocuments": "number",
+            "approvedDocuments": "number",
+            "underReviewDocuments": "number",
+            "draftDocuments": "number",
+            "archivedDocuments": "number"
+          }
+        }
+      },
+      "byCategory": {
+        "method": "GET",
+        "path": "/api/documents/by-category",
+        "description": "Group documents by category",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID"
+        },
+        "response": {
+          "success": true,
+          "data": "Array of category statistics"
         }
       }
     }
   },
-  "customerStructure": {
-    "_id": "MongoDB ObjectID",
-    "organisation": {
-      "organisation_name": "string (required, max: 200)",
-      "email_domain": "string (optional, domain format)",
-      "logo_url": "string (optional, URL format)",
-      "notes": "string (optional, max: 2000)",
-      "metadata": "object (optional, free-form data)"
+  "dataStructures": {
+    "customerStructure": {
+      "_id": "MongoDB ObjectID",
+      "organisation": {
+        "organisation_name": "string",
+        "email_domain": "string",
+        "logo_url": "string",
+        "notes": "string",
+        "metadata": "object"
+      },
+      "company_profile": {
+        "business_number": "string (ABN format)",
+        "company_number": "string (ACN format)",
+        "trading_name": "string",
+        "industry_type": "string",
+        "organisation_size": "string"
+      },
+      "business_address": {
+        "street": "string",
+        "suburb": "string",
+        "state": "string (NSW|VIC|QLD|WA|SA|TAS|ACT|NT)",
+        "postcode": "string (4 digits)"
+      },
+      "postal_address": {
+        "street": "string",
+        "suburb": "string",
+        "state": "string (NSW|VIC|QLD|WA|SA|TAS|ACT|NT)",
+        "postcode": "string (4 digits)"
+      },
+      "contact_methods": [
+        {
+          "_id": "MongoDB ObjectID (auto-generated)",
+          "full_name": "string",
+          "job_title": "string",
+          "department": "string",
+          "role_type": "string (Primary|Billing|Technical|General|Emergency|Project)",
+          "contact_type": "string (Internal|External|Supplier|Customer|Contractor|Consultant|Emergency|Billing|Technical)",
+          "platform_access": "string (Administrative|Operational|View Only|No Access)",
+          "method_type": "string (Email|Phone|SMS|WhatsApp)",
+          "method_value": "string",
+          "label": "string",
+          "is_primary": "boolean",
+          "createdAt": "DateTime",
+          "updatedAt": "DateTime"
+        }
+      ],
+      "metadata": [
+        {
+          "key": "string",
+          "value": "string"
+        }
+      ],
+      "is_active": "boolean",
+      "createdAt": "DateTime",
+      "updatedAt": "DateTime",
+      "__v": "number (MongoDB version key)",
+      "full_business_address": "string (virtual field)",
+      "full_postal_address": "string (virtual field)",
+      "primary_contact": "object (virtual field)",
+      "display_name": "string (virtual field)",
+      "abn_display": "string (virtual field)",
+      "id": "string (virtual field)"
     },
-    "company_profile": {
-      "business_number": "string (optional, ABN format with spaces)",
-      "company_number": "string (optional, ACN format with spaces)",
-      "trading_name": "string (optional)",
-      "industry_type": "enum (Technology|Healthcare|Government|Retail|Hospitality|Industrial|Service|Finance|Education)",
-      "organisation_size": "enum (1-10|11-50|51-200|201-500|501-1000|1001+)"
+    "siteStructure": {
+      "_id": "MongoDB ObjectID",
+      "site_name": "string",
+      "address": "string",
+      "status": "string (Active, Under Construction, Planning, Inactive)",
+      "buildings_count": "number",
+      "floors_count": "number",
+      "tenants_count": "number",
+      "assets_count": "number",
+      "manager": {
+        "name": "string",
+        "email": "string",
+        "phone": "string",
+        "title": "string"
+      },
+      "customer_id": "ObjectId (reference to Customer)",
+      "metadata": [
+        {
+          "key": "string",
+          "value": "string"
+        }
+      ],
+      "is_active": "boolean",
+      "created_date": "DateTime",
+      "createdAt": "DateTime",
+      "updatedAt": "DateTime"
     },
-    "business_address": {
-      "street": "string (required, max: 100)",
-      "suburb": "string (required, max: 50)",
-      "state": "enum (NSW|VIC|QLD|WA|SA|TAS|ACT|NT)",
-      "postcode": "string (required, 4 digits)"
+    "buildingStructure": {
+      "_id": "MongoDB ObjectID",
+      "building_name": "string",
+      "building_code": "string",
+      "image_url": "string",
+      "site_id": "ObjectId (reference to Site)",
+      "building_manager_id": "ObjectId (reference to User)",
+      "customer_id": "ObjectId (reference to Customer)",
+      "category": "string (Retail, Office, Industrial, Mixed Use)",
+      "building_type": "string (Industrial, Commercial, Residential)",
+      "building_grade": "string (Grade A, Grade B, Grade C, Premium)",
+      "primary_use": "string",
+      "number_of_floors": "number",
+      "energy_rating": "number (0-100)",
+      "status": "string (Active, Inactive, Under Construction, Planning)",
+      "total_floors": "number",
+      "active_floors": "number",
+      "total_assets": "number",
+      "avg_occupancy": "number (0-100)",
+      "metadata": [
+        {
+          "key": "string",
+          "value": "string"
+        }
+      ],
+      "is_active": "boolean",
+      "createdAt": "DateTime",
+      "updatedAt": "DateTime"
     },
-    "postal_address": {
-      "street": "string (required, max: 100)",
-      "suburb": "string (required, max: 50)",
-      "state": "enum (NSW|VIC|QLD|WA|SA|TAS|ACT|NT)",
-      "postcode": "string (required, 4 digits)"
+    "floorStructure": {
+      "_id": "MongoDB ObjectID",
+      "site_id": "ObjectId (reference to Site)",
+      "building_id": "ObjectId (reference to Building)",
+      "customer_id": "ObjectId (reference to Customer)",
+      "floor_name": "string",
+      "floor_number": "string",
+      "floor_type": "string (Office, Lobby, Laboratory, Storage, Meeting, Executive)",
+      "occupancy_type": "string (Single Tenant, Multi Tenant, Mixed Use)",
+      "access_control": "string (Public, Private, Restricted, Secure)",
+      "floor_area": "number (square meters)",
+      "floor_area_unit": "string (default: m²)",
+      "ceiling_height": "number (meters)",
+      "ceiling_height_unit": "string (default: m)",
+      "max_occupancy": "number",
+      "hvac_zones": "number",
+      "fire_compartment_id": "string",
+      "current_occupancy": "number",
+      "occupancy_percentage": "number (0-100)",
+      "assets_count": "number",
+      "status": "string (Active, Under Construction, Planning, Inactive)",
+      "metadata": [
+        {
+          "key": "string",
+          "value": "string"
+        }
+      ],
+      "is_active": "boolean",
+      "createdAt": "DateTime",
+      "updatedAt": "DateTime"
     },
-    "contact_methods": [
-      {
-        "_id": "MongoDB ObjectID (auto-generated)",
-        "full_name": "string (required, max: 100)",
-        "job_title": "string (optional)",
-        "department": "string (optional)",
-        "role_type": "enum (Primary|Billing|Technical|General|Emergency|Project)",
-        "contact_type": "enum (Internal|External|Supplier|Customer|Contractor|Consultant|Emergency|Billing|Technical)",
-        "platform_access": "enum (Administrative|Operational|View Only|No Access)",
-        "method_type": "enum (Email|Phone|SMS|WhatsApp)",
-        "method_value": "string (required)",
-        "label": "string (optional)",
-        "is_primary": "boolean (default: false)",
-        "createdAt": "DateTime",
-        "updatedAt": "DateTime"
-      }
-    ],
-    "metadata": [
-      {
-        "key": "string (required)",
-        "value": "string (required)"
-      }
-    ],
-    "is_active": "boolean (default: true)",
-    "createdAt": "DateTime",
-    "updatedAt": "DateTime",
-    "__v": "number (MongoDB version key)",
-    "full_business_address": "string (virtual field - formatted address)",
-    "full_postal_address": "string (virtual field - formatted address)",
-    "primary_contact": "object (virtual field - first contact with is_primary: true)",
-    "display_name": "string (virtual field - organisation.organisation_name)",
-    "abn_display": "string (virtual field - company_profile.business_number)",
-    "id": "string (virtual field - same as _id)"
+    "assetStructure": {
+      "_id": "MongoDB ObjectID",
+      "asset_name": "string",
+      "asset_id_tag": "string",
+      "site_id": "ObjectId (reference to Site)",
+      "building_id": "ObjectId (reference to Building)",
+      "floor_id": "ObjectId (reference to Floor)",
+      "building_tenant_id": "ObjectId (reference to Tenant)",
+      "customer_id": "ObjectId (reference to Customer)",
+      "location_description": "string",
+      "category": "string (HVAC, Security, Safety, Equipment)",
+      "type": "string",
+      "status": "string (Operational, Under Testing, Maintenance Required, Active)",
+      "condition": "string (Good, Excellent, New, Fair)",
+      "manufacturer": "string",
+      "model_number": "string",
+      "serial_number": "string",
+      "installation_date": "Date",
+      "warranty_expiry": "Date",
+      "metadata": [
+        {
+          "key": "string",
+          "value": "string"
+        }
+      ],
+      "is_active": "boolean",
+      "createdAt": "DateTime",
+      "updatedAt": "DateTime"
+    },
+    "tenantStructure": {
+      "_id": "MongoDB ObjectID",
+      "site_id": "ObjectId (reference to Site)",
+      "building_id": "ObjectId (reference to Building)",
+      "floor_id": "ObjectId (reference to Floor)",
+      "customer_id": "ObjectId (reference to Customer)",
+      "tenant_legal_name": "string",
+      "tenant_trading_name": "string",
+      "abn": "string (11 digits)",
+      "acn": "string (9 digits)",
+      "lease_type": "string",
+      "lease_start_date": "Date",
+      "lease_end_date": "Date",
+      "lease_duration_months": "number",
+      "occupied_area": "number",
+      "occupied_area_unit": "string (default: m²)",
+      "number_of_employees": "number",
+      "allocated_parking_spaces": "number",
+      "operating_hours_start": "string (HH:MM)",
+      "operating_hours_end": "string (HH:MM)",
+      "operating_days": "string",
+      "primary_contact_name": "string",
+      "primary_contact_title": "string",
+      "primary_contact_phone": "string",
+      "primary_contact_email": "string",
+      "billing_contact_name": "string",
+      "billing_contact_email": "string",
+      "emergency_contacts": [
+        {
+          "name": "string",
+          "phone": "string",
+          "relationship": "string"
+        }
+      ],
+      "industry_type": "string",
+      "business_category": "string",
+      "occupancy_classification": "string",
+      "utilities_included": ["string"],
+      "services_included": ["string"],
+      "special_requirements": "string",
+      "rental_rate": "number",
+      "rental_rate_unit": "string (default: per sqm/year)",
+      "bond_amount": "number",
+      "outgoings_estimate": "number",
+      "tenant_status": "string (default: Active)",
+      "move_in_date": "Date",
+      "move_out_date": "Date",
+      "notes": "string",
+      "compliance_notes": "string",
+      "is_active": "boolean",
+      "createdAt": "DateTime",
+      "updatedAt": "DateTime"
+    },
+    "documentStructure": {
+      "_id": "MongoDB ObjectID",
+      "document_title": "string",
+      "description": "string",
+      "version": "string (default: '1.0')",
+      "document_type": "string",
+      "category": "string",
+      "engineering_discipline": "string",
+      "location": "string",
+      "building_location": "string",
+      "floor_location": "string",
+      "status": "string (default: 'Draft')",
+      "approval_status": "string (default: 'Pending')",
+      "files": [
+        {
+          "file_name": "string",
+          "file_type": "string",
+          "file_size": "number",
+          "file_size_unit": "string (default: MB)",
+          "file_url": "string",
+          "upload_date": "Date"
+        }
+      ],
+      "uploaded_by": "string",
+      "author_name": "string",
+      "uploaded_date": "Date",
+      "tags": [
+        {
+          "name": "string",
+          "color": "string"
+        }
+      ],
+      "access_level": "string (default: 'Internal')",
+      "confidentiality": "string (default: 'Standard')",
+      "review_required": "boolean (default: true)",
+      "reviewer_name": "string",
+      "review_date": "Date",
+      "approval_date": "Date",
+      "approved_by": "string",
+      "revision_history": [
+        {
+          "version": "string",
+          "description": "string",
+          "date": "Date",
+          "author": "string"
+        }
+      ],
+      "customer_id": "ObjectId (reference to Customer)",
+      "site_id": "ObjectId (reference to Site)",
+      "building_id": "ObjectId (reference to Building)",
+      "floor_id": "ObjectId (reference to Floor)",
+      "asset_id": "ObjectId (reference to Asset)",
+      "project_number": "string",
+      "drawing_number": "string",
+      "specification_number": "string",
+      "compliance_standard": "string",
+      "regulatory_requirement": "string",
+      "is_active": "boolean (default: true)",
+      "is_archived": "boolean (default: false)",
+      "createdAt": "DateTime",
+      "updatedAt": "DateTime"
+    }
   },
   "sampleApiCalls": {
     "getAllCustomers": "curl -X GET http://localhost:30001/api/customers",
-    "getCustomersWithPagination": "curl -X GET 'http://localhost:30001/api/customers?page=1&limit=5'",
-    "filterByState": "curl -X GET 'http://localhost:30001/api/customers?state=NSW'",
-    "filterByActive": "curl -X GET 'http://localhost:30001/api/customers?is_active=true'",
-    "searchCustomers": "curl -X GET 'http://localhost:30001/api/customers?search=Sydney'",
-    "sortByName": "curl -X GET 'http://localhost:30001/api/customers?sortBy=organisation.organisation_name&sortOrder=asc'",
-    "getSingleCustomer": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07",
+    "getCustomerById": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07",
     "createCustomer": "curl -X POST http://localhost:30001/api/customers -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Test Company\"}}'",
+    "updateCustomer": "curl -X PUT http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07 -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Updated Company\"}}'",
+    "getSitesByCustomer": "curl -X GET 'http://localhost:30001/api/sites?customer_id=68d395f9c7ad6627ad607f07'",
+    "getBuildingStats": "curl -X GET http://localhost:30001/api/buildings/summary/stats",
+    "getFloorsByBuilding": "curl -X GET http://localhost:30001/api/floors/by-building/60d5ecb74e4b3c001f647b8c",
+    "getAssetsWithWarrantyExpiring": "curl -X GET 'http://localhost:30001/api/assets?warranty_expired=true'",
+    "getTenantsByIndustry": "curl -X GET http://localhost:30001/api/building-tenants/by-industry",
+    "searchDocuments": "curl -X GET 'http://localhost:30001/api/documents?search=HVAC'",
     "healthCheck": "curl -X GET http://localhost:30001/health"
   },
   "errorResponses": {
     "400": {
       "success": false,
       "message": "Validation error message",
-      "details": "Object with validation details"
+      "error": "Detailed error information"
     },
     "404": {
       "success": false,
-      "message": "Customer not found",
-      "details": {
-        "customerId": "ObjectID"
-      }
+      "message": "Resource not found",
+      "error": "Resource identifier details"
     },
     "500": {
       "success": false,
@@ -442,51 +1215,57 @@
       "error": "Error details"
     }
   },
-  "validationRules": {
-    "organisation_name": "Required, string, max 200 characters",
-    "email_domain": "Optional, valid domain format",
-    "business_number": "Optional, ABN format (11 digits with spaces)",
-    "company_number": "Optional, ACN format (9 digits with spaces)",
-    "postcode": "Required, exactly 4 digits",
-    "state": "Required, must be valid Australian state",
-    "method_type": "Required for contact methods",
-    "method_value": "Required for contact methods",
-    "full_name": "Required for contact methods, max 100 characters"
-  },
-  "australianConstants": {
-    "states": ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"],
-    "organisationSizes": ["1-10", "11-50", "51-200", "201-500", "501-1000", "1001+"],
-    "industryTypes": ["Technology", "Healthcare", "Government", "Retail", "Hospitality", "Industrial", "Service", "Finance", "Education"],
-    "roleTypes": ["Primary", "Billing", "Technical", "General", "Emergency", "Project"],
-    "contactTypes": ["Internal", "External", "Supplier", "Customer", "Contractor", "Consultant", "Emergency", "Billing", "Technical"],
-    "platformAccess": ["Administrative", "Operational", "View Only", "No Access"],
-    "methodTypes": ["Email", "Phone", "SMS", "WhatsApp"]
+  "commonQueryParameters": {
+    "pagination": {
+      "page": "integer (default: 1) - Page number",
+      "limit": "integer (default: 10, max: 100) - Items per page"
+    },
+    "filtering": {
+      "is_active": "boolean - Filter by active status",
+      "customer_id": "ObjectId - Filter by customer",
+      "site_id": "ObjectId - Filter by site",
+      "building_id": "ObjectId - Filter by building",
+      "status": "string - Filter by status"
+    },
+    "sorting": {
+      "sortBy": "string - Field to sort by",
+      "sortOrder": "string (asc|desc) - Sort direction"
+    }
   },
   "databaseInfo": {
     "connectionString": "mongodb+srv://shriramsoft_db_user:nbNKl1V3TpBAQhfo@cluster0.mulczg0.mongodb.net/fulqrom-hub",
     "database": "fulqrom-hub",
-    "collection": "customers",
-    "totalCustomers": 8,
-    "sampleObjectIds": [
-      "68d395f9c7ad6627ad607f07",
-      "68d395f9c7ad6627ad607f0a",
-      "68d395f9c7ad6627ad607f0d",
-      "68d395f9c7ad6627ad607f10",
-      "68d395f9c7ad6627ad607f12",
-      "68d395f9c7ad6627ad607f15",
-      "68d395f9c7ad6627ad607f17",
-      "68d395f9c7ad6627ad607f1a"
+    "collections": [
+      "customers",
+      "sites",
+      "buildings",
+      "floors",
+      "assets",
+      "building_tenants",
+      "documents"
     ]
   },
+  "australianStandards": {
+    "states": ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"],
+    "postcodeFormat": "4 digits (e.g., 2000, 3000, 4000)",
+    "abnFormat": "11 digits with spaces (e.g., '12 345 678 901')",
+    "acnFormat": "9 digits with spaces (e.g., '123 456 789')",
+    "dateFormat": "DD/MM/YYYY",
+    "currency": "AUD with space separator (e.g., '$42 850')",
+    "areaUnit": "square metres (m²)",
+    "distanceUnit": "metres (m)"
+  },
   "notes": {
-    "schemaAlignment": "All schemas are aligned between database model, validation, and API responses",
-    "dataFormat": "API returns exact same structure as data/sample-customers.json",
-    "pendingImplementation": [
-      "PUT /api/customers/:id - Update customer",
-      "DELETE /api/customers/:id - Delete customer",
-      "Advanced search functionality",
-      "Bulk operations"
-    ],
-    "testingDatabase": "To test edits, use ObjectID from sampleObjectIds array above"
+    "apiVersion": "This API reference reflects the current implementation as of 2025-09-24",
+    "routePrefix": "All API routes are prefixed with '/api/'",
+    "tenantRouteDiscrepancy": "Tenant routes use '/api/building-tenants' in server.js but model collection is 'building_tenants'",
+    "populatedFields": "Most GET requests populate referenced fields for better data context",
+    "summaryStats": "List endpoints include calculated summary statistics where applicable",
+    "virtualFields": "Models include virtual fields for computed values (formatted dates, display names, etc.)",
+    "textSearch": "Documents collection supports full-text search on title, description, and tags",
+    "aggregationSupport": "Statistics endpoints use MongoDB aggregation for efficient data processing",
+    "validationStrategy": "Comprehensive validation on API level with minimal frontend validation",
+    "errorHandling": "Consistent error response format across all endpoints",
+    "securityFeatures": "CORS configured, helmet for security headers, input sanitization"
   }
 }
