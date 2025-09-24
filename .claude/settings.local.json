@@ -7,7 +7,9 @@
       "Bash(kill:*)",
       "Bash(npm start)",
       "Bash(find:*)",
-      "Read(//Users/devensitapara/Documents/development/GKBLabs/falcrom/fulqrom-hub/**)"
+      "Read(//Users/devensitapara/Documents/development/GKBLabs/falcrom/fulqrom-hub/**)",
+      "Bash(pkill:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

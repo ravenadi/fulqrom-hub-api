@@ -7,9 +7,13 @@ require('dotenv').config();
 
 const errorHandler = require('./middleware/errorHandler');
 const customersRouter = require('./routes/customers');
+const sitesRouter = require('./routes/sites');
+const buildingsRouter = require('./routes/buildings');
+const floorsRouter = require('./routes/floors');
+const assetsRouter = require('./routes/assets');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 30001;
 const MONGODB_URI = process.env.MONGODB_CONNECTION;
 
 // Security middleware
@@ -45,6 +49,10 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/customers', customersRouter);
+app.use('/api/sites', sitesRouter);
+app.use('/api/buildings', buildingsRouter);
+app.use('/api/floors', floorsRouter);
+app.use('/api/assets', assetsRouter);
 
 // Handle 404 for API routes
 app.use('/api/*', (req, res) => {
@@ -63,7 +71,11 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      customers: '/api/customers'
+      customers: '/api/customers',
+      sites: '/api/sites',
+      buildings: '/api/buildings',
+      floors: '/api/floors',
+      assets: '/api/assets'
     }
   });
 });
