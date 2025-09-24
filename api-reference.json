@@ -18,6 +18,25 @@
         "version": "1.0.0"
       }
     },
+    "root": {
+      "method": "GET",
+      "path": "/",
+      "description": "API information and endpoint list",
+      "response": {
+        "message": "Fulqrom Hub REST API",
+        "description": "Australian Commercial Real Estate & HVAC Building Management System",
+        "version": "1.0.0",
+        "endpoints": {
+          "health": "/health",
+          "customers": "/api/customers",
+          "sites": "/api/sites",
+          "buildings": "/api/buildings",
+          "floors": "/api/floors",
+          "assets": "/api/assets",
+          "building_tenants": "/api/building_tenants"
+        }
+      }
+    },
     "customers": {
       "list": {
         "method": "GET",
@@ -115,6 +134,207 @@
         "params": {
           "id": "MongoDB ObjectID (24-character hex string)"
         }
+      }
+    },
+    "sites": {
+      "list": {
+        "method": "GET",
+        "path": "/api/sites",
+        "description": "Get all sites",
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": "Array of site objects"
+        }
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/sites/:id",
+        "description": "Get single site by ID"
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/sites",
+        "description": "Create new site"
+      }
+    },
+    "buildings": {
+      "list": {
+        "method": "GET",
+        "path": "/api/buildings",
+        "description": "Get all buildings"
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/buildings/:id",
+        "description": "Get single building by ID"
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/buildings",
+        "description": "Create new building"
+      },
+      "stats": {
+        "method": "GET",
+        "path": "/api/buildings/summary/stats",
+        "description": "Get building statistics"
+      },
+      "byCategory": {
+        "method": "GET",
+        "path": "/api/buildings/by-category",
+        "description": "Group buildings by category"
+      }
+    },
+    "floors": {
+      "list": {
+        "method": "GET",
+        "path": "/api/floors",
+        "description": "Get all floors"
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/floors/:id",
+        "description": "Get single floor by ID"
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/floors",
+        "description": "Create new floor"
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/floors/:id",
+        "description": "Update floor"
+      },
+      "byBuilding": {
+        "method": "GET",
+        "path": "/api/floors/by-building/:buildingId",
+        "description": "Get floors by building"
+      },
+      "stats": {
+        "method": "GET",
+        "path": "/api/floors/summary/stats",
+        "description": "Get floor statistics"
+      },
+      "byType": {
+        "method": "GET",
+        "path": "/api/floors/by-type",
+        "description": "Group floors by type"
+      }
+    },
+    "assets": {
+      "list": {
+        "method": "GET",
+        "path": "/api/assets",
+        "description": "Get all assets"
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/assets/:id",
+        "description": "Get single asset by ID"
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/assets",
+        "description": "Create new asset"
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/assets/:id",
+        "description": "Update asset"
+      },
+      "stats": {
+        "method": "GET",
+        "path": "/api/assets/summary/stats",
+        "description": "Get asset statistics"
+      }
+    },
+    "building_tenants": {
+      "list": {
+        "method": "GET",
+        "path": "/api/building_tenants",
+        "description": "Get all building tenants",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID",
+          "floor_id": "Filter by floor ID",
+          "tenant_status": "Filter by tenant status",
+          "lease_type": "Filter by lease type",
+          "industry_type": "Filter by industry type",
+          "lease_expiring_soon": "boolean - Filter leases expiring in 30 days",
+          "is_active": "boolean - Filter by active status"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_tenants": "number",
+            "active_tenants": "number",
+            "leases_expiring_soon": "number",
+            "total_occupied_area": "number",
+            "total_employees": "number",
+            "total_parking_spaces": "number"
+          },
+          "data": "Array of tenant objects"
+        }
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/building_tenants/:id",
+        "description": "Get single tenant by ID"
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/building_tenants",
+        "description": "Create new tenant",
+        "requestBody": {
+          "customer_id": "ObjectId (required)",
+          "site_id": "ObjectId (optional)",
+          "building_id": "ObjectId (optional)",
+          "floor_id": "ObjectId (optional)",
+          "tenant_legal_name": "string",
+          "tenant_trading_name": "string",
+          "abn": "string (11 digits)",
+          "acn": "string (9 digits)",
+          "lease_type": "string (Commercial, Medical, Retail, etc.)",
+          "lease_start_date": "Date",
+          "lease_end_date": "Date",
+          "occupied_area": "number",
+          "number_of_employees": "number",
+          "allocated_parking_spaces": "number",
+          "operating_hours_start": "string (HH:MM)",
+          "operating_hours_end": "string (HH:MM)",
+          "operating_days": "string",
+          "primary_contact_name": "string",
+          "primary_contact_title": "string",
+          "primary_contact_phone": "string",
+          "primary_contact_email": "string",
+          "industry_type": "string",
+          "business_category": "string",
+          "rental_rate": "number",
+          "tenant_status": "string (Active, Inactive, etc.)"
+        }
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/building_tenants/:id",
+        "description": "Update tenant"
+      },
+      "byBuilding": {
+        "method": "GET",
+        "path": "/api/building_tenants/by-building/:buildingId",
+        "description": "Get tenants by building"
+      },
+      "stats": {
+        "method": "GET",
+        "path": "/api/building_tenants/summary/stats",
+        "description": "Get tenant statistics"
+      },
+      "byIndustry": {
+        "method": "GET",
+        "path": "/api/building_tenants/by-industry",
+        "description": "Group tenants by industry type"
       }
     },
     "debug": {

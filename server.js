@@ -11,6 +11,8 @@ const sitesRouter = require('./routes/sites');
 const buildingsRouter = require('./routes/buildings');
 const floorsRouter = require('./routes/floors');
 const assetsRouter = require('./routes/assets');
+const buildingTenantsRouter = require('./routes/tenants');
+const documentsRouter = require('./routes/documents');
 
 const app = express();
 const PORT = process.env.PORT || 30001;
@@ -53,6 +55,8 @@ app.use('/api/sites', sitesRouter);
 app.use('/api/buildings', buildingsRouter);
 app.use('/api/floors', floorsRouter);
 app.use('/api/assets', assetsRouter);
+app.use('/api/building-tenants', buildingTenantsRouter);
+app.use('/api/documents', documentsRouter);
 
 // Handle 404 for API routes
 app.use('/api/*', (req, res) => {
@@ -75,7 +79,9 @@ app.get('/', (req, res) => {
       sites: '/api/sites',
       buildings: '/api/buildings',
       floors: '/api/floors',
-      assets: '/api/assets'
+      assets: '/api/assets',
+      building_tenants: '/api/building-tenants',
+      documents: '/api/documents'
     }
   });
 });
