@@ -15,12 +15,12 @@ const CONTACT_TYPES = ['Internal', 'External', 'Supplier', 'Customer', 'Contract
 const PLATFORM_ACCESS = ['Administrative', 'Operational', 'View Only', 'No Access'];
 const METHOD_TYPES = ['Email', 'Phone', 'SMS', 'WhatsApp'];
 
-// Address schema (reusable)
+// Address schema (reusable) - all fields optional
 const addressSchema = Joi.object({
-  street: Joi.string().trim().max(100).required(),
-  suburb: Joi.string().trim().max(50).required(),
-  state: Joi.string().valid(...AUSTRALIAN_STATES).required(),
-  postcode: Joi.string().pattern(/^\d{4}$/).required()
+  street: Joi.string().trim().max(100).allow(''),
+  suburb: Joi.string().trim().max(50).allow(''),
+  state: Joi.string().valid(...AUSTRALIAN_STATES).allow(''),
+  postcode: Joi.string().pattern(/^\d{4}$/).allow('')
 });
 
 // Organisation schema
@@ -32,25 +32,25 @@ const organisationSchema = Joi.object({
   metadata: Joi.object().default({})
 });
 
-// Company Profile schema
+// Company Profile schema - allow null for enum fields
 const companyProfileSchema = Joi.object({
   business_number: Joi.string().trim().allow(''),
   company_number: Joi.string().trim().allow(''),
   trading_name: Joi.string().trim().allow(''),
-  industry_type: Joi.string().valid(...INDUSTRY_TYPES).allow(''),
-  organisation_size: Joi.string().valid(...ORG_SIZES).allow('')
+  industry_type: Joi.string().valid(...INDUSTRY_TYPES).allow('', null),
+  organisation_size: Joi.string().valid(...ORG_SIZES).allow('', null)
 });
 
-// Contact Method schema
+// Contact Method schema - allow null for enum fields
 const contactMethodSchema = Joi.object({
-  full_name: Joi.string().trim().max(100).required(),
+  full_name: Joi.string().trim().max(100).allow(''),
   job_title: Joi.string().trim().allow(''),
   department: Joi.string().trim().allow(''),
-  role_type: Joi.string().valid(...ROLE_TYPES).allow(''),
-  contact_type: Joi.string().valid(...CONTACT_TYPES).allow(''),
-  platform_access: Joi.string().valid(...PLATFORM_ACCESS).allow(''),
-  method_type: Joi.string().valid(...METHOD_TYPES).required(),
-  method_value: Joi.string().trim().required(),
+  role_type: Joi.string().valid(...ROLE_TYPES).allow('', null),
+  contact_type: Joi.string().valid(...CONTACT_TYPES).allow('', null),
+  platform_access: Joi.string().valid(...PLATFORM_ACCESS).allow('', null),
+  method_type: Joi.string().valid(...METHOD_TYPES).allow(''),
+  method_value: Joi.string().trim().allow(''),
   label: Joi.string().trim().allow(''),
   is_primary: Joi.boolean().default(false)
 });
@@ -61,26 +61,26 @@ const metadataItemSchema = Joi.object({
   value: Joi.string().trim().required()
 });
 
-// Create Customer Schema
+// Create Customer Schema - only organisation name required
 const createCustomerSchema = Joi.object({
   // Organisation Information
   organisation: organisationSchema.required(),
 
-  // Company Profile Information
-  company_profile: companyProfileSchema,
+  // Company Profile Information (optional)
+  company_profile: companyProfileSchema.optional(),
 
-  // Address Information
-  business_address: addressSchema,
-  postal_address: addressSchema,
+  // Address Information (optional)
+  business_address: addressSchema.optional(),
+  postal_address: addressSchema.optional(),
 
-  // Contact Information
-  contact_methods: Joi.array().items(contactMethodSchema).default([]),
+  // Contact Information (optional)
+  contact_methods: Joi.array().items(contactMethodSchema).optional().default([]),
 
-  // Additional Information
-  metadata: Joi.array().items(metadataItemSchema).default([]),
+  // Additional Information (optional)
+  metadata: Joi.array().items(metadataItemSchema).optional().default([]),
 
   // System fields
-  is_active: Joi.boolean().default(true)
+  is_active: Joi.boolean().optional().default(true)
 });
 
 // Update Customer Schema (all fields optional)

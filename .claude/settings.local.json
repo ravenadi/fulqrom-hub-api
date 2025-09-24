@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(npm install)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(kill:*)",
+      "Bash(npm start)",
+      "Bash(find:*)",
+      "Read(//Users/devensitapara/Documents/development/GKBLabs/falcrom/fulqrom-hub/**)"
     ],
     "deny": [],
     "ask": []

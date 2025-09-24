@@ -3,10 +3,31 @@ const Customer = require('../models/Customer');
 
 const router = express.Router();
 
-// GET /api/customers - List all customers
+// POST /api/customers - Create new customer
+router.post('/', async (req, res) => {
+  try {
+    const customer = new Customer(req.body);
+    const savedCustomer = await customer.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Customer created successfully',
+      data: savedCustomer
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Error creating customer',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/customers - Get all customers
 router.get('/', async (req, res) => {
   try {
     const customers = await Customer.find();
+
     res.status(200).json({
       success: true,
       count: customers.length,
@@ -41,26 +62,6 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching customer',
-      error: error.message
-    });
-  }
-});
-
-// POST /api/customers - Create new customer
-router.post('/', async (req, res) => {
-  try {
-    const customer = new Customer(req.body);
-    await customer.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Customer created successfully',
-      data: customer
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: 'Error creating customer',
       error: error.message
     });
   }

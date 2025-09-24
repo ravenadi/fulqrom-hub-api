@@ -4,24 +4,19 @@ const mongoose = require('mongoose');
 const OrganisationSchema = new mongoose.Schema({
   organisation_name: {
     type: String,
-    required: true,
-    trim: true,
-    maxlength: 200
+    trim: true
   },
   email_domain: {
     type: String,
-    trim: true,
-    match: /^[a-zA-Z0-9][a-zA-Z0-9.-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/
+    trim: true
   },
   logo_url: {
     type: String,
-    trim: true,
-    match: /^https?:\/\/.+\.(jpg|jpeg|png|gif|svg)$/i
+    trim: true
   },
   notes: {
     type: String,
-    trim: true,
-    maxlength: 2000
+    trim: true
   },
   metadata: {
     type: mongoose.Schema.Types.Mixed,
@@ -33,25 +28,21 @@ const OrganisationSchema = new mongoose.Schema({
 const CompanyProfileSchema = new mongoose.Schema({
   business_number: {
     type: String,
-    trim: true,
-    match: /^\d{2}\s?\d{3}\s?\d{3}\s?\d{3}$/ // ABN format with spaces
+    trim: true
   },
   company_number: {
     type: String,
-    trim: true,
-    match: /^\d{3}\s?\d{3}\s?\d{3}$/ // ACN format with spaces
+    trim: true
   },
   trading_name: {
     type: String,
     trim: true
   },
   industry_type: {
-    type: String,
-    enum: ['Technology', 'Healthcare', 'Government', 'Retail', 'Hospitality', 'Industrial', 'Service', 'Finance', 'Education']
+    type: String
   },
   organisation_size: {
-    type: String,
-    enum: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001+']
+    type: String
   }
 }, { _id: false });
 
@@ -59,27 +50,17 @@ const CompanyProfileSchema = new mongoose.Schema({
 const AddressSchema = new mongoose.Schema({
   street: {
     type: String,
-    required: true,
-    trim: true,
-    minlength: 5,
-    maxlength: 100
+    trim: true
   },
   suburb: {
     type: String,
-    required: true,
-    trim: true,
-    minlength: 2,
-    maxlength: 50
+    trim: true
   },
   state: {
-    type: String,
-    required: true,
-    enum: ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT']
+    type: String
   },
   postcode: {
-    type: String,
-    required: true,
-    match: /^\d{4}$/ // Australian 4-digit postcodes
+    type: String
   }
 }, { _id: false });
 
@@ -87,10 +68,7 @@ const AddressSchema = new mongoose.Schema({
 const ContactMethodSchema = new mongoose.Schema({
   full_name: {
     type: String,
-    required: true,
-    trim: true,
-    minlength: 2,
-    maxlength: 100
+    trim: true
   },
   job_title: {
     type: String,
@@ -101,25 +79,19 @@ const ContactMethodSchema = new mongoose.Schema({
     trim: true
   },
   role_type: {
-    type: String,
-    enum: ['Primary', 'Billing', 'Technical', 'General', 'Emergency', 'Project']
+    type: String
   },
   contact_type: {
-    type: String,
-    enum: ['Internal', 'External', 'Supplier', 'Customer', 'Contractor', 'Consultant', 'Emergency', 'Billing', 'Technical']
+    type: String
   },
   platform_access: {
-    type: String,
-    enum: ['Administrative', 'Operational', 'View Only', 'No Access']
+    type: String
   },
   method_type: {
-    type: String,
-    required: true,
-    enum: ['Email', 'Phone', 'SMS', 'WhatsApp']
+    type: String
   },
   method_value: {
     type: String,
-    required: true,
     trim: true
   },
   label: {
@@ -138,12 +110,10 @@ const ContactMethodSchema = new mongoose.Schema({
 const MetadataItemSchema = new mongoose.Schema({
   key: {
     type: String,
-    required: true,
     trim: true
   },
   value: {
     type: String,
-    required: true,
     trim: true
   }
 }, { _id: false });
@@ -152,8 +122,7 @@ const MetadataItemSchema = new mongoose.Schema({
 const CustomerSchema = new mongoose.Schema({
   // Organisation Information
   organisation: {
-    type: OrganisationSchema,
-    required: true
+    type: OrganisationSchema
   },
 
   // Company Profile Information
@@ -220,24 +189,6 @@ CustomerSchema.virtual('abn_display').get(function() {
 CustomerSchema.set('toJSON', { virtuals: true });
 CustomerSchema.set('toObject', { virtuals: true });
 
-// Add validation for unique ABN
-CustomerSchema.index({ 'company_profile.business_number': 1 }, { unique: true, sparse: true });
-
-// Pre-save middleware for ABN uniqueness validation
-CustomerSchema.pre('save', async function(next) {
-  if (this.company_profile?.business_number) {
-    const existingCustomer = await this.constructor.findOne({
-      'company_profile.business_number': this.company_profile.business_number,
-      _id: { $ne: this._id }
-    });
-
-    if (existingCustomer) {
-      const error = new Error('ABN already exists');
-      error.code = 'DUPLICATE_ABN';
-      return next(error);
-    }
-  }
-  next();
-});
+// Remove unique ABN validation for flexibility
 
 module.exports = mongoose.model('Customer', CustomerSchema);

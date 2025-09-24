@@ -58,9 +58,44 @@
       "create": {
         "method": "POST",
         "path": "/api/customers",
-        "description": "Create new customer (PENDING IMPLEMENTATION)",
-        "status": "NOT_IMPLEMENTED",
-        "requestBody": "Customer object without _id, createdAt, updatedAt"
+        "description": "Create new customer",
+        "status": "IMPLEMENTED",
+        "requestBody": {
+          "organisation": {
+            "organisation_name": "string (required)",
+            "email_domain": "string (optional)",
+            "logo_url": "string (optional)",
+            "notes": "string (optional)",
+            "metadata": "object (optional)"
+          },
+          "company_profile": {
+            "business_number": "string (optional, ABN format)",
+            "company_number": "string (optional, ACN format)",
+            "trading_name": "string (optional)",
+            "industry_type": "string (optional)",
+            "organisation_size": "string (optional)"
+          },
+          "business_address": {
+            "street": "string (optional)",
+            "suburb": "string (optional)",
+            "state": "string (optional)",
+            "postcode": "string (optional, 4 digits)"
+          },
+          "postal_address": {
+            "street": "string (optional)",
+            "suburb": "string (optional)",
+            "state": "string (optional)",
+            "postcode": "string (optional, 4 digits)"
+          },
+          "contact_methods": "array (optional)",
+          "metadata": "array (optional)",
+          "is_active": "boolean (optional, default: true)"
+        },
+        "response": {
+          "success": true,
+          "message": "Customer created successfully",
+          "data": "Created customer object with _id, timestamps"
+        }
       },
       "update": {
         "method": "PUT",
@@ -165,6 +200,7 @@
     "searchCustomers": "curl -X GET 'http://localhost:30001/api/customers?search=Sydney'",
     "sortByName": "curl -X GET 'http://localhost:30001/api/customers?sortBy=organisation.organisation_name&sortOrder=asc'",
     "getSingleCustomer": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07",
+    "createCustomer": "curl -X POST http://localhost:30001/api/customers -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Test Company\"}}'",
     "healthCheck": "curl -X GET http://localhost:30001/health"
   },
   "errorResponses": {
@@ -226,7 +262,6 @@
     "schemaAlignment": "All schemas are aligned between database model, validation, and API responses",
     "dataFormat": "API returns exact same structure as data/sample-customers.json",
     "pendingImplementation": [
-      "POST /api/customers - Create new customer",
       "PUT /api/customers/:id - Update customer",
       "DELETE /api/customers/:id - Delete customer",
       "Advanced search functionality",
