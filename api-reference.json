@@ -1,0 +1,237 @@
+{
+  "apiInfo": {
+    "title": "Fulqrom Hub REST API",
+    "description": "Australian Commercial Real Estate & HVAC Building Management System API",
+    "version": "1.0.0",
+    "baseUrl": "http://localhost:30001",
+    "database": "MongoDB Atlas - fulqrom-hub collection"
+  },
+  "endpoints": {
+    "health": {
+      "method": "GET",
+      "path": "/health",
+      "description": "API health check",
+      "response": {
+        "status": "OK",
+        "timestamp": "2025-09-24T07:07:07.052Z",
+        "service": "Fulqrom Hub API",
+        "version": "1.0.0"
+      }
+    },
+    "customers": {
+      "list": {
+        "method": "GET",
+        "path": "/api/customers",
+        "description": "Get all customers with pagination and filtering",
+        "queryParams": {
+          "page": "integer (default: 1) - Page number",
+          "limit": "integer (default: 10, max: 100) - Items per page",
+          "is_active": "boolean - Filter by active status",
+          "state": "string - Australian state (NSW, VIC, QLD, WA, SA, TAS, ACT, NT)",
+          "search": "string (max: 200) - Search in organisation names",
+          "sortBy": "string (organisation.organisation_name|createdAt|updatedAt) - Sort field",
+          "sortOrder": "string (asc|desc) - Sort direction"
+        },
+        "response": {
+          "success": true,
+          "count": 8,
+          "totalCount": 8,
+          "totalPages": 1,
+          "currentPage": 1,
+          "hasNextPage": false,
+          "hasPrevPage": false,
+          "data": "Array of customer objects (see customer structure below)"
+        }
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/customers/:id",
+        "description": "Get single customer by ObjectID",
+        "params": {
+          "id": "MongoDB ObjectID (24-character hex string)"
+        },
+        "response": {
+          "success": true,
+          "data": "Single customer object (see customer structure below)"
+        }
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/customers",
+        "description": "Create new customer (PENDING IMPLEMENTATION)",
+        "status": "NOT_IMPLEMENTED",
+        "requestBody": "Customer object without _id, createdAt, updatedAt"
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/customers/:id",
+        "description": "Update existing customer (PENDING IMPLEMENTATION)",
+        "status": "NOT_IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID (24-character hex string)"
+        },
+        "requestBody": "Partial customer object"
+      },
+      "delete": {
+        "method": "DELETE",
+        "path": "/api/customers/:id",
+        "description": "Delete customer (PENDING IMPLEMENTATION)",
+        "status": "NOT_IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID (24-character hex string)"
+        }
+      }
+    },
+    "debug": {
+      "collections": {
+        "method": "GET",
+        "path": "/api/customers/debug/collections",
+        "description": "List available MongoDB collections",
+        "response": {
+          "success": true,
+          "collections": ["customers"],
+          "currentModel": "customers"
+        }
+      }
+    }
+  },
+  "customerStructure": {
+    "_id": "MongoDB ObjectID",
+    "organisation": {
+      "organisation_name": "string (required, max: 200)",
+      "email_domain": "string (optional, domain format)",
+      "logo_url": "string (optional, URL format)",
+      "notes": "string (optional, max: 2000)",
+      "metadata": "object (optional, free-form data)"
+    },
+    "company_profile": {
+      "business_number": "string (optional, ABN format with spaces)",
+      "company_number": "string (optional, ACN format with spaces)",
+      "trading_name": "string (optional)",
+      "industry_type": "enum (Technology|Healthcare|Government|Retail|Hospitality|Industrial|Service|Finance|Education)",
+      "organisation_size": "enum (1-10|11-50|51-200|201-500|501-1000|1001+)"
+    },
+    "business_address": {
+      "street": "string (required, max: 100)",
+      "suburb": "string (required, max: 50)",
+      "state": "enum (NSW|VIC|QLD|WA|SA|TAS|ACT|NT)",
+      "postcode": "string (required, 4 digits)"
+    },
+    "postal_address": {
+      "street": "string (required, max: 100)",
+      "suburb": "string (required, max: 50)",
+      "state": "enum (NSW|VIC|QLD|WA|SA|TAS|ACT|NT)",
+      "postcode": "string (required, 4 digits)"
+    },
+    "contact_methods": [
+      {
+        "_id": "MongoDB ObjectID (auto-generated)",
+        "full_name": "string (required, max: 100)",
+        "job_title": "string (optional)",
+        "department": "string (optional)",
+        "role_type": "enum (Primary|Billing|Technical|General|Emergency|Project)",
+        "contact_type": "enum (Internal|External|Supplier|Customer|Contractor|Consultant|Emergency|Billing|Technical)",
+        "platform_access": "enum (Administrative|Operational|View Only|No Access)",
+        "method_type": "enum (Email|Phone|SMS|WhatsApp)",
+        "method_value": "string (required)",
+        "label": "string (optional)",
+        "is_primary": "boolean (default: false)",
+        "createdAt": "DateTime",
+        "updatedAt": "DateTime"
+      }
+    ],
+    "metadata": [
+      {
+        "key": "string (required)",
+        "value": "string (required)"
+      }
+    ],
+    "is_active": "boolean (default: true)",
+    "createdAt": "DateTime",
+    "updatedAt": "DateTime",
+    "__v": "number (MongoDB version key)",
+    "full_business_address": "string (virtual field - formatted address)",
+    "full_postal_address": "string (virtual field - formatted address)",
+    "primary_contact": "object (virtual field - first contact with is_primary: true)",
+    "display_name": "string (virtual field - organisation.organisation_name)",
+    "abn_display": "string (virtual field - company_profile.business_number)",
+    "id": "string (virtual field - same as _id)"
+  },
+  "sampleApiCalls": {
+    "getAllCustomers": "curl -X GET http://localhost:30001/api/customers",
+    "getCustomersWithPagination": "curl -X GET 'http://localhost:30001/api/customers?page=1&limit=5'",
+    "filterByState": "curl -X GET 'http://localhost:30001/api/customers?state=NSW'",
+    "filterByActive": "curl -X GET 'http://localhost:30001/api/customers?is_active=true'",
+    "searchCustomers": "curl -X GET 'http://localhost:30001/api/customers?search=Sydney'",
+    "sortByName": "curl -X GET 'http://localhost:30001/api/customers?sortBy=organisation.organisation_name&sortOrder=asc'",
+    "getSingleCustomer": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07",
+    "healthCheck": "curl -X GET http://localhost:30001/health"
+  },
+  "errorResponses": {
+    "400": {
+      "success": false,
+      "message": "Validation error message",
+      "details": "Object with validation details"
+    },
+    "404": {
+      "success": false,
+      "message": "Customer not found",
+      "details": {
+        "customerId": "ObjectID"
+      }
+    },
+    "500": {
+      "success": false,
+      "message": "Internal server error",
+      "error": "Error details"
+    }
+  },
+  "validationRules": {
+    "organisation_name": "Required, string, max 200 characters",
+    "email_domain": "Optional, valid domain format",
+    "business_number": "Optional, ABN format (11 digits with spaces)",
+    "company_number": "Optional, ACN format (9 digits with spaces)",
+    "postcode": "Required, exactly 4 digits",
+    "state": "Required, must be valid Australian state",
+    "method_type": "Required for contact methods",
+    "method_value": "Required for contact methods",
+    "full_name": "Required for contact methods, max 100 characters"
+  },
+  "australianConstants": {
+    "states": ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"],
+    "organisationSizes": ["1-10", "11-50", "51-200", "201-500", "501-1000", "1001+"],
+    "industryTypes": ["Technology", "Healthcare", "Government", "Retail", "Hospitality", "Industrial", "Service", "Finance", "Education"],
+    "roleTypes": ["Primary", "Billing", "Technical", "General", "Emergency", "Project"],
+    "contactTypes": ["Internal", "External", "Supplier", "Customer", "Contractor", "Consultant", "Emergency", "Billing", "Technical"],
+    "platformAccess": ["Administrative", "Operational", "View Only", "No Access"],
+    "methodTypes": ["Email", "Phone", "SMS", "WhatsApp"]
+  },
+  "databaseInfo": {
+    "connectionString": "mongodb+srv://shriramsoft_db_user:nbNKl1V3TpBAQhfo@cluster0.mulczg0.mongodb.net/fulqrom-hub",
+    "database": "fulqrom-hub",
+    "collection": "customers",
+    "totalCustomers": 8,
+    "sampleObjectIds": [
+      "68d395f9c7ad6627ad607f07",
+      "68d395f9c7ad6627ad607f0a",
+      "68d395f9c7ad6627ad607f0d",
+      "68d395f9c7ad6627ad607f10",
+      "68d395f9c7ad6627ad607f12",
+      "68d395f9c7ad6627ad607f15",
+      "68d395f9c7ad6627ad607f17",
+      "68d395f9c7ad6627ad607f1a"
+    ]
+  },
+  "notes": {
+    "schemaAlignment": "All schemas are aligned between database model, validation, and API responses",
+    "dataFormat": "API returns exact same structure as data/sample-customers.json",
+    "pendingImplementation": [
+      "POST /api/customers - Create new customer",
+      "PUT /api/customers/:id - Update customer",
+      "DELETE /api/customers/:id - Delete customer",
+      "Advanced search functionality",
+      "Bulk operations"
+    ],
+    "testingDatabase": "To test edits, use ObjectID from sampleObjectIds array above"
+  }
+}
