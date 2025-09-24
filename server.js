@@ -18,8 +18,15 @@ app.use(compression());
 
 // CORS configuration for development
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
+  origin: [
+    process.env.CLIENT_URL || 'http://localhost:8080',
+    'http://localhost:8080',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 
 // Body parsing middleware
