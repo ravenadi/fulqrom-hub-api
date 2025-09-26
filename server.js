@@ -14,6 +14,7 @@ const floorsRouter = require('./routes/floors');
 const assetsRouter = require('./routes/assets');
 const buildingTenantsRouter = require('./routes/tenants');
 const documentsRouter = require('./routes/documents');
+const hierarchyRouter = require('./routes/hierarchy');
 
 const app = express();
 const PORT = process.env.PORT || 30001;
@@ -60,6 +61,7 @@ app.use('/api/floors', floorsRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/building-tenants', buildingTenantsRouter);
 app.use('/api/documents', documentsRouter);
+app.use('/api/hierarchy', hierarchyRouter);
 
 // Handle 404 for API routes
 app.use('/api/*', (req, res) => {
@@ -85,7 +87,8 @@ app.get('/', (req, res) => {
       floors: '/api/floors',
       assets: '/api/assets',
       building_tenants: '/api/building-tenants',
-      documents: '/api/documents'
+      documents: '/api/documents',
+      hierarchy: '/api/hierarchy/:customer_id'
     }
   });
 });

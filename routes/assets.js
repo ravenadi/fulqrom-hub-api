@@ -9,13 +9,16 @@ router.get('/', async (req, res) => {
     const {
       customer_id,
       site_id,
-      building_id,
       category,
       status,
       condition,
       manufacturer,
       warranty_expired,
-      is_active
+      is_active,
+      page = 1,
+      limit = 50,
+      sort_by = 'createdAt',
+      sort_order = 'desc'
     } = req.query;
 
     // Build filter query
@@ -27,10 +30,6 @@ router.get('/', async (req, res) => {
 
     if (site_id) {
       filterQuery.site_id = site_id;
-    }
-
-    if (building_id) {
-      filterQuery.building_id = building_id;
     }
 
     if (category) {
@@ -46,7 +45,7 @@ router.get('/', async (req, res) => {
     }
 
     if (manufacturer) {
-      filterQuery.manufacturer = new RegExp(manufacturer, 'i');
+      filterQuery.make = new RegExp(manufacturer, 'i');
     }
 
     if (warranty_expired === 'true') {
@@ -59,35 +58,105 @@ router.get('/', async (req, res) => {
       filterQuery.is_active = is_active === 'true';
     }
 
+    // Pagination
+    const pageNumber = Math.max(1, parseInt(page));
+    const limitNumber = Math.min(Math.max(1, parseInt(limit)), 200); // Max 200 per page
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Sort configuration
+    const sortField = ['createdAt', 'updatedAt', 'asset_no', 'asset_id', 'category', 'status', 'condition', 'make'].includes(sort_by) ? sort_by : 'createdAt';
+    const sortDirection = sort_order === 'asc' ? 1 : -1;
+
+    // Get total count for pagination
+    const totalAssets = await Asset.countDocuments(filterQuery);
+
+    // Get paginated assets
     const assets = await Asset.find(filterQuery)
       .populate('customer_id', 'organisation.organisation_name')
       .populate('site_id', 'site_name')
-      .populate('building_id', 'building_name')
-      .sort({ createdAt: -1 });
+      .sort({ [sortField]: sortDirection })
+      .skip(skip)
+      .limit(limitNumber);
 
-    // Calculate summary statistics
-    const totalAssets = assets.length;
-    const operationalAssets = assets.filter(asset => asset.status === 'Operational').length;
-    const warrantyExpiringAssets = assets.filter(asset => {
-      if (!asset.warranty_expiry) return false;
-      const today = new Date();
-      const thirtyDaysFromNow = new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000));
-      return asset.warranty_expiry <= thirtyDaysFromNow && asset.warranty_expiry >= today;
-    }).length;
-    const maintenanceRequiredAssets = assets.filter(asset =>
-      asset.status === 'Maintenance Required' || asset.condition === 'Fair'
-    ).length;
+    // Calculate summary statistics (on filtered data, not paginated)
+    const summaryStats = await Asset.aggregate([
+      { $match: filterQuery },
+      {
+        $group: {
+          _id: null,
+          total_assets: { $sum: 1 },
+          active_assets: {
+            $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] }
+          },
+          operational_assets: {
+            $sum: { $cond: [{ $eq: ['$status', 'Operational'] }, 1, 0] }
+          },
+          good_condition: {
+            $sum: { $cond: [{ $eq: ['$condition', 'Good'] }, 1, 0] }
+          },
+          poor_condition: {
+            $sum: { $cond: [{ $eq: ['$condition', 'Poor'] }, 1, 0] }
+          },
+          needs_maintenance: {
+            $sum: {
+              $cond: [
+                {
+                  $or: [
+                    { $eq: ['$status', 'Maintenance Required'] },
+                    { $eq: ['$condition', 'Poor'] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    const summary = summaryStats[0] || {
+      total_assets: 0,
+      active_assets: 0,
+      operational_assets: 0,
+      good_condition: 0,
+      poor_condition: 0,
+      needs_maintenance: 0
+    };
+
+    // Pagination metadata
+    const totalPages = Math.ceil(totalAssets / limitNumber);
+    const hasNextPage = pageNumber < totalPages;
+    const hasPrevPage = pageNumber > 1;
 
     res.status(200).json({
       success: true,
-      count: totalAssets,
-      summary: {
-        total_assets: totalAssets,
-        operational: operationalAssets,
-        warranty_expiring: warrantyExpiringAssets,
-        needs_maintenance: maintenanceRequiredAssets
+      data: assets,
+      pagination: {
+        current_page: pageNumber,
+        per_page: limitNumber,
+        total_items: totalAssets,
+        total_pages: totalPages,
+        has_next_page: hasNextPage,
+        has_prev_page: hasPrevPage,
+        next_page: hasNextPage ? pageNumber + 1 : null,
+        prev_page: hasPrevPage ? pageNumber - 1 : null
       },
-      data: assets
+      summary: summary,
+      filters_applied: {
+        customer_id: customer_id || null,
+        site_id: site_id || null,
+        category: category || null,
+        status: status || null,
+        condition: condition || null,
+        manufacturer: manufacturer || null,
+        warranty_expired: warranty_expired || null,
+        is_active: is_active || null
+      },
+      sort: {
+        field: sortField,
+        order: sort_order
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -177,6 +246,7 @@ router.put('/:id', async (req, res) => {
     });
   }
 });
+
 
 // GET /api/assets/summary/stats - Get asset summary statistics
 router.get('/summary/stats', async (req, res) => {
