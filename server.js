@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const errorHandler = require('./middleware/errorHandler');
 const customersRouter = require('./routes/customers');
+const contactsRouter = require('./routes/contacts');
 const sitesRouter = require('./routes/sites');
 const buildingsRouter = require('./routes/buildings');
 const floorsRouter = require('./routes/floors');
@@ -52,6 +53,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/customers', customersRouter);
+app.use('/api/customers/:customerId/contacts', contactsRouter);
 app.use('/api/sites', sitesRouter);
 app.use('/api/buildings', buildingsRouter);
 app.use('/api/floors', floorsRouter);
@@ -77,6 +79,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       customers: '/api/customers',
+      contacts: '/api/customers/:customerId/contacts',
       sites: '/api/sites',
       buildings: '/api/buildings',
       floors: '/api/floors',

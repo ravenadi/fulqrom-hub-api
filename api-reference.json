@@ -30,6 +30,7 @@
         "endpoints": {
           "health": "/health",
           "customers": "/api/customers",
+          "contacts": "/api/customers/:customerId/contacts",
           "sites": "/api/sites",
           "buildings": "/api/buildings",
           "floors": "/api/floors",
@@ -119,6 +120,186 @@
           "success": true,
           "message": "Customer updated successfully",
           "data": "Updated customer object"
+        }
+      },
+      "delete": {
+        "method": "DELETE",
+        "path": "/api/customers/:id",
+        "description": "Delete customer",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID (24-character hex string)"
+        },
+        "response": {
+          "success": true,
+          "message": "Customer deleted successfully",
+          "data": "Deleted customer object"
+        }
+      }
+    },
+    "contacts": {
+      "list": {
+        "method": "GET",
+        "path": "/api/customers/:customerId/contacts",
+        "description": "Get all contacts for a customer from contact_methods array",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID (24-character hex string)"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": "Array of contact objects from customer.contact_methods",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "getPrimary": {
+        "method": "GET",
+        "path": "/api/customers/:customerId/contacts/primary",
+        "description": "Get primary contact for customer",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": "Primary contact object",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "search": {
+        "method": "GET",
+        "path": "/api/customers/:customerId/contacts/search",
+        "description": "Search contacts by name, email, job title, or department",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID"
+        },
+        "queryParams": {
+          "q": "Search term for name, email, job title, department",
+          "role_type": "Filter by role type",
+          "contact_type": "Filter by contact type"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": "Array of filtered contact objects",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/customers/:customerId/contacts/:id",
+        "description": "Get single contact by ID from customer's contact_methods",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID",
+          "id": "Contact ObjectID from contact_methods array"
+        },
+        "response": {
+          "success": true,
+          "data": "Single contact object",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/customers/:customerId/contacts",
+        "description": "Add new contact to customer's contact_methods array",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID"
+        },
+        "requestBody": {
+          "full_name": "string (optional)",
+          "job_title": "string (optional)",
+          "department": "string (optional)",
+          "role_type": "string (optional)",
+          "contact_type": "string (optional)",
+          "platform_access": "string (optional)",
+          "method_type": "string (optional)",
+          "method_value": "string (optional)",
+          "label": "string (optional)",
+          "is_primary": "boolean (optional, default: false)"
+        },
+        "response": {
+          "success": true,
+          "message": "Contact created successfully",
+          "data": "Created contact object with auto-generated _id",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/customers/:customerId/contacts/:id",
+        "description": "Update contact in customer's contact_methods array",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID",
+          "id": "Contact ObjectID from contact_methods array"
+        },
+        "requestBody": "Partial contact object",
+        "response": {
+          "success": true,
+          "message": "Contact updated successfully",
+          "data": "Updated contact object",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "setPrimary": {
+        "method": "PATCH",
+        "path": "/api/customers/:customerId/contacts/:id/primary",
+        "description": "Set contact as primary (removes primary from others)",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID",
+          "id": "Contact ObjectID"
+        },
+        "response": {
+          "success": true,
+          "message": "Contact set as primary successfully",
+          "data": "Updated contact object",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "delete": {
+        "method": "DELETE",
+        "path": "/api/customers/:customerId/contacts/:id",
+        "description": "Remove contact from customer's contact_methods array",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID",
+          "id": "Contact ObjectID"
+        },
+        "response": {
+          "success": true,
+          "message": "Contact deleted successfully",
+          "data": "Deleted contact object",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
         }
       }
     },
@@ -1190,6 +1371,11 @@
     "getCustomerById": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07",
     "createCustomer": "curl -X POST http://localhost:30001/api/customers -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Test Company\"}}'",
     "updateCustomer": "curl -X PUT http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07 -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Updated Company\"}}'",
+    "getCustomerContacts": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts",
+    "getPrimaryContact": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts/primary",
+    "createContact": "curl -X POST http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts -H 'Content-Type: application/json' -d '{\"full_name\":\"John Smith\",\"job_title\":\"Building Manager\",\"method_type\":\"Email\",\"method_value\":\"john@company.com\",\"is_primary\":true}'",
+    "updateContact": "curl -X PUT http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts/60d5ecb74e4b3c001f647b8c -H 'Content-Type: application/json' -d '{\"job_title\":\"Senior Building Manager\"}'",
+    "searchContacts": "curl -X GET 'http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts/search?q=john'",
     "getSitesByCustomer": "curl -X GET 'http://localhost:30001/api/sites?customer_id=68d395f9c7ad6627ad607f07'",
     "getBuildingStats": "curl -X GET http://localhost:30001/api/buildings/summary/stats",
     "getFloorsByBuilding": "curl -X GET http://localhost:30001/api/floors/by-building/60d5ecb74e4b3c001f647b8c",
