@@ -1,6 +1,35 @@
 const mongoose = require('mongoose');
 
-// Simplified address - just a string
+// Structured address schema
+const SiteAddressSchema = new mongoose.Schema({
+  street: {
+    type: String,
+    trim: true
+  },
+  suburb: {
+    type: String,
+    trim: true
+  },
+  state: {
+    type: String,
+    enum: ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'NT', 'ACT'],
+    trim: true
+  },
+  postcode: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return !v || /^\d{4}$/.test(v);
+      },
+      message: 'Postcode must be 4 digits'
+    }
+  },
+  full_address: {
+    type: String,
+    trim: true
+  }
+}, { _id: false });
 
 // Manager schema
 const SiteManagerSchema = new mongoose.Schema({
@@ -42,8 +71,80 @@ const SiteSchema = new mongoose.Schema({
   },
 
   address: {
+    type: mongoose.Schema.Types.Mixed,
+    default: function() {
+      return {};
+    }
+  },
+
+  type: {
     type: String,
-    trim: true
+    enum: ['commercial', 'mixed-use', 'industrial'],
+    default: 'commercial'
+  },
+
+  total_floor_area: {
+    type: Number,
+    default: 0
+  },
+
+  electricity_consumption: {
+    value: {
+      type: Number,
+      default: 0
+    },
+    trend: {
+      type: String,
+      enum: ['up', 'down', 'stable'],
+      default: 'stable'
+    },
+    yoy_change: {
+      type: Number,
+      default: 0
+    }
+  },
+
+  activity_level: {
+    total_actions: {
+      type: Number,
+      default: 0
+    },
+    closed_actions: {
+      type: Number,
+      default: 0
+    },
+    completion_rate: {
+      type: Number,
+      default: 0
+    }
+  },
+
+  comfort_score: {
+    rating: {
+      type: String,
+      enum: ['excellent', 'good', 'average', 'poor'],
+      default: 'good'
+    },
+    score: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0
+    }
+  },
+
+  equipment_health: {
+    status: {
+      type: String,
+      enum: ['excellent', 'good', 'average', 'poor'],
+      default: 'good'
+    },
+    score: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0
+    }
   },
 
   status: {
@@ -105,9 +206,32 @@ SiteSchema.virtual('formatted_created_date').get(function() {
   });
 });
 
-// Virtual for display address (same as address since it's already full)
+// Virtual for display address - handles both old string format and new object format
 SiteSchema.virtual('display_address').get(function() {
-  return this.address || '';
+  if (!this.address) return '';
+
+  // If address is still a string (backward compatibility)
+  if (typeof this.address === 'string') {
+    return this.address;
+  }
+
+  // If address is an object, use full_address or build from components
+  if (typeof this.address === 'object') {
+    if (this.address.full_address) {
+      return this.address.full_address;
+    }
+
+    // Build address from components
+    const parts = [];
+    if (this.address.street) parts.push(this.address.street);
+    if (this.address.suburb) parts.push(this.address.suburb);
+    if (this.address.state) parts.push(this.address.state);
+    if (this.address.postcode) parts.push(this.address.postcode);
+
+    return parts.join(', ');
+  }
+
+  return '';
 });
 
 // Indexes for performance
@@ -116,6 +240,9 @@ SiteSchema.index({ customer_id: 1 });
 SiteSchema.index({ status: 1 });
 SiteSchema.index({ is_active: 1 });
 SiteSchema.index({ address: 1 });
+SiteSchema.index({ 'address.state': 1 });
+SiteSchema.index({ 'address.postcode': 1 });
+SiteSchema.index({ type: 1 });
 SiteSchema.index({ 'manager.name': 1 });
 
 // Ensure virtual fields are serialized
