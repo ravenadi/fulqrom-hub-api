@@ -28,6 +28,7 @@ const organisationSchema = Joi.object({
   organisation_name: Joi.string().trim().max(200).required(),
   email_domain: Joi.string().trim().allow(''),
   logo_url: Joi.string().uri().allow(''),
+  building_image: Joi.string().uri().allow(''),
   notes: Joi.string().trim().max(2000).allow(''),
   metadata: Joi.object().default({})
 });
@@ -122,6 +123,7 @@ const customerResponseSchema = {
       organisation_name: 'string',
       email_domain: 'string',
       logo_url: 'string',
+      building_image: 'string',
       notes: 'string',
       metadata: 'object'
     },

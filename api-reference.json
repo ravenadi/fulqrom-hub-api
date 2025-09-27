@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-09-24T07:07:07.052Z"
+    "lastUpdated": "2025-09-27T07:45:00.000Z"
   },
   "endpoints": {
     "health": {
@@ -75,6 +75,7 @@
             "organisation_name": "string (optional)",
             "email_domain": "string (optional)",
             "logo_url": "string (optional)",
+            "building_image": "string (optional)",
             "notes": "string (optional)",
             "metadata": "object (optional)"
           },
@@ -1078,6 +1079,7 @@
         "organisation_name": "string",
         "email_domain": "string",
         "logo_url": "string",
+        "building_image": "string",
         "notes": "string",
         "metadata": "object"
       },
@@ -1369,7 +1371,7 @@
   "sampleApiCalls": {
     "getAllCustomers": "curl -X GET http://localhost:30001/api/customers",
     "getCustomerById": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07",
-    "createCustomer": "curl -X POST http://localhost:30001/api/customers -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Test Company\"}}'",
+    "createCustomer": "curl -X POST http://localhost:30001/api/customers -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Test Company\",\"building_image\":\"https://example.com/building.jpg\"}}'",
     "updateCustomer": "curl -X PUT http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07 -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Updated Company\"}}'",
     "getCustomerContacts": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts",
     "getPrimaryContact": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts/primary",

@@ -14,6 +14,10 @@ const OrganisationSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  building_image: {
+    type: String,
+    trim: true
+  },
   notes: {
     type: String,
     trim: true
