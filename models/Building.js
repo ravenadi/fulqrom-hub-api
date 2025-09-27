@@ -12,11 +12,32 @@ const BuildingMetadataSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+// Building Manager schema (similar to Site Manager)
+const BuildingManagerSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    trim: true
+  },
+  email: {
+    type: String,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
+  title: {
+    type: String,
+    trim: true
+  }
+}, { _id: false });
+
 // Main Building schema
 const BuildingSchema = new mongoose.Schema({
   // Basic Information
   building_name: {
     type: String,
+    required: true,
     trim: true
   },
   building_code: {
@@ -31,79 +52,67 @@ const BuildingSchema = new mongoose.Schema({
   // Relationships
   site_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Site'
+    ref: 'Site',
+    required: true
   },
-  building_manager_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+  site_name: {
+    type: String,
+    trim: true
   },
   customer_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Customer'
   },
 
+  // Building Manager (embedded document like Site Manager)
+  manager: BuildingManagerSchema,
+
   // Classification
-  category: {
-    type: String,
-    trim: true
-    // Retail, Office, Industrial, Mixed Use
-  },
   building_type: {
     type: String,
+    required: true,
     trim: true
-    // Industrial, Commercial, Residential
-  },
-  building_grade: {
-    type: String,
-    trim: true
-    // Grade A, Grade B, Grade C, Premium
-  },
-  primary_use: {
-    type: String,
-    trim: true
-    // Warehouse, Office, Laboratory, Retail
   },
 
   // Specifications
   number_of_floors: {
     type: Number,
+    required: true,
+    min: 1,
     default: 1
   },
-  energy_rating: {
+  total_area: {
     type: Number,
-    min: 0,
-    max: 100
-    // Percentage (0-100%)
+    min: 0
+  },
+  year_built: {
+    type: Number,
+    min: 1900,
+    max: new Date().getFullYear() + 10
   },
 
-  // Status
+  // NABERS Rating (0-6 star rating as per requirements)
+  nabers_rating: {
+    type: Number,
+    min: 0,
+    max: 6,
+    validate: {
+      validator: function(v) {
+        return v === null || v === undefined || (Number.isInteger(v) && v >= 0 && v <= 6);
+      },
+      message: 'NABERS rating must be between 0 and 6 stars'
+    }
+  },
+
+  // Status (matching form payload)
   status: {
     type: String,
-    trim: true
-    // Active, Inactive, Under Construction, Planning
+    default: 'Active',
+    required: true
   },
 
-  // Summary/Calculated fields (these would typically be calculated from floors/assets)
-  total_floors: {
-    type: Number,
-    default: 0
-  },
-  active_floors: {
-    type: Number,
-    default: 0
-  },
-  total_assets: {
-    type: Number,
-    default: 0
-  },
-  avg_occupancy: {
-    type: Number,
-    min: 0,
-    max: 100,
-    default: 0
-  },
 
-  // Additional metadata
+  // Additional Information (renamed from metadata as per requirements)
   metadata: [BuildingMetadataSchema],
 
   // System fields
@@ -115,9 +124,15 @@ const BuildingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Virtual for formatted energy rating
-BuildingSchema.virtual('formatted_energy_rating').get(function() {
-  return this.energy_rating ? `${this.energy_rating}%` : 'N/A';
+// Virtual for formatted NABERS rating
+BuildingSchema.virtual('formatted_nabers_rating').get(function() {
+  return this.nabers_rating !== null && this.nabers_rating !== undefined ? `${this.nabers_rating} star${this.nabers_rating !== 1 ? 's' : ''}` : 'Not Rated';
+});
+
+// Virtual for energy_rating (backward compatibility with Vue file)
+BuildingSchema.virtual('energy_rating').get(function() {
+  // Convert NABERS rating (0-6) to percentage for Vue compatibility
+  return this.nabers_rating ? Math.round((this.nabers_rating / 6) * 100) : 0;
 });
 
 // Virtual for display name
@@ -133,21 +148,11 @@ BuildingSchema.virtual('building_identifier').get(function() {
   return this.building_name || this.building_code || 'Unnamed Building';
 });
 
-// Virtual for occupancy status
-BuildingSchema.virtual('occupancy_status').get(function() {
-  if (this.avg_occupancy >= 90) return 'High';
-  if (this.avg_occupancy >= 70) return 'Good';
-  if (this.avg_occupancy >= 50) return 'Moderate';
-  if (this.avg_occupancy > 0) return 'Low';
-  return 'Empty';
-});
-
 // Indexes for performance
 BuildingSchema.index({ building_name: 1 });
 BuildingSchema.index({ building_code: 1 });
 BuildingSchema.index({ site_id: 1 });
 BuildingSchema.index({ customer_id: 1 });
-BuildingSchema.index({ category: 1 });
 BuildingSchema.index({ building_type: 1 });
 BuildingSchema.index({ status: 1 });
 BuildingSchema.index({ is_active: 1 });
@@ -155,7 +160,7 @@ BuildingSchema.index({ is_active: 1 });
 // Compound indexes
 BuildingSchema.index({ customer_id: 1, site_id: 1 });
 BuildingSchema.index({ site_id: 1, status: 1 });
-BuildingSchema.index({ category: 1, building_grade: 1 });
+BuildingSchema.index({ building_type: 1, status: 1 });
 
 // Ensure virtual fields are serialized
 BuildingSchema.set('toJSON', { virtuals: true });

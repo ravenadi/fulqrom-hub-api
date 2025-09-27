@@ -24,6 +24,10 @@ const AssetSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Site'
   },
+  building_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Building'
+  },
 
   // Primary Information
   asset_id: {

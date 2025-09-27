@@ -3,82 +3,100 @@ const Floor = require('../models/Floor');
 
 const router = express.Router();
 
-// GET /api/floors - List all floors
+// GET /api/floors - List all floors with pagination and search
 router.get('/', async (req, res) => {
   try {
     const {
+      page = 1,
+      per_page = 10,
+      search,
       customer_id,
       site_id,
       building_id,
       floor_type,
-      occupancy_type,
-      access_control,
-      status,
+      sort_by = 'createdAt',
+      sort_order = 'desc',
       is_active
     } = req.query;
 
     // Build filter query
     let filterQuery = {};
 
+    // Search functionality
+    if (search) {
+      filterQuery.$or = [
+        { floor_name: new RegExp(search, 'i') }
+      ];
+    }
+
+    // Filter by customer
     if (customer_id) {
-      filterQuery.customer_id = customer_id;
+      const customerIds = customer_id.split(',').map(id => id.trim());
+      filterQuery.customer_id = { $in: customerIds };
     }
 
+    // Filter by site
     if (site_id) {
-      filterQuery.site_id = site_id;
+      const siteIds = site_id.split(',').map(id => id.trim());
+      filterQuery.site_id = { $in: siteIds };
     }
 
+    // Filter by building
     if (building_id) {
-      filterQuery.building_id = building_id;
+      const buildingIds = building_id.split(',').map(id => id.trim());
+      filterQuery.building_id = { $in: buildingIds };
     }
 
+    // Filter by floor type
     if (floor_type) {
       filterQuery.floor_type = floor_type;
-    }
-
-    if (occupancy_type) {
-      filterQuery.occupancy_type = occupancy_type;
-    }
-
-    if (access_control) {
-      filterQuery.access_control = access_control;
-    }
-
-    if (status) {
-      filterQuery.status = status;
     }
 
     if (is_active !== undefined) {
       filterQuery.is_active = is_active === 'true';
     }
 
+    // Pagination
+    const limit = parseInt(per_page);
+    const skip = (parseInt(page) - 1) * limit;
+
+    // Sort configuration
+    const sortConfig = {};
+    sortConfig[sort_by] = sort_order === 'desc' ? -1 : 1;
+
+    // Get total count for pagination
+    const totalCount = await Floor.countDocuments(filterQuery);
+
+    // Fetch floors with pagination
     const floors = await Floor.find(filterQuery)
-      .populate('customer_id', 'organisation.organisation_name')
       .populate('site_id', 'site_name address')
       .populate('building_id', 'building_name building_code')
-      .sort({ building_id: 1, floor_number: 1 });
+      .populate('customer_id', 'organisation.organisation_name')
+      .sort(sortConfig)
+      .skip(skip)
+      .limit(limit);
 
-    // Calculate summary statistics
-    const totalFloors = floors.length;
-    const activeFloors = floors.filter(floor => floor.status === 'Active').length;
-    const underConstruction = floors.filter(floor => floor.status === 'Under Construction').length;
-    const totalAssets = floors.reduce((sum, floor) => sum + (floor.assets_count || 0), 0);
-    const totalArea = floors.reduce((sum, floor) => sum + (floor.floor_area || 0), 0);
-    const avgOccupancy = floors.length > 0 ?
-      floors.reduce((sum, floor) => sum + (floor.occupancy_percentage || 0), 0) / floors.length : 0;
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / limit);
+    const currentPage = parseInt(page);
 
     res.status(200).json({
       success: true,
-      count: totalFloors,
-      summary: {
-        total_floors: totalFloors,
-        active_floors: activeFloors,
-        under_construction: underConstruction,
-        total_assets: totalAssets,
-        total_area: Math.round(totalArea),
-        avg_occupancy: Math.round(avgOccupancy)
+      data: floors,
+      meta: {
+        current_page: currentPage,
+        per_page: limit,
+        total: totalCount,
+        last_page: totalPages,
+        from: skip + 1,
+        to: Math.min(skip + limit, totalCount)
       },
-      data: floors
+      links: {
+        first: `${req.protocol}://${req.get('host')}${req.baseUrl}?page=1&per_page=${limit}`,
+        last: `${req.protocol}://${req.get('host')}${req.baseUrl}?page=${totalPages}&per_page=${limit}`,
+        prev: currentPage > 1 ? `${req.protocol}://${req.get('host')}${req.baseUrl}?page=${currentPage - 1}&per_page=${limit}` : null,
+        next: currentPage < totalPages ? `${req.protocol}://${req.get('host')}${req.baseUrl}?page=${currentPage + 1}&per_page=${limit}` : null
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -149,7 +167,10 @@ router.put('/:id', async (req, res) => {
       req.params.id,
       req.body,
       { new: true, runValidators: true }
-    );
+    )
+    .populate('site_id', 'site_name address')
+    .populate('building_id', 'building_name building_code')
+    .populate('customer_id', 'organisation.organisation_name');
 
     if (!floor) {
       return res.status(404).json({
@@ -167,6 +188,52 @@ router.put('/:id', async (req, res) => {
     res.status(400).json({
       success: false,
       message: 'Error updating floor',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/floors/:id - Delete floor
+router.delete('/:id', async (req, res) => {
+  try {
+    const floor = await Floor.findByIdAndDelete(req.params.id);
+
+    if (!floor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Floor not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Floor deleted successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting floor',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/floors/options/dropdown - Get dropdown options
+router.get('/options/dropdown', async (req, res) => {
+  try {
+    const options = {
+      floor_types: ['Office', 'Retail', 'Plant Room', 'Lab', 'Common Area', 'Residential'],
+      area_units: ['m²', 'sq ft']
+    };
+
+    res.status(200).json({
+      success: true,
+      data: options
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching dropdown options',
       error: error.message
     });
   }

@@ -3,77 +3,94 @@ const Building = require('../models/Building');
 
 const router = express.Router();
 
-// GET /api/buildings - List all buildings
+// GET /api/buildings - List all buildings with pagination and search
 router.get('/', async (req, res) => {
   try {
     const {
-      customer_id,
+      page = 1,
+      per_page = 10,
+      search,
       site_id,
-      category,
       building_type,
-      building_grade,
-      status,
+      operational_status,
+      sort_by = 'created_date',
+      sort_order = 'desc',
       is_active
     } = req.query;
 
     // Build filter query
     let filterQuery = {};
 
-    if (customer_id) {
-      filterQuery.customer_id = customer_id;
+    // Search functionality
+    if (search) {
+      filterQuery.$or = [
+        { building_name: new RegExp(search, 'i') },
+        { building_code: new RegExp(search, 'i') },
+        { site_name: new RegExp(search, 'i') }
+      ];
     }
 
+    // Filter by site
     if (site_id) {
-      filterQuery.site_id = site_id;
+      const siteIds = site_id.split(',').map(id => id.trim());
+      filterQuery.site_id = { $in: siteIds };
     }
 
-    if (category) {
-      filterQuery.category = category;
-    }
-
+    // Filter by building type
     if (building_type) {
       filterQuery.building_type = building_type;
     }
 
-    if (building_grade) {
-      filterQuery.building_grade = building_grade;
-    }
-
-    if (status) {
-      filterQuery.status = status;
+    // Filter by status
+    if (operational_status) {
+      const statuses = operational_status.split(',').map(status => status.trim());
+      filterQuery.status = { $in: statuses };
     }
 
     if (is_active !== undefined) {
       filterQuery.is_active = is_active === 'true';
     }
 
-    const buildings = await Building.find(filterQuery)
-      .populate('customer_id', 'organisation.organisation_name')
-      .populate('site_id', 'site_name address')
-      .populate('building_manager_id', 'name email')
-      .sort({ createdAt: -1 });
+    // Pagination
+    const limit = parseInt(per_page);
+    const skip = (parseInt(page) - 1) * limit;
 
-    // Calculate summary statistics
-    const totalBuildings = buildings.length;
-    const activeBuildings = buildings.filter(building => building.status === 'Active').length;
-    const underConstruction = buildings.filter(building => building.status === 'Under Construction').length;
-    const totalFloors = buildings.reduce((sum, building) => sum + (building.total_floors || 0), 0);
-    const totalAssets = buildings.reduce((sum, building) => sum + (building.total_assets || 0), 0);
-    const avgOccupancy = buildings.length > 0 ?
-      buildings.reduce((sum, building) => sum + (building.avg_occupancy || 0), 0) / buildings.length : 0;
+    // Sort configuration
+    const sortConfig = {};
+    sortConfig[sort_by] = sort_order === 'desc' ? -1 : 1;
+
+    // Get total count for pagination
+    const totalCount = await Building.countDocuments(filterQuery);
+
+    // Fetch buildings with pagination
+    const buildings = await Building.find(filterQuery)
+      .populate('site_id', 'site_name address')
+      .populate('customer_id', 'organisation.organisation_name')
+      .sort(sortConfig)
+      .skip(skip)
+      .limit(limit);
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / limit);
+    const currentPage = parseInt(page);
 
     res.status(200).json({
       success: true,
-      count: totalBuildings,
-      summary: {
-        total_buildings: totalBuildings,
-        active_buildings: activeBuildings,
-        under_construction: underConstruction,
-        total_floors: totalFloors,
-        total_assets: totalAssets,
-        avg_occupancy: Math.round(avgOccupancy)
+      data: buildings,
+      meta: {
+        current_page: currentPage,
+        per_page: limit,
+        total: totalCount,
+        last_page: totalPages,
+        from: skip + 1,
+        to: Math.min(skip + limit, totalCount)
       },
-      data: buildings
+      links: {
+        first: `${req.protocol}://${req.get('host')}${req.baseUrl}?page=1&per_page=${limit}`,
+        last: `${req.protocol}://${req.get('host')}${req.baseUrl}?page=${totalPages}&per_page=${limit}`,
+        prev: currentPage > 1 ? `${req.protocol}://${req.get('host')}${req.baseUrl}?page=${currentPage - 1}&per_page=${limit}` : null,
+        next: currentPage < totalPages ? `${req.protocol}://${req.get('host')}${req.baseUrl}?page=${currentPage + 1}&per_page=${limit}` : null
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -89,8 +106,7 @@ router.get('/:id', async (req, res) => {
   try {
     const building = await Building.findById(req.params.id)
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
-      .populate('site_id', 'site_name address status')
-      .populate('building_manager_id', 'name email phone title');
+      .populate('site_id', 'site_name address status');
 
     if (!building) {
       return res.status(404).json({
@@ -119,9 +135,8 @@ router.post('/', async (req, res) => {
     await building.save();
 
     // Populate the created building before returning
-    await building.populate('customer_id', 'organisation.organisation_name');
     await building.populate('site_id', 'site_name address');
-    await building.populate('building_manager_id', 'name email');
+    await building.populate('customer_id', 'organisation.organisation_name');
 
     res.status(201).json({
       success: true,
@@ -132,6 +147,84 @@ router.post('/', async (req, res) => {
     res.status(400).json({
       success: false,
       message: 'Error creating building',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/buildings/:id - Update building
+router.put('/:id', async (req, res) => {
+  try {
+    const building = await Building.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    )
+    .populate('site_id', 'site_name address')
+    .populate('customer_id', 'organisation.organisation_name');
+
+    if (!building) {
+      return res.status(404).json({
+        success: false,
+        message: 'Building not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Building updated successfully',
+      data: building
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Error updating building',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/buildings/:id - Delete building
+router.delete('/:id', async (req, res) => {
+  try {
+    const building = await Building.findByIdAndDelete(req.params.id);
+
+    if (!building) {
+      return res.status(404).json({
+        success: false,
+        message: 'Building not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Building deleted successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting building',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/buildings/options/dropdown - Get dropdown options
+router.get('/options/dropdown', async (req, res) => {
+  try {
+    const options = {
+      building_types: ['Office', 'Retail', 'Industrial', 'Mixed Use', 'Warehouse', 'Data Centre', 'Healthcare', 'Educational'],
+      statuses: ['Active', 'Under Construction', 'Renovation', 'Vacant', 'Demolished']
+    };
+
+    res.status(200).json({
+      success: true,
+      data: options
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching dropdown options',
       error: error.message
     });
   }

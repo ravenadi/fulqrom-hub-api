@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-09-27T07:45:00.000Z"
+    "lastUpdated": "2025-09-27T08:30:00.000Z"
   },
   "endpoints": {
     "health": {
@@ -36,7 +36,8 @@
           "floors": "/api/floors",
           "assets": "/api/assets",
           "building_tenants": "/api/building-tenants",
-          "documents": "/api/documents"
+          "documents": "/api/documents",
+          "hierarchy": "/api/hierarchy"
         }
       }
     },
@@ -414,14 +415,14 @@
           "building_code": "string",
           "site_id": "ObjectId (reference to Site)",
           "customer_id": "ObjectId (reference to Customer)",
-          "building_manager_id": "ObjectId (reference to User)",
-          "category": "string (Retail, Office, Industrial, Mixed Use)",
-          "building_type": "string (Industrial, Commercial, Residential)",
+          "manager": "object { name, email, phone, title }",
+          "category": "string",
+          "building_type": "string",
           "building_grade": "string (Grade A, Grade B, Grade C, Premium)",
           "primary_use": "string",
           "number_of_floors": "number",
           "energy_rating": "number (0-100)",
-          "status": "string (Active, Inactive, Under Construction, Planning)",
+          "status": "string",
           "metadata": "array (optional)",
           "is_active": "boolean (default: true)"
         },
@@ -1070,6 +1071,63 @@
           "data": "Array of category statistics"
         }
       }
+    },
+    "hierarchy": {
+      "get": {
+        "method": "GET",
+        "path": "/api/hierarchy/:customer_id",
+        "description": "Get hierarchical structure for customer (sites > buildings > floors > assets)",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customer_id": "MongoDB ObjectID"
+        },
+        "queryParams": {
+          "site_id": "Filter by specific site ID",
+          "building_id": "Filter by specific building ID - returns building-level hierarchy only"
+        },
+        "response": {
+          "success": true,
+          "data": "Array of hierarchical nodes (sites/buildings with nested floors and assets)",
+          "metadata": {
+            "total_sites": "number",
+            "total_buildings": "number",
+            "total_assets": "number",
+            "generated_floors": "number",
+            "view_level": "string (full|building)"
+          }
+        }
+      },
+      "stats": {
+        "method": "GET",
+        "path": "/api/hierarchy/:customer_id/stats",
+        "description": "Get hierarchy statistics for customer",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customer_id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "sites": {
+              "totalSites": "number",
+              "activeSites": "number",
+              "totalBuildings": "number",
+              "totalAssets": "number"
+            },
+            "buildings": {
+              "totalBuildings": "number",
+              "activeBuildings": "number",
+              "totalFloors": "number",
+              "avgEnergyRating": "number"
+            },
+            "assets": {
+              "totalAssets": "number",
+              "activeAssets": "number",
+              "avgAge": "number"
+            }
+          }
+        }
+      }
     }
   },
   "dataStructures": {
@@ -1169,15 +1227,15 @@
       "building_code": "string",
       "image_url": "string",
       "site_id": "ObjectId (reference to Site)",
-      "building_manager_id": "ObjectId (reference to User)",
+      "manager": "object { name, email, phone, title }",
       "customer_id": "ObjectId (reference to Customer)",
-      "category": "string (Retail, Office, Industrial, Mixed Use)",
-      "building_type": "string (Industrial, Commercial, Residential)",
+      "category": "string",
+      "building_type": "string",
       "building_grade": "string (Grade A, Grade B, Grade C, Premium)",
       "primary_use": "string",
       "number_of_floors": "number",
       "energy_rating": "number (0-100)",
-      "status": "string (Active, Inactive, Under Construction, Planning)",
+      "status": "string",
       "total_floors": "number",
       "active_floors": "number",
       "total_assets": "number",
@@ -1384,6 +1442,9 @@
     "getAssetsWithWarrantyExpiring": "curl -X GET 'http://localhost:30001/api/assets?warranty_expired=true'",
     "getTenantsByIndustry": "curl -X GET http://localhost:30001/api/building-tenants/by-industry",
     "searchDocuments": "curl -X GET 'http://localhost:30001/api/documents?search=HVAC'",
+    "getHierarchy": "curl -X GET http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df",
+    "getHierarchyByBuilding": "curl -X GET 'http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df?building_id=68d3e1de1bfdc3d6bd004643'",
+    "getHierarchyStats": "curl -X GET http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df/stats",
     "healthCheck": "curl -X GET http://localhost:30001/health"
   },
   "errorResponses": {
@@ -1444,7 +1505,7 @@
     "distanceUnit": "metres (m)"
   },
   "notes": {
-    "apiVersion": "This API reference reflects the current implementation as of 2025-09-24",
+    "apiVersion": "This API reference reflects the current implementation as of 2025-09-27",
     "routePrefix": "All API routes are prefixed with '/api/'",
     "tenantRouteDiscrepancy": "Tenant routes use '/api/building-tenants' in server.js but model collection is 'building_tenants'",
     "populatedFields": "Most GET requests populate referenced fields for better data context",
@@ -1454,6 +1515,9 @@
     "aggregationSupport": "Statistics endpoints use MongoDB aggregation for efficient data processing",
     "validationStrategy": "Comprehensive validation on API level with minimal frontend validation",
     "errorHandling": "Consistent error response format across all endpoints",
-    "securityFeatures": "CORS configured, helmet for security headers, input sanitization"
+    "securityFeatures": "CORS configured, helmet for security headers, input sanitization",
+    "hierarchyApi": "New hierarchy API provides nested site > building > floor > asset structure with building-level filtering",
+    "buildingEnumRemoval": "Building type and status enum restrictions removed to allow flexible values",
+    "assetBuildingLink": "Assets now include building_id field for proper building-level hierarchy filtering"
   }
 }

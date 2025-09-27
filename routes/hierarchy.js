@@ -133,17 +133,79 @@ router.get('/:customer_id', async (req, res) => {
     let totalAssets = 0;
     let generatedFloors = 0;
 
-    // Transform sites into hierarchy structure
+    // If building_id is specified, return only building-level hierarchy
+    if (building_id && mongoose.Types.ObjectId.isValid(building_id)) {
+      // Find the specific building across all sites
+      let targetBuilding = null;
+      let targetSite = null;
+
+      for (const site of sites) {
+        const building = site.buildings.find(b => b._id.toString() === building_id);
+        if (building) {
+          targetBuilding = building;
+          targetSite = site;
+          break;
+        }
+      }
+
+      if (!targetBuilding) {
+        return res.status(404).json({
+          success: false,
+          message: 'Building not found'
+        });
+      }
+
+      // Get assets for this building (filter by building context)
+      const buildingAssets = assets.filter(asset => {
+        // Filter assets by building_id if it exists on the asset
+        return asset.building_id && asset.building_id.toString() === building_id;
+      });
+
+      totalAssets = buildingAssets.length;
+      const floors = generateFloors(targetBuilding, buildingAssets);
+
+      // Return only the building hierarchy
+      const buildingHierarchy = {
+        id: targetBuilding._id.toString(),
+        name: targetBuilding.building_name || targetBuilding.building_code || 'Unnamed Building',
+        type: 'building',
+        details: {
+          buildingCode: targetBuilding.building_code,
+          buildingType: targetBuilding.building_type,
+          numberOfFloors: targetBuilding.number_of_floors,
+          totalArea: targetBuilding.total_area,
+          yearBuilt: targetBuilding.year_built,
+          nabersRating: targetBuilding.nabers_rating,
+          status: targetBuilding.status,
+          manager: targetBuilding.manager,
+          imageUrl: targetBuilding.image_url,
+          siteInfo: {
+            id: targetSite._id.toString(),
+            name: targetSite.site_name,
+            address: targetSite.display_address || targetSite.address
+          }
+        },
+        children: floors
+      };
+
+      return res.status(200).json({
+        success: true,
+        data: [buildingHierarchy],
+        metadata: {
+          total_buildings: 1,
+          total_assets: totalAssets,
+          generated_floors: floors.length,
+          view_level: 'building'
+        }
+      });
+    }
+
+    // Transform sites into hierarchy structure (full hierarchy)
     const hierarchyData = sites.map(site => {
       totalSites++;
 
-      // Filter buildings by building_id if specified
+      // Get all buildings for site-level view
       let buildings = site.buildings;
-      if (building_id && mongoose.Types.ObjectId.isValid(building_id)) {
-        buildings = buildings.filter(building =>
-          building._id.toString() === building_id
-        );
-      }
 
       totalBuildings += buildings.length;
 
