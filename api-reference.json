@@ -1087,7 +1087,9 @@
         },
         "queryParams": {
           "site_id": "Filter by specific site ID",
-          "building_id": "Filter by specific building ID - returns building-level hierarchy only"
+          "building_id": "Filter by specific building ID - returns building-level hierarchy only",
+          "floor_number": "Filter by floor number within a building (requires building_id) - returns floor-level hierarchy",
+          "floor_level": "Filter by exact floor level string (e.g., 'Lvl 20', 'GF') within a building (requires building_id) - returns floor-level hierarchy"
         },
         "response": {
           "success": true,
@@ -1097,7 +1099,8 @@
             "total_buildings": "number",
             "total_assets": "number",
             "generated_floors": "number",
-            "view_level": "string (full|building)"
+            "view_level": "string (full|building|floor|floor_level)",
+            "level": "string (only present when floor_level filtering is used)"
           }
         }
       },
@@ -1447,6 +1450,8 @@
     "searchDocuments": "curl -X GET 'http://localhost:30001/api/documents?search=HVAC'",
     "getHierarchy": "curl -X GET http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df",
     "getHierarchyByBuilding": "curl -X GET 'http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df?building_id=68d3e1de1bfdc3d6bd004643'",
+    "getHierarchyByFloorNumber": "curl -X GET 'http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df?building_id=68d3e1de1bfdc3d6bd004643&floor_number=5'",
+    "getHierarchyByFloorLevel": "curl -X GET 'http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df?building_id=68d3e1de1bfdc3d6bd004643&floor_level=Lvl+20'",
     "getHierarchyStats": "curl -X GET http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df/stats",
     "createFloor": "curl -X POST http://localhost:30001/api/floors -H 'Content-Type: application/json' -d '{\\\"floor_name\\\":\\\"Level 5\\\",\\\"floor_number\\\":5,\\\"floor_type\\\":\\\"Office\\\",\\\"building_id\\\":\\\"68d3e1de1bfdc3d6bd004643\\\",\\\"floor_area\\\":750,\\\"floor_area_unit\\\":\\\"m²\\\",\\\"assets_count\\\":15,\\\"status\\\":\\\"Active\\\"}'",
     "updateFloor": "curl -X PUT http://localhost:30001/api/floors/68d7da2fb488fd9b798db6bc -H 'Content-Type: application/json' -d '{\\\"floor_name\\\":\\\"Updated Floor\\\",\\\"current_occupancy\\\":50,\\\"assets_count\\\":20}'",
@@ -1522,10 +1527,11 @@
     "validationStrategy": "Comprehensive validation on API level with minimal frontend validation",
     "errorHandling": "Consistent error response format across all endpoints",
     "securityFeatures": "CORS configured, helmet for security headers, input sanitization",
-    "hierarchyApi": "New hierarchy API provides nested site > building > floor > asset structure with building-level filtering",
+    "hierarchyApi": "New hierarchy API provides nested site > building > floor > asset structure with building-level and floor-level filtering",
     "buildingEnumRemoval": "Building type and status enum restrictions removed to allow flexible values",
     "assetBuildingLink": "Assets now include building_id field for proper building-level hierarchy filtering",
     "floorModelEnhanced": "Floor model updated with comprehensive field set including assets_count, dual area systems, occupancy tracking, and metadata support",
-    "floorBackwardCompatibility": "Floor model maintains backward compatibility with both old (area_number, area_unit) and new (floor_area, floor_area_unit) field naming"
+    "floorBackwardCompatibility": "Floor model maintains backward compatibility with both old (area_number, area_unit) and new (floor_area, floor_area_unit) field naming",
+    "floorLevelFiltering": "Hierarchy API supports floor_level filtering by exact string match (e.g., 'Lvl 20', 'GF') for precise asset filtering within buildings"
   }
 }

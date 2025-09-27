@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Site = require('../models/Site');
 const Building = require('../models/Building');
+const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
 
 const router = express.Router();
@@ -88,7 +89,7 @@ function generateFloors(building, assets) {
 router.get('/:customer_id', async (req, res) => {
   try {
     const { customer_id } = req.params;
-    const { site_id, building_id } = req.query;
+    const { site_id, building_id, floor_number, floor_level } = req.query;
 
     // Validate customer_id
     if (!mongoose.Types.ObjectId.isValid(customer_id)) {
@@ -132,6 +133,107 @@ router.get('/:customer_id', async (req, res) => {
     let totalBuildings = 0;
     let totalAssets = 0;
     let generatedFloors = 0;
+
+    // If floor_level and building_id are specified, return floor-level hierarchy by level (MOST SPECIFIC)
+    if (floor_level && building_id && mongoose.Types.ObjectId.isValid(building_id)) {
+      // Get all assets for this customer first
+      const assetMatchQuery = { customer_id: new mongoose.Types.ObjectId(customer_id) };
+
+      // Filter assets by building_id and level
+      const floorAssets = assets.filter(asset => {
+        return asset.building_id &&
+               asset.building_id.toString() === building_id &&
+               asset.level === floor_level;
+      });
+
+      if (floorAssets.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: `No assets found for level '${floor_level}' in the specified building`
+        });
+      }
+
+      // Get building information for context
+      const targetBuilding = await Building.findById(building_id)
+        .populate('site_id', 'site_name address display_address')
+        .populate('customer_id', 'organisation.organisation_name');
+
+      if (!targetBuilding) {
+        return res.status(404).json({
+          success: false,
+          message: 'Building not found'
+        });
+      }
+
+      totalAssets = floorAssets.length;
+
+      // Transform assets to hierarchy nodes
+      const assetNodes = floorAssets.map(asset => ({
+        id: asset._id.toString(),
+        name: asset.asset_no || asset.asset_id || 'Unnamed Asset',
+        type: 'asset',
+        details: {
+          category: asset.category,
+          type: asset.type,
+          status: asset.status,
+          condition: asset.condition,
+          make: asset.make,
+          model: asset.model,
+          serial: asset.serial,
+          area: asset.area,
+          owner: asset.owner,
+          serviceStatus: asset.service_status,
+          dateOfInstallation: asset.date_of_installation,
+          age: asset.age,
+          purchaseCost: asset.purchase_cost_aud,
+          currentValue: asset.current_book_value_aud
+        },
+        children: []
+      }));
+
+      // Create display name for floor level
+      let floorDisplayName = floor_level;
+      if (floor_level === 'GF') {
+        floorDisplayName = 'Ground Floor';
+      } else if (floor_level.startsWith('Lvl ')) {
+        const levelNum = floor_level.replace('Lvl ', '').replace(/^0+/, '');
+        floorDisplayName = `Level ${levelNum}`;
+      }
+
+      // Return the floor hierarchy by level
+      const floorHierarchy = {
+        id: `${building_id}_${floor_level}`,
+        name: floorDisplayName,
+        type: 'floor',
+        details: {
+          originalLevel: floor_level,
+          assetsCount: floorAssets.length,
+          buildingInfo: {
+            id: targetBuilding._id.toString(),
+            name: targetBuilding.building_name,
+            code: targetBuilding.building_code,
+            type: targetBuilding.building_type
+          },
+          siteInfo: {
+            id: targetBuilding.site_id._id.toString(),
+            name: targetBuilding.site_id.site_name,
+            address: targetBuilding.site_id.display_address || targetBuilding.site_id.address
+          }
+        },
+        children: assetNodes
+      };
+
+      return res.status(200).json({
+        success: true,
+        data: [floorHierarchy],
+        metadata: {
+          total_floors: 1,
+          total_assets: totalAssets,
+          view_level: 'floor_level',
+          level: floor_level
+        }
+      });
+    }
 
     // If building_id is specified, return only building-level hierarchy
     if (building_id && mongoose.Types.ObjectId.isValid(building_id)) {
@@ -199,6 +301,107 @@ router.get('/:customer_id', async (req, res) => {
         }
       });
     }
+
+    // If floor_number and building_id are specified, return only floor-level hierarchy
+    if (floor_number && building_id && mongoose.Types.ObjectId.isValid(building_id)) {
+      // Find the specific floor by floor_number and building_id
+      const targetFloor = await Floor.findOne({
+        floor_number: parseInt(floor_number),
+        building_id: new mongoose.Types.ObjectId(building_id)
+      })
+        .populate('site_id', 'site_name address display_address')
+        .populate('building_id', 'building_name building_code building_type status manager image_url')
+        .populate('customer_id', 'organisation.organisation_name');
+
+      if (!targetFloor) {
+        return res.status(404).json({
+          success: false,
+          message: `Floor ${floor_number} not found in the specified building`
+        });
+      }
+
+      // Get assets for this floor (filter by floor_id if it exists on assets, or by level matching)
+      const floorAssets = assets.filter(asset => {
+        // Try to match by floor_id first
+        if (asset.floor_id && asset.floor_id.toString() === targetFloor._id.toString()) {
+          return true;
+        }
+        // Fallback: match by building_id and level string matching
+        if (asset.building_id && asset.building_id.toString() === building_id) {
+          if (asset.level && targetFloor.floor_name) {
+            return asset.level.toLowerCase().includes(targetFloor.floor_name.toLowerCase()) ||
+                   asset.level.includes(floor_number.toString());
+          }
+        }
+        return false;
+      });
+
+      totalAssets = floorAssets.length;
+
+      // Transform assets to hierarchy nodes
+      const assetNodes = floorAssets.map(asset => ({
+        id: asset._id.toString(),
+        name: asset.asset_no || asset.asset_id || 'Unnamed Asset',
+        type: 'asset',
+        details: {
+          category: asset.category,
+          type: asset.type,
+          status: asset.status,
+          condition: asset.condition,
+          make: asset.make,
+          model: asset.model,
+          serial: asset.serial,
+          area: asset.area,
+          owner: asset.owner,
+          serviceStatus: asset.service_status,
+          dateOfInstallation: asset.date_of_installation,
+          age: asset.age,
+          purchaseCost: asset.purchase_cost_aud,
+          currentValue: asset.current_book_value_aud
+        },
+        children: []
+      }));
+
+      // Return only the floor hierarchy
+      const floorHierarchy = {
+        id: targetFloor._id.toString(),
+        name: targetFloor.floor_name || 'Unnamed Floor',
+        type: 'floor',
+        details: {
+          floorNumber: targetFloor.floor_number,
+          floorType: targetFloor.floor_type,
+          status: targetFloor.status,
+          occupancy: targetFloor.current_occupancy || targetFloor.occupancy,
+          maxOccupancy: targetFloor.max_occupancy,
+          floorArea: targetFloor.floor_area || targetFloor.area_number,
+          floorAreaUnit: targetFloor.floor_area_unit || targetFloor.area_unit,
+          ceilingHeight: targetFloor.ceiling_height,
+          assetsCount: floorAssets.length,
+          buildingInfo: {
+            id: targetFloor.building_id._id.toString(),
+            name: targetFloor.building_id.building_name,
+            code: targetFloor.building_id.building_code
+          },
+          siteInfo: {
+            id: targetFloor.site_id._id.toString(),
+            name: targetFloor.site_id.site_name,
+            address: targetFloor.site_id.display_address || targetFloor.site_id.address
+          }
+        },
+        children: assetNodes
+      };
+
+      return res.status(200).json({
+        success: true,
+        data: [floorHierarchy],
+        metadata: {
+          total_floors: 1,
+          total_assets: totalAssets,
+          view_level: 'floor'
+        }
+      });
+    }
+
 
     // Transform sites into hierarchy structure (full hierarchy)
     const hierarchyData = sites.map(site => {
