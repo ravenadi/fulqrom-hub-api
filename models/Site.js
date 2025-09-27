@@ -25,6 +25,16 @@ const SiteAddressSchema = new mongoose.Schema({
       message: 'Postcode must be 4 digits'
     }
   },
+  latitude: {
+    type: Number,
+    min: -90,
+    max: 90
+  },
+  longitude: {
+    type: Number,
+    min: -180,
+    max: 180
+  },
   full_address: {
     type: String,
     trim: true
@@ -77,10 +87,41 @@ const SiteSchema = new mongoose.Schema({
     }
   },
 
+  site_code: {
+    type: String,
+    trim: true
+  },
+
   type: {
     type: String,
-    enum: ['commercial', 'mixed-use', 'industrial'],
-    default: 'commercial'
+    enum: ['University Campus', 'Shopping Centre', 'Corporate Office', 'Industrial Park', 'Data Center', 'Healthcare'],
+    default: 'Corporate Office'
+  },
+
+  security_level: {
+    type: String,
+    enum: ['Public Access', 'Controlled Access', 'High Security'],
+    default: 'Controlled Access'
+  },
+
+  site_logo: {
+    type: String,
+    trim: true
+  },
+
+  building_image: {
+    type: String,
+    trim: true
+  },
+
+  project_name: {
+    type: String,
+    trim: true
+  },
+
+  local_council: {
+    type: String,
+    trim: true
   },
 
   total_floor_area: {
@@ -149,8 +190,8 @@ const SiteSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    trim: true
-    // Active, Under Construction, Planning, Inactive
+    enum: ['Operational', 'In Development', 'Maintenance', 'Inactive', 'Decommissioned', 'Planned'],
+    default: 'Operational'
   },
 
   // Counts - these would typically be calculated from related data

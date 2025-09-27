@@ -95,4 +95,34 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT /api/sites/:id - Update site
+router.put('/:id', async (req, res) => {
+  try {
+    const site = await Site.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Site updated successfully',
+      data: site
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Error updating site',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
