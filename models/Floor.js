@@ -50,6 +50,19 @@ const FloorSchema = new mongoose.Schema({
     min: 0,
     default: 0
   },
+  current_occupancy: {
+    type: Number,
+    min: 0
+  },
+  max_occupancy: {
+    type: Number,
+    min: 0
+  },
+  occupancy_percentage: {
+    type: Number,
+    min: 0,
+    max: 100
+  },
 
   // Area specifications
   area_number: {
@@ -61,11 +74,45 @@ const FloorSchema = new mongoose.Schema({
     enum: ['m²', 'sq ft'],
     default: 'm²'
   },
+  floor_area: {
+    type: Number,
+    min: 0
+  },
+  floor_area_unit: {
+    type: String,
+    enum: ['m²', 'sq ft'],
+    default: 'm²'
+  },
+  ceiling_height: {
+    type: Number,
+    min: 0
+  },
+  ceiling_height_unit: {
+    type: String,
+    enum: ['m', 'ft'],
+    default: 'm'
+  },
+
+  // Status
+  status: {
+    type: String,
+    default: 'Active'
+  },
 
   // Relationships
   customer_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Customer'
+  },
+
+  // Additional Information
+  metadata: [FloorMetadataSchema],
+
+  // Counts
+  assets_count: {
+    type: Number,
+    default: 0,
+    min: 0
   },
 
   // System fields
@@ -96,6 +143,7 @@ FloorSchema.index({ site_id: 1 });
 FloorSchema.index({ building_id: 1 });
 FloorSchema.index({ customer_id: 1 });
 FloorSchema.index({ floor_type: 1 });
+FloorSchema.index({ status: 1 });
 FloorSchema.index({ is_active: 1 });
 
 // Compound indexes

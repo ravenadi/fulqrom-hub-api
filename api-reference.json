@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-09-27T08:30:00.000Z"
+    "lastUpdated": "2025-09-27T15:45:00.000Z"
   },
   "endpoints": {
     "health": {
@@ -522,16 +522,20 @@
           "building_id": "ObjectId (reference to Building)",
           "customer_id": "ObjectId (reference to Customer)",
           "floor_name": "string",
-          "floor_number": "string",
-          "floor_type": "string (Office, Lobby, Laboratory, Storage, Meeting, Executive)",
-          "occupancy_type": "string (Single Tenant, Multi Tenant, Mixed Use)",
-          "access_control": "string (Public, Private, Restricted, Secure)",
-          "floor_area": "number (square meters)",
-          "ceiling_height": "number (meters)",
+          "floor_number": "number",
+          "floor_type": "string (Office, Retail, Plant Room, Lab, Common Area, Residential)",
+          "occupancy": "number (default: 0)",
+          "current_occupancy": "number",
           "max_occupancy": "number",
-          "hvac_zones": "number",
-          "fire_compartment_id": "string",
-          "status": "string (Active, Under Construction, Planning, Inactive)",
+          "occupancy_percentage": "number (0-100)",
+          "area_number": "number",
+          "area_unit": "string (m²|sq ft, default: m²)",
+          "floor_area": "number",
+          "floor_area_unit": "string (m²|sq ft, default: m²)",
+          "ceiling_height": "number",
+          "ceiling_height_unit": "string (m|ft, default: m)",
+          "status": "string (default: Active)",
+          "assets_count": "number (default: 0)",
           "metadata": "array (optional)",
           "is_active": "boolean (default: true)"
         },
@@ -1256,21 +1260,20 @@
       "building_id": "ObjectId (reference to Building)",
       "customer_id": "ObjectId (reference to Customer)",
       "floor_name": "string",
-      "floor_number": "string",
-      "floor_type": "string (Office, Lobby, Laboratory, Storage, Meeting, Executive)",
-      "occupancy_type": "string (Single Tenant, Multi Tenant, Mixed Use)",
-      "access_control": "string (Public, Private, Restricted, Secure)",
-      "floor_area": "number (square meters)",
-      "floor_area_unit": "string (default: m²)",
-      "ceiling_height": "number (meters)",
-      "ceiling_height_unit": "string (default: m)",
-      "max_occupancy": "number",
-      "hvac_zones": "number",
-      "fire_compartment_id": "string",
+      "floor_number": "number",
+      "floor_type": "string (Office, Retail, Plant Room, Lab, Common Area, Residential)",
+      "occupancy": "number (default: 0)",
       "current_occupancy": "number",
+      "max_occupancy": "number",
       "occupancy_percentage": "number (0-100)",
-      "assets_count": "number",
-      "status": "string (Active, Under Construction, Planning, Inactive)",
+      "area_number": "number",
+      "area_unit": "string (m²|sq ft, default: m²)",
+      "floor_area": "number",
+      "floor_area_unit": "string (m²|sq ft, default: m²)",
+      "ceiling_height": "number",
+      "ceiling_height_unit": "string (m|ft, default: m)",
+      "status": "string (default: Active)",
+      "assets_count": "number (default: 0)",
       "metadata": [
         {
           "key": "string",
@@ -1445,6 +1448,9 @@
     "getHierarchy": "curl -X GET http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df",
     "getHierarchyByBuilding": "curl -X GET 'http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df?building_id=68d3e1de1bfdc3d6bd004643'",
     "getHierarchyStats": "curl -X GET http://localhost:30001/api/hierarchy/68d3929ae4c5d9b3e920a9df/stats",
+    "createFloor": "curl -X POST http://localhost:30001/api/floors -H 'Content-Type: application/json' -d '{\\\"floor_name\\\":\\\"Level 5\\\",\\\"floor_number\\\":5,\\\"floor_type\\\":\\\"Office\\\",\\\"building_id\\\":\\\"68d3e1de1bfdc3d6bd004643\\\",\\\"floor_area\\\":750,\\\"floor_area_unit\\\":\\\"m²\\\",\\\"assets_count\\\":15,\\\"status\\\":\\\"Active\\\"}'",
+    "updateFloor": "curl -X PUT http://localhost:30001/api/floors/68d7da2fb488fd9b798db6bc -H 'Content-Type: application/json' -d '{\\\"floor_name\\\":\\\"Updated Floor\\\",\\\"current_occupancy\\\":50,\\\"assets_count\\\":20}'",
+    "getFloorStats": "curl -X GET 'http://localhost:30001/api/floors/summary/stats?building_id=68d3e1de1bfdc3d6bd004643'",
     "healthCheck": "curl -X GET http://localhost:30001/health"
   },
   "errorResponses": {
@@ -1518,6 +1524,8 @@
     "securityFeatures": "CORS configured, helmet for security headers, input sanitization",
     "hierarchyApi": "New hierarchy API provides nested site > building > floor > asset structure with building-level filtering",
     "buildingEnumRemoval": "Building type and status enum restrictions removed to allow flexible values",
-    "assetBuildingLink": "Assets now include building_id field for proper building-level hierarchy filtering"
+    "assetBuildingLink": "Assets now include building_id field for proper building-level hierarchy filtering",
+    "floorModelEnhanced": "Floor model updated with comprehensive field set including assets_count, dual area systems, occupancy tracking, and metadata support",
+    "floorBackwardCompatibility": "Floor model maintains backward compatibility with both old (area_number, area_unit) and new (floor_area, floor_area_unit) field naming"
   }
 }
