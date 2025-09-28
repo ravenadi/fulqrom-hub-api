@@ -33,6 +33,10 @@ const TenantSchema = new mongoose.Schema({
   },
 
   // Tenant Details
+  tenant_name: {
+    type: String,
+    trim: true
+  },
   tenant_legal_name: {
     type: String,
     trim: true
@@ -73,11 +77,28 @@ const TenantSchema = new mongoose.Schema({
     type: String,
     default: 'm²'
   },
+  area_sqm: {
+    type: Number
+  },
   number_of_employees: {
     type: Number
   },
   allocated_parking_spaces: {
     type: Number
+  },
+  location: {
+    floor: {
+      type: String,
+      trim: true
+    },
+    suite: {
+      type: String,
+      trim: true
+    },
+    room: {
+      type: String,
+      trim: true
+    }
   },
   operating_hours_start: {
     type: String,
@@ -93,6 +114,20 @@ const TenantSchema = new mongoose.Schema({
   },
 
   // Contact Information
+  contact_details: {
+    name: {
+      type: String,
+      trim: true
+    },
+    email: {
+      type: String,
+      trim: true
+    },
+    phone: {
+      type: String,
+      trim: true
+    }
+  },
   primary_contact_name: {
     type: String,
     trim: true
@@ -126,6 +161,10 @@ const TenantSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  industry: {
+    type: String,
+    trim: true
+  },
   business_category: {
     type: String,
     trim: true
@@ -155,6 +194,13 @@ const TenantSchema = new mongoose.Schema({
     type: String,
     default: 'per sqm/year'
   },
+  rent_amount: {
+    type: Number
+  },
+  rent_frequency: {
+    type: String,
+    trim: true
+  },
   bond_amount: {
     type: Number
   },
@@ -176,11 +222,25 @@ const TenantSchema = new mongoose.Schema({
   },
 
   // Additional Information
+  metadata: [{
+    key: {
+      type: String,
+      trim: true
+    },
+    value: {
+      type: String,
+      trim: true
+    }
+  }],
   notes: {
     type: String,
     trim: true
   },
   compliance_notes: {
+    type: String,
+    trim: true
+  },
+  formatted_created_date: {
     type: String,
     trim: true
   },
@@ -205,19 +265,6 @@ TenantSchema.virtual('display_name').get(function() {
   return this.tenant_trading_name || this.tenant_legal_name || 'Unnamed Tenant';
 });
 
-// Virtual for lease status
-TenantSchema.virtual('lease_status').get(function() {
-  if (!this.lease_end_date) return 'No End Date';
-
-  const today = new Date();
-  const endDate = new Date(this.lease_end_date);
-  const daysUntilExpiry = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
-
-  if (daysUntilExpiry < 0) return 'Expired';
-  if (daysUntilExpiry <= 30) return 'Expiring Soon';
-  if (daysUntilExpiry <= 90) return 'Expiring';
-  return 'Active';
-});
 
 // Virtual for formatted area
 TenantSchema.virtual('formatted_area').get(function() {

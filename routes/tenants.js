@@ -1,7 +1,66 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Tenant = require('../models/Tenant');
 
 const router = express.Router();
+
+// Australian validation helpers
+const validateABN = (abn) => {
+  if (!abn) return true; // Optional field
+  const abnString = abn.replace(/\s/g, '');
+  return /^\d{11}$/.test(abnString);
+};
+
+
+const validatePostcode = (postcode) => {
+  if (!postcode) return true; // Optional field
+  return /^\d{4}$/.test(postcode);
+};
+
+// Validation middleware
+const validateTenantData = (req, res, next) => {
+  const errors = [];
+  const { abn, primary_contact_email } = req.body;
+
+  // ABN validation (11 digits)
+  if (abn && !validateABN(abn)) {
+    errors.push({
+      field: 'abn',
+      message: 'ABN must be exactly 11 digits'
+    });
+  }
+
+  // Email validation
+  if (primary_contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(primary_contact_email)) {
+    errors.push({
+      field: 'primary_contact_email',
+      message: 'Invalid email format'
+    });
+  }
+
+  // Required fields validation
+  if (req.method === 'POST') {
+    const requiredFields = ['tenant_legal_name', 'building_id', 'customer_id'];
+    requiredFields.forEach(field => {
+      if (!req.body[field]) {
+        errors.push({
+          field: field,
+          message: `${field.replace('_', ' ')} is required`
+        });
+      }
+    });
+  }
+
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation errors',
+      errors: errors
+    });
+  }
+
+  next();
+};
 
 // GET /api/tenants - List all tenants
 router.get('/', async (req, res) => {
@@ -131,7 +190,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/tenants - Create new tenant
-router.post('/', async (req, res) => {
+router.post('/', validateTenantData, async (req, res) => {
   try {
     const tenant = new Tenant(req.body);
     await tenant.save();
@@ -157,7 +216,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/tenants/:id - Update tenant
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateTenantData, async (req, res) => {
   try {
     const tenant = await Tenant.findByIdAndUpdate(
       req.params.id,
@@ -278,6 +337,32 @@ router.get('/summary/stats', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching tenant statistics',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/tenants/:id - Delete tenant
+router.delete('/:id', async (req, res) => {
+  try {
+    const tenant = await Tenant.findByIdAndDelete(req.params.id);
+
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Tenant deleted successfully',
+      data: tenant
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting tenant',
       error: error.message
     });
   }
