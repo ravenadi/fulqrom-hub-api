@@ -1,39 +1,154 @@
 const mongoose = require('mongoose');
 
-// File schema for document files
-const FileSchema = new mongoose.Schema({
+// File metadata schema
+const FileMetaSchema = new mongoose.Schema({
   file_name: {
     type: String,
-    trim: true
-  },
-  file_type: {
-    type: String,
+    required: true,
     trim: true
   },
   file_size: {
-    type: Number
+    type: Number,
+    required: true
   },
-  file_size_unit: {
+  file_type: {
     type: String,
-    default: 'MB'
+    required: true,
+    trim: true
+  },
+  file_extension: {
+    type: String,
+    required: true,
+    trim: true
   },
   file_url: {
     type: String,
     trim: true
   },
-  upload_date: {
-    type: Date,
-    default: Date.now
-  }
-}, { _id: false });
-
-// Tag schema for document tagging
-const TagSchema = new mongoose.Schema({
-  name: {
+  file_path: {
     type: String,
     trim: true
   },
-  color: {
+  file_key: {
+    type: String,
+    trim: true
+  },
+  version: {
+    type: String,
+    default: '1.0',
+    trim: true
+  },
+  file_mime_type: {
+    type: String,
+    trim: true
+  }
+}, { _id: false });
+
+// File container schema
+const FileSchema = new mongoose.Schema({
+  file_meta: FileMetaSchema
+}, { _id: false });
+
+// Tags schema (nested structure to match existing pattern)
+const TagsSchema = new mongoose.Schema({
+  tags: [{
+    type: String,
+    trim: true
+  }]
+}, { _id: false });
+
+// Location schema for hierarchical associations
+const LocationSchema = new mongoose.Schema({
+  site: {
+    site_id: {
+      type: String,
+      trim: true
+    },
+    site_name: {
+      type: String,
+      trim: true
+    }
+  },
+  building: {
+    building_id: {
+      type: String,
+      trim: true
+    },
+    building_name: {
+      type: String,
+      trim: true
+    }
+  },
+  floor: {
+    floor_id: {
+      type: String,
+      trim: true
+    },
+    floor_name: {
+      type: String,
+      trim: true
+    }
+  },
+  tenant: {
+    tenant_id: {
+      type: String,
+      trim: true
+    },
+    tenant_name: {
+      type: String,
+      trim: true
+    }
+  }
+}, { _id: false });
+
+// Customer schema
+const CustomerSchema = new mongoose.Schema({
+  customer_id: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  customer_name: {
+    type: String,
+    required: true,
+    trim: true
+  }
+}, { _id: false });
+
+// Compliance and regulatory metadata schema
+const MetadataSchema = new mongoose.Schema({
+  engineering_discipline: {
+    type: String,
+    enum: ['Architectural', 'Structural', 'Electrical', 'Mechanical'],
+    trim: true
+  },
+  regulatory_framework: {
+    type: String,
+    enum: ['as1851_fire_systems', 'as3745_emergency_control', 'nabers_energy', 'green_star', 'whs_compliance', 'essential_safety_measures'],
+    trim: true
+  },
+  certification_number: {
+    type: String,
+    trim: true
+  },
+  compliance_framework: {
+    type: String,
+    trim: true
+  },
+  compliance_status: {
+    type: String,
+    enum: ['current', 'expiring_30_days', 'overdue', 'under_review'],
+    trim: true
+  },
+  issue_date: {
+    type: String,
+    trim: true
+  },
+  expiry_date: {
+    type: String,
+    trim: true
+  },
+  review_date: {
     type: String,
     trim: true
   }
@@ -42,8 +157,9 @@ const TagSchema = new mongoose.Schema({
 // Main Document schema
 const DocumentSchema = new mongoose.Schema({
   // Basic Information
-  document_title: {
+  name: {
     type: String,
+    required: true,
     trim: true
   },
   description: {
@@ -57,253 +173,113 @@ const DocumentSchema = new mongoose.Schema({
   },
 
   // Document Classification
-  document_type: {
-    type: String,
-    trim: true
-  },
   category: {
     type: String,
+    required: true,
+    enum: ['drawing_register', 'compliance_regulatory', 'standards_procedures', 'building_management', 'general_repository'],
+    trim: true
+  },
+  type: {
+    type: String,
+    required: true,
+    enum: ['compliance', 'standards', 'management', 'general', 'service_report'],
     trim: true
   },
   engineering_discipline: {
     type: String,
+    enum: ['Architectural', 'Structural', 'Electrical', 'Mechanical'],
     trim: true
-  },
-
-  // Location & Association
-  location: {
-    type: String,
-    trim: true
-  },
-  building_location: {
-    type: String,
-    trim: true
-  },
-  floor_location: {
-    type: String,
-    trim: true
-  },
-
-  // Status & Approval
-  status: {
-    type: String,
-    trim: true,
-    default: 'Draft'
-  },
-  approval_status: {
-    type: String,
-    trim: true,
-    default: 'Pending'
   },
 
   // File Information
-  files: [FileSchema],
+  file: FileSchema,
 
-  // Upload & Author Information
-  uploaded_by: {
-    type: String,
-    trim: true
-  },
-  author_name: {
-    type: String,
-    trim: true
-  },
-  uploaded_date: {
-    type: Date,
-    default: Date.now
-  },
+  // Tags
+  tags: TagsSchema,
 
-  // Document Management
-  tags: [TagSchema],
-  access_level: {
-    type: String,
-    trim: true,
-    default: 'Internal'
-  },
-  confidentiality: {
-    type: String,
-    trim: true,
-    default: 'Standard'
-  },
+  // Location & Associations
+  location: LocationSchema,
 
-  // Review & Approval Workflow
-  review_required: {
-    type: Boolean,
-    default: true
-  },
-  reviewer_name: {
-    type: String,
-    trim: true
-  },
-  review_date: {
-    type: Date
-  },
-  approval_date: {
-    type: Date
-  },
-  approved_by: {
-    type: String,
-    trim: true
-  },
+  // Customer Information
+  customer: CustomerSchema,
 
-  // Revision Control
-  revision_history: [{
-    version: String,
-    description: String,
-    date: { type: Date, default: Date.now },
-    author: String
-  }],
+  // Compliance & Regulatory Metadata
+  metadata: MetadataSchema,
 
-  // Relationships
-  customer_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Customer'
-  },
-  site_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Site'
-  },
-  building_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Building'
-  },
-  floor_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Floor'
-  },
-  asset_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Asset'
-  },
-
-  // Additional Metadata
-  project_number: {
+  // Audit Fields
+  created_by: {
     type: String,
     trim: true
   },
-  drawing_number: {
+  created_at: {
     type: String,
-    trim: true
+    default: () => new Date().toISOString()
   },
-  specification_number: {
+  updated_at: {
     type: String,
-    trim: true
-  },
-
-  // Compliance & Standards
-  compliance_standard: {
-    type: String,
-    trim: true
-  },
-  regulatory_requirement: {
-    type: String,
-    trim: true
-  },
-
-  // System fields
-  is_active: {
-    type: Boolean,
-    default: true
-  },
-  is_archived: {
-    type: Boolean,
-    default: false
+    default: () => new Date().toISOString()
   }
 }, {
-  timestamps: true
+  timestamps: false
 });
 
 // Virtual for display name
 DocumentSchema.virtual('display_name').get(function() {
-  return this.document_title || 'Unnamed Document';
+  return this.name || 'Unnamed Document';
 });
 
-// Virtual for primary file
-DocumentSchema.virtual('primary_file').get(function() {
-  return this.files && this.files.length > 0 ? this.files[0] : null;
-});
-
-// Virtual for file count
-DocumentSchema.virtual('file_count').get(function() {
-  return this.files ? this.files.length : 0;
-});
-
-// Virtual for formatted file size
+// Virtual for file size
 DocumentSchema.virtual('formatted_file_size').get(function() {
-  if (this.files && this.files.length > 0) {
-    const totalSize = this.files.reduce((sum, file) => sum + (file.file_size || 0), 0);
-    return `${totalSize.toFixed(1)} MB`;
+  if (this.file && this.file.file_meta && this.file.file_meta.file_size) {
+    const sizeInMB = (this.file.file_meta.file_size / (1024 * 1024)).toFixed(1);
+    return `${sizeInMB} MB`;
   }
   return 'N/A';
-});
-
-// Virtual for status color
-DocumentSchema.virtual('status_color').get(function() {
-  const statusColors = {
-    'Draft': 'blue',
-    'Under Review': 'orange',
-    'Approved': 'green',
-    'Rejected': 'red',
-    'Archived': 'gray'
-  };
-  return statusColors[this.status] || 'gray';
-});
-
-// Virtual for approval status color
-DocumentSchema.virtual('approval_status_color').get(function() {
-  const approvalColors = {
-    'Pending': 'orange',
-    'Approved': 'green',
-    'Rejected': 'red',
-    'Under Review': 'blue'
-  };
-  return approvalColors[this.approval_status] || 'gray';
 });
 
 // Virtual for location display
 DocumentSchema.virtual('location_display').get(function() {
   const parts = [];
-  if (this.building_location) parts.push(this.building_location);
-  if (this.floor_location) parts.push(this.floor_location);
-  return parts.length > 0 ? parts.join(' - ') : this.location || 'N/A';
+  if (this.location && this.location.building && this.location.building.building_name) {
+    parts.push(this.location.building.building_name);
+  }
+  if (this.location && this.location.floor && this.location.floor.floor_name) {
+    parts.push(this.location.floor.floor_name);
+  }
+  return parts.length > 0 ? parts.join(' - ') : 'N/A';
 });
 
-// Pre-save middleware to update revision history
+// Pre-save middleware to update timestamps
 DocumentSchema.pre('save', function(next) {
   if (this.isModified() && !this.isNew) {
-    this.revision_history.push({
-      version: this.version,
-      description: 'Document updated',
-      author: this.uploaded_by || 'System'
-    });
+    this.updated_at = new Date().toISOString();
   }
   next();
 });
 
 // Indexes for performance
-DocumentSchema.index({ document_title: 1 });
-DocumentSchema.index({ document_type: 1 });
+DocumentSchema.index({ name: 1 });
 DocumentSchema.index({ category: 1 });
-DocumentSchema.index({ status: 1 });
-DocumentSchema.index({ approval_status: 1 });
-DocumentSchema.index({ customer_id: 1 });
-DocumentSchema.index({ site_id: 1 });
-DocumentSchema.index({ building_id: 1 });
-DocumentSchema.index({ floor_id: 1 });
-DocumentSchema.index({ uploaded_date: -1 });
-DocumentSchema.index({ is_active: 1 });
-DocumentSchema.index({ is_archived: 1 });
+DocumentSchema.index({ type: 1 });
+DocumentSchema.index({ 'customer.customer_id': 1 });
+DocumentSchema.index({ 'location.site.site_id': 1 });
+DocumentSchema.index({ 'location.building.building_id': 1 });
+DocumentSchema.index({ 'location.floor.floor_id': 1 });
+DocumentSchema.index({ 'location.tenant.tenant_id': 1 });
+DocumentSchema.index({ created_at: -1 });
+DocumentSchema.index({ 'metadata.regulatory_framework': 1 });
+DocumentSchema.index({ 'metadata.compliance_status': 1 });
 
 // Compound indexes
-DocumentSchema.index({ customer_id: 1, document_type: 1 });
-DocumentSchema.index({ building_id: 1, category: 1 });
-DocumentSchema.index({ status: 1, approval_status: 1 });
+DocumentSchema.index({ 'customer.customer_id': 1, category: 1 });
+DocumentSchema.index({ 'location.building.building_id': 1, category: 1 });
+DocumentSchema.index({ category: 1, type: 1 });
 
 // Text index for search
 DocumentSchema.index({
-  document_title: 'text',
+  name: 'text',
   description: 'text',
-  'tags.name': 'text'
+  'tags.tags': 'text'
 });
 
 // Ensure virtual fields are serialized
