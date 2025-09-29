@@ -1,5 +1,9 @@
 const express = require('express');
 const Customer = require('../models/Customer');
+const Site = require('../models/Site');
+const Building = require('../models/Building');
+const Asset = require('../models/Asset');
+const Document = require('../models/Document');
 
 const router = express.Router();
 
@@ -68,6 +72,52 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching customer',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/customers/:id/stats - Get customer statistics
+router.get('/:id/stats', async (req, res) => {
+  try {
+    const customerId = req.params.id;
+
+    // Verify customer exists
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    // Get counts in parallel
+    const [siteCount, buildingCount, assetCount, documentCount] = await Promise.all([
+      Site.countDocuments({ customer_id: customerId }),
+      Building.countDocuments({ customer_id: customerId }),
+      Asset.countDocuments({ customer_id: customerId }),
+      Document.countDocuments({ 'customer.customer_id': customerId })
+    ]);
+
+    const stats = {
+      totalSites: siteCount,
+      totalBuildings: buildingCount,
+      totalAssets: assetCount,
+      totalDocuments: documentCount
+    };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        customer_id: customerId,
+        customer_name: customer.organisation?.organisation_name || 'Unknown',
+        stats
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching customer statistics',
       error: error.message
     });
   }
