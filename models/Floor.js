@@ -50,10 +50,6 @@ const FloorSchema = new mongoose.Schema({
     min: 0,
     default: 0
   },
-  current_occupancy: {
-    type: Number,
-    min: 0
-  },
   max_occupancy: {
     type: Number,
     min: 0
