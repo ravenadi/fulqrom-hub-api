@@ -6,7 +6,7 @@ const router = express.Router();
 // GET /api/sites - List all sites
 router.get('/', async (req, res) => {
   try {
-    const { customer_id, status, manager, address, is_active } = req.query;
+    const { customer_id, status, manager, address, is_active, search } = req.query;
 
     // Build filter query
     let filterQuery = {};
@@ -29,6 +29,15 @@ router.get('/', async (req, res) => {
 
     if (is_active !== undefined) {
       filterQuery.is_active = is_active === 'true';
+    }
+
+    // Simple search across key fields
+    if (search) {
+      filterQuery.$or = [
+        { site_name: { $regex: search, $options: 'i' } },
+        { address: { $regex: search, $options: 'i' } },
+        { 'manager.name': { $regex: search, $options: 'i' } }
+      ];
     }
 
     const sites = await Site.find(filterQuery)

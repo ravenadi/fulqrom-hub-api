@@ -7,6 +7,7 @@ const router = express.Router({ mergeParams: true });
 router.get('/', async (req, res) => {
   try {
     const { customerId } = req.params;
+    const { search } = req.query;
 
     const customer = await Customer.findById(customerId);
     if (!customer) {
@@ -16,7 +17,19 @@ router.get('/', async (req, res) => {
       });
     }
 
-    const contacts = customer.contact_methods || [];
+    let contacts = customer.contact_methods || [];
+
+    // Simple search across key fields
+    if (search) {
+      const searchTerm = search.toLowerCase();
+      contacts = contacts.filter(contact =>
+        (contact.full_name && contact.full_name.toLowerCase().includes(searchTerm)) ||
+        (contact.method_value && contact.method_value.toLowerCase().includes(searchTerm)) ||
+        (contact.job_title && contact.job_title.toLowerCase().includes(searchTerm)) ||
+        (contact.department && contact.department.toLowerCase().includes(searchTerm)) ||
+        (contact.role_type && contact.role_type.toLowerCase().includes(searchTerm))
+      );
+    }
 
     res.status(200).json({
       success: true,

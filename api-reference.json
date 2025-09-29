@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-09-27T15:45:00.000Z"
+    "lastUpdated": "2025-09-29T08:30:00.000Z"
   },
   "endpoints": {
     "health": {
@@ -34,6 +34,7 @@
           "sites": "/api/sites",
           "buildings": "/api/buildings",
           "floors": "/api/floors",
+          "tenants": "/api/tenants",
           "assets": "/api/assets",
           "building_tenants": "/api/building-tenants",
           "documents": "/api/documents",
@@ -143,10 +144,13 @@
       "list": {
         "method": "GET",
         "path": "/api/customers/:customerId/contacts",
-        "description": "Get all contacts for a customer from contact_methods array",
+        "description": "Get all contacts for a customer from contact_methods array with search support",
         "status": "IMPLEMENTED",
         "params": {
           "customerId": "MongoDB ObjectID (24-character hex string)"
+        },
+        "queryParams": {
+          "search": "Search term for full_name, method_value, job_title, department, role_type"
         },
         "response": {
           "success": true,
@@ -316,7 +320,8 @@
           "status": "Filter by site status",
           "manager": "Filter by manager name (case insensitive)",
           "address": "Filter by address (case insensitive)",
-          "is_active": "boolean - Filter by active status"
+          "is_active": "boolean - Filter by active status",
+          "search": "Search term for site_name, address, manager.name"
         },
         "response": {
           "success": true,
@@ -376,7 +381,8 @@
           "building_type": "Filter by building type",
           "building_grade": "Filter by building grade",
           "status": "Filter by building status",
-          "is_active": "boolean - Filter by active status"
+          "is_active": "boolean - Filter by active status",
+          "search": "Search term for building_name, building_code"
         },
         "response": {
           "success": true,
@@ -483,7 +489,8 @@
           "occupancy_type": "Filter by occupancy type",
           "access_control": "Filter by access control",
           "status": "Filter by floor status",
-          "is_active": "boolean - Filter by active status"
+          "is_active": "boolean - Filter by active status",
+          "search": "Search term for floor_name"
         },
         "response": {
           "success": true,
@@ -830,7 +837,8 @@
           "lease_type": "Filter by lease type",
           "industry_type": "Filter by industry type",
           "lease_expiring_soon": "boolean - Filter leases expiring in 30 days",
-          "is_active": "boolean - Filter by active status"
+          "is_active": "boolean - Filter by active status",
+          "search": "Search term for tenant_legal_name, tenant_trading_name, abn, primary_contact_name, primary_contact_email, industry_type"
         },
         "response": {
           "success": true,
@@ -964,6 +972,165 @@
       "byIndustry": {
         "method": "GET",
         "path": "/api/building-tenants/by-industry",
+        "description": "Group tenants by industry type",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID"
+        },
+        "response": {
+          "success": true,
+          "data": "Array of industry statistics"
+        }
+      }
+    },
+    "tenants": {
+      "list": {
+        "method": "GET",
+        "path": "/api/tenants",
+        "description": "Get all tenants with filtering and summary statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID",
+          "floor_id": "Filter by floor ID",
+          "tenant_status": "Filter by tenant status",
+          "lease_type": "Filter by lease type",
+          "industry_type": "Filter by industry type",
+          "lease_expiring_soon": "boolean - Filter leases expiring in 30 days",
+          "is_active": "boolean - Filter by active status",
+          "search": "Search term for tenant_legal_name, tenant_trading_name, abn, primary_contact_name, primary_contact_email, industry_type"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_tenants": "number",
+            "active_tenants": "number",
+            "leases_expiring_soon": "number",
+            "total_occupied_area": "number",
+            "total_employees": "number",
+            "total_parking_spaces": "number"
+          },
+          "data": "Array of tenant objects with populated references"
+        }
+      },
+      "getById": {
+        "method": "GET",
+        "path": "/api/tenants/:id",
+        "description": "Get single tenant by ID",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "data": "Single tenant object with populated references"
+        }
+      },
+      "create": {
+        "method": "POST",
+        "path": "/api/tenants",
+        "description": "Create new tenant",
+        "status": "IMPLEMENTED",
+        "requestBody": {
+          "customer_id": "ObjectId (reference to Customer)",
+          "site_id": "ObjectId (reference to Site)",
+          "building_id": "ObjectId (reference to Building)",
+          "floor_id": "ObjectId (reference to Floor)",
+          "tenant_legal_name": "string",
+          "tenant_trading_name": "string",
+          "abn": "string (11 digits)",
+          "primary_contact_name": "string",
+          "primary_contact_email": "string",
+          "industry_type": "string",
+          "tenant_status": "string (Active, Inactive, etc.)",
+          "is_active": "boolean (default: true)"
+        },
+        "response": {
+          "success": true,
+          "message": "Tenant created successfully",
+          "data": "Created tenant object with populated references"
+        }
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/tenants/:id",
+        "description": "Update tenant",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": "Partial tenant object",
+        "response": {
+          "success": true,
+          "message": "Tenant updated successfully",
+          "data": "Updated tenant object"
+        }
+      },
+      "delete": {
+        "method": "DELETE",
+        "path": "/api/tenants/:id",
+        "description": "Delete tenant",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "message": "Tenant deleted successfully",
+          "data": "Deleted tenant object"
+        }
+      },
+      "byBuilding": {
+        "method": "GET",
+        "path": "/api/tenants/by-building/:buildingId",
+        "description": "Get tenants by building",
+        "status": "IMPLEMENTED",
+        "params": {
+          "buildingId": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "summary": {
+            "total_tenants": "number",
+            "active_tenants": "number",
+            "total_occupied_area": "number",
+            "total_employees": "number",
+            "total_parking_spaces": "number"
+          },
+          "data": "Array of tenant objects for the building"
+        }
+      },
+      "stats": {
+        "method": "GET",
+        "path": "/api/tenants/summary/stats",
+        "description": "Get tenant statistics",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter by customer ID",
+          "site_id": "Filter by site ID",
+          "building_id": "Filter by building ID"
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "totalTenants": "number",
+            "activeTenants": "number",
+            "leasesExpiringSoon": "number",
+            "totalOccupiedArea": "number",
+            "totalEmployees": "number",
+            "totalParkingSpaces": "number",
+            "avgRentalRate": "number"
+          }
+        }
+      },
+      "byIndustry": {
+        "method": "GET",
+        "path": "/api/tenants/by-industry",
         "description": "Group tenants by industry type",
         "status": "IMPLEMENTED",
         "queryParams": {
@@ -1533,7 +1700,12 @@
     "createContact": "curl -X POST http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts -H 'Content-Type: application/json' -d '{\"full_name\":\"John Smith\",\"job_title\":\"Building Manager\",\"method_type\":\"Email\",\"method_value\":\"john@company.com\",\"is_primary\":true}'",
     "updateContact": "curl -X PUT http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts/60d5ecb74e4b3c001f647b8c -H 'Content-Type: application/json' -d '{\"job_title\":\"Senior Building Manager\"}'",
     "searchContacts": "curl -X GET 'http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts/search?q=john'",
+    "searchContactsMain": "curl -X GET 'http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts?search=manager'",
     "getSitesByCustomer": "curl -X GET 'http://localhost:30001/api/sites?customer_id=68d395f9c7ad6627ad607f07'",
+    "searchSites": "curl -X GET 'http://localhost:30001/api/sites?search=melbourne'",
+    "searchBuildings": "curl -X GET 'http://localhost:30001/api/buildings?search=office'",
+    "searchFloors": "curl -X GET 'http://localhost:30001/api/floors?search=level'",
+    "searchTenants": "curl -X GET 'http://localhost:30001/api/tenants?search=retail'",
     "getBuildingStats": "curl -X GET http://localhost:30001/api/buildings/summary/stats",
     "getFloorsByBuilding": "curl -X GET http://localhost:30001/api/floors/by-building/60d5ecb74e4b3c001f647b8c",
     "getAssetsWithWarrantyExpiring": "curl -X GET 'http://localhost:30001/api/assets?warranty_expired=true'",
@@ -1597,6 +1769,7 @@
       "sites",
       "buildings",
       "floors",
+      "tenants",
       "assets",
       "building_tenants",
       "documents"
@@ -1629,6 +1802,10 @@
     "assetBuildingLink": "Assets now include building_id field for proper building-level hierarchy filtering",
     "floorModelEnhanced": "Floor model updated with comprehensive field set including assets_count, dual area systems, occupancy tracking, and metadata support",
     "floorBackwardCompatibility": "Floor model maintains backward compatibility with both old (area_number, area_unit) and new (floor_area, floor_area_unit) field naming",
-    "floorLevelFiltering": "Hierarchy API supports floor_level filtering by exact string match (e.g., 'Lvl 20', 'GF') for precise asset filtering within buildings"
+    "floorLevelFiltering": "Hierarchy API supports floor_level filtering by exact string match (e.g., 'Lvl 20', 'GF') for precise asset filtering within buildings",
+    "searchFunctionality": "Search functionality implemented across all customer module GET endpoints: Sites, Buildings, Floors, Tenants, Documents, and Contacts. Simple case-insensitive partial matching across key fields using regex patterns",
+    "searchImplementation": "Search parameter added to main list endpoints with logical field selection: sites (site_name, address, manager.name), buildings (building_name, building_code), floors (floor_name), tenants (tenant_legal_name, tenant_trading_name, abn, primary_contact_name, primary_contact_email, industry_type), contacts (full_name, method_value, job_title, department, role_type)",
+    "tenantsCollection": "Added dedicated /api/tenants route separate from /api/building-tenants for simplified tenant management with search capability",
+    "documentSearch": "Documents collection has comprehensive search with helper functions covering name, description, tags, customer, location, file metadata, and compliance fields"
   }
 }

@@ -13,6 +13,15 @@ const {
   validateQueryParams,
   validateObjectId
 } = require('../middleware/documentValidation');
+const {
+  buildSearchQuery,
+  buildPagination,
+  buildSort,
+  isValidObjectId,
+  buildApiResponse,
+  handleError,
+  sanitizeQuery
+} = require('../middleware/searchHelpers');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -86,9 +95,10 @@ async function fetchEntityNames(documentData) {
   return entityNames;
 }
 
-// GET /api/documents - List all documents
+// GET /api/documents - List all documents with advanced search and filtering
 router.get('/', validateQueryParams, async (req, res) => {
   try {
+    const sanitizedQuery = sanitizeQuery(req.query);
     const {
       customer_id,
       site_id,
@@ -106,119 +116,93 @@ router.get('/', validateQueryParams, async (req, res) => {
       limit = 50,
       sort = 'created_at',
       order = 'desc'
-    } = req.query;
+    } = sanitizedQuery;
 
     // Build filter query
     let filterQuery = {};
 
-    if (customer_id) {
-      filterQuery['customer.customer_id'] = customer_id;
-    }
+    // Entity filters
+    if (customer_id) filterQuery['customer.customer_id'] = customer_id;
+    if (site_id) filterQuery['location.site.site_id'] = site_id;
+    if (building_id) filterQuery['location.building.building_id'] = building_id;
+    if (floor_id) filterQuery['location.floor.floor_id'] = floor_id;
+    if (tenant_id) filterQuery['location.tenant.tenant_id'] = tenant_id;
 
-    if (site_id) {
-      filterQuery['location.site.site_id'] = site_id;
-    }
+    // Document filters
+    if (category) filterQuery.category = category;
+    if (type) filterQuery.type = type;
+    if (engineering_discipline) filterQuery.engineering_discipline = engineering_discipline;
 
-    if (building_id) {
-      filterQuery['location.building.building_id'] = building_id;
-    }
+    // Compliance filters
+    if (regulatory_framework) filterQuery['metadata.regulatory_framework'] = regulatory_framework;
+    if (compliance_status) filterQuery['metadata.compliance_status'] = compliance_status;
 
-    if (floor_id) {
-      filterQuery['location.floor.floor_id'] = floor_id;
-    }
-
-    if (tenant_id) {
-      filterQuery['location.tenant.tenant_id'] = tenant_id;
-    }
-
-    if (category) {
-      filterQuery.category = category;
-    }
-
-    if (type) {
-      filterQuery.type = type;
-    }
-
-    if (engineering_discipline) {
-      filterQuery.engineering_discipline = engineering_discipline;
-    }
-
-    if (regulatory_framework) {
-      filterQuery['metadata.regulatory_framework'] = regulatory_framework;
-    }
-
-    if (compliance_status) {
-      filterQuery['metadata.compliance_status'] = compliance_status;
-    }
-
+    // Tags filter
     if (tags) {
       const tagArray = Array.isArray(tags) ? tags : [tags];
       filterQuery['tags.tags'] = { $in: tagArray };
     }
 
-    // Text search
-    if (search) {
-      filterQuery.$text = { $search: search };
+    // Advanced search
+    const searchQuery = buildSearchQuery(search);
+    if (Object.keys(searchQuery).length > 0) {
+      filterQuery = { ...filterQuery, ...searchQuery };
     }
 
-    // Pagination
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+    // Pagination and sorting
+    const pagination = buildPagination(page, limit);
+    const sortObj = buildSort(sort, order);
 
-    // Sort options
-    const sortObj = {};
-    sortObj[sort] = order === 'asc' ? 1 : -1;
-
-    const documents = await Document.find(filterQuery)
-      .sort(sortObj)
-      .skip(skip)
-      .limit(limitNum);
-
-    const totalDocuments = await Document.countDocuments(filterQuery);
-
-    // Calculate summary statistics
-    const summary = await Document.aggregate([
-      { $match: filterQuery },
-      {
-        $group: {
-          _id: null,
-          total_documents: { $sum: 1 },
-          by_category: {
-            $push: {
-              category: '$category',
-              type: '$type'
-            }
+    // Execute queries in parallel for better performance
+    const [documents, totalDocuments, categoryStats] = await Promise.all([
+      Document.find(filterQuery)
+        .sort(sortObj)
+        .skip(pagination.skip)
+        .limit(pagination.limitNum)
+        .lean() // Performance optimization - returns plain JS objects
+        .exec(),
+      Document.countDocuments(filterQuery).exec(),
+      Document.aggregate([
+        { $match: filterQuery },
+        {
+          $group: {
+            _id: '$category',
+            count: { $sum: 1 },
+            types: { $addToSet: '$type' }
           }
-        }
-      }
+        },
+        { $sort: { count: -1 } }
+      ]).exec()
     ]);
 
-    // Group by category
+    // Build category summary
     const documentsByCategory = {};
-    documents.forEach(doc => {
-      const category = doc.category || 'Unknown';
-      documentsByCategory[category] = (documentsByCategory[category] || 0) + 1;
+    categoryStats.forEach(stat => {
+      documentsByCategory[stat._id || 'Unknown'] = stat.count;
     });
 
-    res.status(200).json({
-      success: true,
-      count: documents.length,
-      total: totalDocuments,
-      page: pageNum,
-      pages: Math.ceil(totalDocuments / limitNum),
-      summary: {
-        total_documents: totalDocuments,
-        documents_by_category: documentsByCategory
-      },
-      data: documents
-    });
+    // Build response
+    const response = buildApiResponse(
+      true,
+      documents,
+      null,
+      {
+        total: totalDocuments,
+        page: pagination.pageNum,
+        limit: pagination.limitNum
+      }
+    );
+
+    response.summary = {
+      total_documents: totalDocuments,
+      documents_by_category: documentsByCategory,
+      category_breakdown: categoryStats
+    };
+
+    res.status(200).json(response);
+
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching documents',
-      error: error.message
-    });
+    handleError(error, res, 'fetching documents');
   }
 });
 
@@ -494,69 +478,159 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET /api/documents/by-type/:type - Get documents by type
+// GET /api/documents/by-type/:type - Get documents by type with search
 router.get('/by-type/:type', async (req, res) => {
   try {
-    const documents = await Document.find({
-      type: req.params.type
-    }).sort({ created_at: -1 });
+    const { search, page = 1, limit = 50, sort = 'created_at', order = 'desc' } = req.query;
+
+    // Build filter query
+    let filterQuery = { type: req.params.type };
+
+    // Add search capability
+    if (search) {
+      filterQuery.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { 'tags.tags': { $regex: search, $options: 'i' } },
+        { 'customer.customer_name': { $regex: search, $options: 'i' } },
+        { 'location.site.site_name': { $regex: search, $options: 'i' } },
+        { 'location.building.building_name': { $regex: search, $options: 'i' } },
+        { 'location.floor.floor_name': { $regex: search, $options: 'i' } },
+        { 'file.file_meta.file_name': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sort options
+    const sortObj = {};
+    sortObj[sort] = order === 'asc' ? 1 : -1;
+
+    const documents = await Document.find(filterQuery)
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limitNum)
+      .lean(); // Performance optimization
+
+    const totalDocuments = await Document.countDocuments(filterQuery);
 
     const summary = {
-      total_documents: documents.length,
+      total_documents: totalDocuments,
       by_category: {}
     };
 
-    // Group by category
-    documents.forEach(doc => {
-      const category = doc.category || 'Unknown';
-      summary.by_category[category] = (summary.by_category[category] || 0) + 1;
+    // Group by category (optimized aggregation)
+    const categoryStats = await Document.aggregate([
+      { $match: filterQuery },
+      { $group: { _id: '$category', count: { $sum: 1 } } }
+    ]);
+
+    categoryStats.forEach(stat => {
+      summary.by_category[stat._id || 'Unknown'] = stat.count;
     });
 
     res.status(200).json({
       success: true,
       count: documents.length,
+      total: totalDocuments,
+      page: pageNum,
+      pages: Math.ceil(totalDocuments / limitNum),
       document_type: req.params.type,
       summary,
       data: documents
     });
   } catch (error) {
+    console.error('Error fetching documents by type:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching documents by type',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 });
 
-// GET /api/documents/by-building/:buildingId - Get documents by building
+// GET /api/documents/by-building/:buildingId - Get documents by building with search
 router.get('/by-building/:buildingId', async (req, res) => {
   try {
-    const documents = await Document.find({
+    const { search, page = 1, limit = 50, sort = 'created_at', order = 'desc' } = req.query;
+
+    // Validate building ID format
+    if (!req.params.buildingId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid building ID format'
+      });
+    }
+
+    // Build filter query
+    let filterQuery = {
       'location.building.building_id': req.params.buildingId
-    }).sort({ category: 1, created_at: -1 });
+    };
+
+    // Add search capability
+    if (search) {
+      filterQuery.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { 'tags.tags': { $regex: search, $options: 'i' } },
+        { 'customer.customer_name': { $regex: search, $options: 'i' } },
+        { 'location.site.site_name': { $regex: search, $options: 'i' } },
+        { 'location.floor.floor_name': { $regex: search, $options: 'i' } },
+        { 'location.tenant.tenant_name': { $regex: search, $options: 'i' } },
+        { 'file.file_meta.file_name': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sort options
+    const sortObj = {};
+    sortObj[sort] = order === 'asc' ? 1 : -1;
+
+    const [documents, totalDocuments, categoryStats] = await Promise.all([
+      Document.find(filterQuery)
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Document.countDocuments(filterQuery),
+      Document.aggregate([
+        { $match: filterQuery },
+        { $group: { _id: '$category', count: { $sum: 1 } } }
+      ])
+    ]);
 
     const summary = {
-      total_documents: documents.length,
+      total_documents: totalDocuments,
       by_category: {}
     };
 
-    // Group by category
-    documents.forEach(doc => {
-      const category = doc.category || 'Unknown';
-      summary.by_category[category] = (summary.by_category[category] || 0) + 1;
+    categoryStats.forEach(stat => {
+      summary.by_category[stat._id || 'Unknown'] = stat.count;
     });
 
     res.status(200).json({
       success: true,
       count: documents.length,
+      total: totalDocuments,
+      page: pageNum,
+      pages: Math.ceil(totalDocuments / limitNum),
+      building_id: req.params.buildingId,
       summary,
       data: documents
     });
   } catch (error) {
+    console.error('Error fetching documents by building:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching documents by building',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 });

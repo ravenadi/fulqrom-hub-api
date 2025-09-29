@@ -74,7 +74,8 @@ router.get('/', async (req, res) => {
       lease_type,
       industry_type,
       lease_expiring_soon,
-      is_active
+      is_active,
+      search
     } = req.query;
 
     // Build filter query
@@ -116,6 +117,18 @@ router.get('/', async (req, res) => {
 
     if (is_active !== undefined) {
       filterQuery.is_active = is_active === 'true';
+    }
+
+    // Simple search across key fields
+    if (search) {
+      filterQuery.$or = [
+        { tenant_legal_name: { $regex: search, $options: 'i' } },
+        { tenant_trading_name: { $regex: search, $options: 'i' } },
+        { abn: { $regex: search, $options: 'i' } },
+        { primary_contact_name: { $regex: search, $options: 'i' } },
+        { primary_contact_email: { $regex: search, $options: 'i' } },
+        { industry_type: { $regex: search, $options: 'i' } }
+      ];
     }
 
     const tenants = await Tenant.find(filterQuery)
