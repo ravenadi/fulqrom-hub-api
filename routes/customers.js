@@ -6,7 +6,34 @@ const router = express.Router();
 // GET /api/customers - List all customers
 router.get('/', async (req, res) => {
   try {
-    const customers = await Customer.find();
+    const { search, limit } = req.query;
+
+    // Build filter query
+    let filterQuery = {};
+
+    // Simple search across key fields
+    if (search) {
+      filterQuery.$or = [
+        { 'organisation.organisation_name': { $regex: search, $options: 'i' } },
+        { 'company_profile.trading_name': { $regex: search, $options: 'i' } },
+        { 'company_profile.business_number': { $regex: search, $options: 'i' } },
+        { 'business_address.street': { $regex: search, $options: 'i' } },
+        { 'business_address.suburb': { $regex: search, $options: 'i' } },
+        { 'contact_methods.full_name': { $regex: search, $options: 'i' } },
+        { 'contact_methods.method_value': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    let query = Customer.find(filterQuery);
+
+    // Apply limit if provided
+    if (limit) {
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+      query = query.limit(limitNum);
+    }
+
+    const customers = await query.exec();
+
     res.status(200).json({
       success: true,
       count: customers.length,
