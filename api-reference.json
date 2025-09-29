@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-09-29T10:45:00.000Z"
+    "lastUpdated": "2025-09-29T11:00:00.000Z"
   },
   "endpoints": {
     "health": {
@@ -325,6 +325,75 @@
           "success": true,
           "message": "Contact deleted successfully",
           "data": "Deleted contact object",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "addMethod": {
+        "method": "POST",
+        "path": "/api/customers/:customerId/contacts/:id/methods",
+        "description": "Add contact method to existing contact (supports multiple methods per contact)",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID",
+          "id": "Contact ObjectID"
+        },
+        "requestBody": {
+          "method_type": "string (required) - Email, Phone, SMS, WhatsApp",
+          "method_value": "string (required) - email@example.com, +61400123456",
+          "label": "string (optional) - Work, Mobile, Home",
+          "is_primary": "boolean (optional, default: false)"
+        },
+        "response": {
+          "success": true,
+          "message": "Contact method added successfully",
+          "data": "New method object with _id",
+          "contact": "Updated contact object",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "updateMethod": {
+        "method": "PUT",
+        "path": "/api/customers/:customerId/contacts/:id/methods/:methodId",
+        "description": "Update specific contact method",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID",
+          "id": "Contact ObjectID",
+          "methodId": "Method ObjectID"
+        },
+        "requestBody": "Partial method object",
+        "response": {
+          "success": true,
+          "message": "Contact method updated successfully",
+          "data": "Updated method object",
+          "contact": "Updated contact object",
+          "customer": {
+            "id": "ObjectId",
+            "name": "string"
+          }
+        }
+      },
+      "deleteMethod": {
+        "method": "DELETE",
+        "path": "/api/customers/:customerId/contacts/:id/methods/:methodId",
+        "description": "Delete specific contact method",
+        "status": "IMPLEMENTED",
+        "params": {
+          "customerId": "MongoDB ObjectID",
+          "id": "Contact ObjectID",
+          "methodId": "Method ObjectID"
+        },
+        "response": {
+          "success": true,
+          "message": "Contact method deleted successfully",
+          "data": "Deleted method object",
+          "contact": "Updated contact object",
           "customer": {
             "id": "ObjectId",
             "name": "string"
@@ -1452,10 +1521,19 @@
           "role_type": "string (Primary|Billing|Technical|General|Emergency|Project)",
           "contact_type": "string (Internal|External|Supplier|Customer|Contractor|Consultant|Emergency|Billing|Technical)",
           "platform_access": "string (Administrative|Operational|View Only|No Access)",
-          "method_type": "string (Email|Phone|SMS|WhatsApp)",
-          "method_value": "string",
-          "label": "string",
-          "is_primary": "boolean",
+          "contact_methods": [
+            {
+              "_id": "MongoDB ObjectID (auto-generated)",
+              "method_type": "string (Email|Phone|SMS|WhatsApp)",
+              "method_value": "string",
+              "label": "string",
+              "is_primary": "boolean"
+            }
+          ],
+          "method_type": "string (Legacy field for backward compatibility)",
+          "method_value": "string (Legacy field for backward compatibility)",
+          "label": "string (Legacy field for backward compatibility)",
+          "is_primary": "boolean (Legacy field for backward compatibility)",
           "createdAt": "DateTime",
           "updatedAt": "DateTime"
         }
@@ -1725,6 +1803,9 @@
     "updateContact": "curl -X PUT http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts/60d5ecb74e4b3c001f647b8c -H 'Content-Type: application/json' -d '{\"job_title\":\"Senior Building Manager\"}'",
     "searchContacts": "curl -X GET 'http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts/search?q=john'",
     "searchContactsMain": "curl -X GET 'http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts?search=manager'",
+    "addContactMethod": "curl -X POST http://localhost:30001/api/customers/68d3929ae4c5d9b3e920a9df/contacts/60d5ecb74e4b3c001f647b8c/methods -H 'Content-Type: application/json' -d '{\"method_type\":\"Phone\",\"method_value\":\"+61400123456\",\"label\":\"Mobile\",\"is_primary\":false}'",
+    "updateContactMethod": "curl -X PUT http://localhost:30001/api/customers/68d3929ae4c5d9b3e920a9df/contacts/60d5ecb74e4b3c001f647b8c/methods/methodId123 -H 'Content-Type: application/json' -d '{\"method_value\":\"+61400999888\",\"label\":\"New Mobile\"}'",
+    "deleteContactMethod": "curl -X DELETE http://localhost:30001/api/customers/68d3929ae4c5d9b3e920a9df/contacts/60d5ecb74e4b3c001f647b8c/methods/methodId123",
     "getSitesByCustomer": "curl -X GET 'http://localhost:30001/api/sites?customer_id=68d395f9c7ad6627ad607f07'",
     "searchSites": "curl -X GET 'http://localhost:30001/api/sites?search=melbourne'",
     "searchBuildings": "curl -X GET 'http://localhost:30001/api/buildings?search=office'",
@@ -1832,6 +1913,7 @@
     "tenantsCollection": "Added dedicated /api/tenants route separate from /api/building-tenants for simplified tenant management with search capability",
     "documentSearch": "Documents collection has comprehensive search with helper functions covering name, description, tags, customer, location, file metadata, and compliance fields",
     "customerStats": "Added customer statistics endpoint (/api/customers/:id/stats) that provides dynamic counts for sites, buildings, assets, and documents with proper nested field query for documents (customer.customer_id)",
-    "contactManagement": "Comprehensive contact management APIs implemented: full CRUD operations (create, read, update, delete), primary contact management, search functionality, and nested contact operations within customer entities. Contacts are managed as subdocuments in the customer's contact_methods array."
+    "contactManagement": "Comprehensive contact management APIs implemented: full CRUD operations (create, read, update, delete), primary contact management, search functionality, and nested contact operations within customer entities. Contacts are managed as subdocuments in the customer's contact_methods array.",
+    "multipleContactMethods": "Enhanced contact system to support multiple contact methods per contact. Each contact can have multiple communication methods (Email, Phone, SMS, WhatsApp) with individual add/edit/delete operations. Only one primary method per contact is enforced. Includes backward compatibility with legacy single-method structure and dedicated API endpoints for method management (/:id/methods)."
   }
 }
