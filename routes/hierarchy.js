@@ -372,7 +372,6 @@ router.get('/:customer_id', async (req, res) => {
           floorType: targetFloor.floor_type,
           status: targetFloor.status,
           occupancy: targetFloor.occupancy,
-          maxOccupancy: targetFloor.max_occupancy,
           floorArea: targetFloor.floor_area || targetFloor.area_number,
           floorAreaUnit: targetFloor.floor_area_unit || targetFloor.area_unit,
           ceilingHeight: targetFloor.ceiling_height,

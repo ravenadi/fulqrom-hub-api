@@ -253,7 +253,7 @@ router.get('/by-building/:buildingId', async (req, res) => {
       total_area: floors.reduce((sum, f) => sum + (f.floor_area || 0), 0),
       total_assets: floors.reduce((sum, f) => sum + (f.assets_count || 0), 0),
       avg_occupancy: floors.length > 0 ?
-        Math.round(floors.reduce((sum, f) => sum + (f.occupancy_percentage || 0), 0) / floors.length) : 0
+        Math.round(floors.reduce((sum, f) => sum + (f.occupancy || 0), 0) / floors.length) : 0
     };
 
     res.status(200).json({
@@ -295,7 +295,7 @@ router.get('/summary/stats', async (req, res) => {
           },
           totalArea: { $sum: '$floor_area' },
           totalAssets: { $sum: '$assets_count' },
-          avgOccupancy: { $avg: '$occupancy_percentage' },
+          avgOccupancy: { $avg: '$occupancy' },
           avgCeilingHeight: { $avg: '$ceiling_height' }
         }
       }
@@ -344,7 +344,7 @@ router.get('/by-type', async (req, res) => {
             $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] }
           },
           totalArea: { $sum: '$floor_area' },
-          avgOccupancy: { $avg: '$occupancy_percentage' },
+          avgOccupancy: { $avg: '$occupancy' },
           totalAssets: { $sum: '$assets_count' }
         }
       },

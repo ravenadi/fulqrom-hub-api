@@ -50,15 +50,6 @@ const FloorSchema = new mongoose.Schema({
     min: 0,
     default: 0
   },
-  max_occupancy: {
-    type: Number,
-    min: 0
-  },
-  occupancy_percentage: {
-    type: Number,
-    min: 0,
-    max: 100
-  },
 
   // Area specifications
   area_number: {
