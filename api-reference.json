@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-09-29T08:30:00.000Z"
+    "lastUpdated": "2025-09-29T10:20:00.000Z"
   },
   "endpoints": {
     "health": {
@@ -30,6 +30,7 @@
         "endpoints": {
           "health": "/health",
           "customers": "/api/customers",
+          "customer_stats": "/api/customers/:id/stats",
           "contacts": "/api/customers/:customerId/contacts",
           "sites": "/api/sites",
           "buildings": "/api/buildings",
@@ -137,6 +138,28 @@
           "success": true,
           "message": "Customer deleted successfully",
           "data": "Deleted customer object"
+        }
+      },
+      "getStats": {
+        "method": "GET",
+        "path": "/api/customers/:id/stats",
+        "description": "Get customer statistics (sites, buildings, assets, documents counts)",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID (24-character hex string)"
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "customer_id": "ObjectId",
+            "customer_name": "string",
+            "stats": {
+              "totalSites": "number",
+              "totalBuildings": "number",
+              "totalAssets": "number",
+              "totalDocuments": "number"
+            }
+          }
         }
       }
     },
@@ -1693,6 +1716,7 @@
   "sampleApiCalls": {
     "getAllCustomers": "curl -X GET http://localhost:30001/api/customers",
     "getCustomerById": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07",
+    "getCustomerStats": "curl -X GET http://localhost:30001/api/customers/68d3929ae4c5d9b3e920a9df/stats",
     "createCustomer": "curl -X POST http://localhost:30001/api/customers -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Test Company\",\"building_image\":\"https://example.com/building.jpg\"}}'",
     "updateCustomer": "curl -X PUT http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07 -H 'Content-Type: application/json' -d '{\"organisation\":{\"organisation_name\":\"Updated Company\"}}'",
     "getCustomerContacts": "curl -X GET http://localhost:30001/api/customers/68d395f9c7ad6627ad607f07/contacts",
@@ -1806,6 +1830,7 @@
     "searchFunctionality": "Search functionality implemented across all customer module GET endpoints: Sites, Buildings, Floors, Tenants, Documents, and Contacts. Simple case-insensitive partial matching across key fields using regex patterns",
     "searchImplementation": "Search parameter added to main list endpoints with logical field selection: sites (site_name, address, manager.name), buildings (building_name, building_code), floors (floor_name), tenants (tenant_legal_name, tenant_trading_name, abn, primary_contact_name, primary_contact_email, industry_type), contacts (full_name, method_value, job_title, department, role_type)",
     "tenantsCollection": "Added dedicated /api/tenants route separate from /api/building-tenants for simplified tenant management with search capability",
-    "documentSearch": "Documents collection has comprehensive search with helper functions covering name, description, tags, customer, location, file metadata, and compliance fields"
+    "documentSearch": "Documents collection has comprehensive search with helper functions covering name, description, tags, customer, location, file metadata, and compliance fields",
+    "customerStats": "Added customer statistics endpoint (/api/customers/:id/stats) that provides dynamic counts for sites, buildings, assets, and documents with proper nested field query for documents (customer.customer_id)"
   }
 }
