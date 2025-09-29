@@ -6,7 +6,7 @@ const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Tenant = require('../models/Tenant');
-const { uploadFileToS3, generatePresignedUrl, deleteFileFromS3 } = require('../utils/s3Upload');
+const { uploadFileToS3, generatePresignedUrl, generatePreviewUrl, deleteFileFromS3 } = require('../utils/s3Upload');
 const {
   validateCreateDocument,
   validateUpdateDocument,
@@ -272,6 +272,61 @@ router.get('/:id/download', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error generating download URL',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/:id/preview - Generate presigned URL for document preview
+router.get('/:id/preview', validateObjectId, async (req, res) => {
+  try {
+    const document = await Document.findById(req.params.id);
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    if (!document.file || !document.file.file_meta || !document.file.file_meta.file_key) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document file not found'
+      });
+    }
+
+    const fileMeta = document.file.file_meta;
+
+    // Generate preview URL with inline content disposition
+    const urlResult = await generatePreviewUrl(
+      fileMeta.file_key,
+      fileMeta.file_name,
+      fileMeta.file_type,
+      3600 // 1 hour expiry
+    );
+
+    if (!urlResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate preview URL',
+        error: urlResult.error
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      preview_url: urlResult.url,
+      expires_in: 3600,
+      file_name: fileMeta.file_name,
+      file_type: fileMeta.file_type,
+      file_size: fileMeta.file_size
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error generating preview URL',
       error: error.message
     });
   }

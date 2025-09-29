@@ -217,6 +217,39 @@ async function generatePresignedUrl(s3Key, expiresIn = 3600) {
 }
 
 /**
+ * Generate presigned URL for document preview (inline display)
+ * @param {string} s3Key - S3 key of file
+ * @param {string} fileName - Original file name
+ * @param {string} contentType - File content type
+ * @param {number} expiresIn - URL expiration time in seconds (default: 1 hour)
+ * @returns {Promise<Object>} - Presigned URL result
+ */
+async function generatePreviewUrl(s3Key, fileName, contentType, expiresIn = 3600) {
+  try {
+    const getObjectCommand = new GetObjectCommand({
+      Bucket: process.env.AWS_BUCKET,
+      Key: s3Key,
+      ResponseContentType: contentType,
+      ResponseContentDisposition: 'inline'
+    });
+
+    const url = await getSignedUrl(s3Client, getObjectCommand, { expiresIn });
+
+    return {
+      success: true,
+      url: url
+    };
+
+  } catch (error) {
+    console.error('S3 Preview URL Error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
  * Check if S3 bucket exists and is accessible
  * @returns {Promise<Object>} - Health check result
  */
@@ -246,6 +279,7 @@ module.exports = {
   uploadFileToS3,
   deleteFileFromS3,
   generatePresignedUrl,
+  generatePreviewUrl,
   checkS3Health,
   validateFile,
   MAX_FILE_SIZE,
