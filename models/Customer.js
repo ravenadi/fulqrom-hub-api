@@ -68,7 +68,28 @@ const AddressSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
-// Contact Method schema
+// Individual Contact Method schema (nested within contact)
+const IndividualMethodSchema = new mongoose.Schema({
+  method_type: {
+    type: String,
+    required: true
+  },
+  method_value: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  label: {
+    type: String,
+    trim: true
+  },
+  is_primary: {
+    type: Boolean,
+    default: false
+  }
+}, { _id: true });
+
+// Contact schema with multiple methods
 const ContactMethodSchema = new mongoose.Schema({
   full_name: {
     type: String,
@@ -91,6 +112,8 @@ const ContactMethodSchema = new mongoose.Schema({
   platform_access: {
     type: String
   },
+  contact_methods: [IndividualMethodSchema],
+  // Legacy fields for backward compatibility
   method_type: {
     type: String
   },
@@ -108,6 +131,25 @@ const ContactMethodSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+// Pre-save middleware to ensure only one primary method per contact
+ContactMethodSchema.pre('save', function(next) {
+  // Handle primary validation for contact_methods array
+  if (this.contact_methods && this.contact_methods.length > 0) {
+    const primaryMethods = this.contact_methods.filter(method => method.is_primary);
+
+    // If multiple primary methods, keep only the first one
+    if (primaryMethods.length > 1) {
+      this.contact_methods.forEach((method, index) => {
+        if (index > 0 && method.is_primary) {
+          method.is_primary = false;
+        }
+      });
+    }
+  }
+
+  next();
 });
 
 // Metadata Item schema

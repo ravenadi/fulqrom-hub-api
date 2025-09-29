@@ -147,8 +147,24 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Create contact with both new and legacy structure for compatibility
+    const newContactData = {
+      ...req.body,
+      contact_methods: [] // Initialize empty contact_methods array
+    };
+
+    // If legacy method fields are provided, also add them to the new structure
+    if (req.body.method_type || req.body.method_value) {
+      newContactData.contact_methods = [{
+        method_type: req.body.method_type,
+        method_value: req.body.method_value,
+        label: req.body.label,
+        is_primary: req.body.is_primary || true
+      }];
+    }
+
     // Add new contact to contact_methods array
-    customer.contact_methods.push(req.body);
+    customer.contact_methods.push(newContactData);
     await customer.save();
 
     // Get the newly added contact
@@ -370,6 +386,195 @@ router.get('/search', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error searching contacts',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/customers/:customerId/contacts/:id/methods - Add contact method to existing contact
+router.post('/:id/methods', async (req, res) => {
+  try {
+    const { customerId, id } = req.params;
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    const contactIndex = customer.contact_methods.findIndex(contact => contact._id.toString() === id);
+    if (contactIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contact not found'
+      });
+    }
+
+    // Ensure contact_methods array exists
+    if (!customer.contact_methods[contactIndex].contact_methods) {
+      customer.contact_methods[contactIndex].contact_methods = [];
+    }
+
+    // If this method is set as primary, remove primary from other methods in this contact
+    if (req.body.is_primary) {
+      customer.contact_methods[contactIndex].contact_methods.forEach(method => {
+        method.is_primary = false;
+      });
+    }
+
+    // Add new method to contact_methods array
+    customer.contact_methods[contactIndex].contact_methods.push(req.body);
+    await customer.save();
+
+    // Get the newly added method
+    const methodsArray = customer.contact_methods[contactIndex].contact_methods;
+    const newMethod = methodsArray[methodsArray.length - 1];
+
+    res.status(201).json({
+      success: true,
+      message: 'Contact method added successfully',
+      data: newMethod,
+      contact: customer.contact_methods[contactIndex],
+      customer: {
+        id: customer._id,
+        name: customer.display_name
+      }
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Error adding contact method',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/customers/:customerId/contacts/:id/methods/:methodId - Update specific contact method
+router.put('/:id/methods/:methodId', async (req, res) => {
+  try {
+    const { customerId, id, methodId } = req.params;
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    const contactIndex = customer.contact_methods.findIndex(contact => contact._id.toString() === id);
+    if (contactIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contact not found'
+      });
+    }
+
+    const contact = customer.contact_methods[contactIndex];
+    if (!contact.contact_methods) {
+      return res.status(404).json({
+        success: false,
+        message: 'No contact methods found'
+      });
+    }
+
+    const methodIndex = contact.contact_methods.findIndex(method => method._id.toString() === methodId);
+    if (methodIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contact method not found'
+      });
+    }
+
+    // If this method is set as primary, remove primary from other methods in this contact
+    if (req.body.is_primary) {
+      contact.contact_methods.forEach((method, index) => {
+        if (index !== methodIndex) {
+          method.is_primary = false;
+        }
+      });
+    }
+
+    // Update the method
+    Object.assign(contact.contact_methods[methodIndex], req.body);
+    await customer.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Contact method updated successfully',
+      data: contact.contact_methods[methodIndex],
+      contact: contact,
+      customer: {
+        id: customer._id,
+        name: customer.display_name
+      }
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Error updating contact method',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/customers/:customerId/contacts/:id/methods/:methodId - Delete specific contact method
+router.delete('/:id/methods/:methodId', async (req, res) => {
+  try {
+    const { customerId, id, methodId } = req.params;
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    const contactIndex = customer.contact_methods.findIndex(contact => contact._id.toString() === id);
+    if (contactIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contact not found'
+      });
+    }
+
+    const contact = customer.contact_methods[contactIndex];
+    if (!contact.contact_methods) {
+      return res.status(404).json({
+        success: false,
+        message: 'No contact methods found'
+      });
+    }
+
+    const methodIndex = contact.contact_methods.findIndex(method => method._id.toString() === methodId);
+    if (methodIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contact method not found'
+      });
+    }
+
+    const deletedMethod = contact.contact_methods[methodIndex];
+    contact.contact_methods.splice(methodIndex, 1);
+    await customer.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Contact method deleted successfully',
+      data: deletedMethod,
+      contact: contact,
+      customer: {
+        id: customer._id,
+        name: customer.display_name
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting contact method',
       error: error.message
     });
   }
