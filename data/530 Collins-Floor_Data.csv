@@ -1,0 +1,17 @@
+Floor Name,Floor Number,Floor Type,Status,Site,Building,Floor Area,Area Unit,Current Occupancy,Assets Count
+Floor 1,1,Residential,Active,530 Collins,530 Collins,2659,ft²,5,31
+Floor 2,2,Retail,Inactive,530 Collins,530 Collins,3293,ft²,52,1
+Floor 3,3,Parking,Active,530 Collins,530 Collins,3227,ft²,56,34
+Floor 4,4,Parking,Inactive,530 Collins,530 Collins,4820,ft²,257,16
+Floor 5,5,Retail,Active,530 Collins,530 Collins,2155,ft²,120,23
+Floor 6,6,Mixed Use,Active,530 Collins,530 Collins,3675,m²,176,17
+Floor 7,7,Parking,Active,530 Collins,530 Collins,833,m²,148,47
+Floor 8,8,Residential,Inactive,530 Collins,530 Collins,1822,m²,292,5
+Floor 9,9,Retail,Active,530 Collins,530 Collins,1308,m²,250,31
+Floor 10,10,Retail,Inactive,530 Collins,530 Collins,1234,ft²,106,7
+Floor 11,11,Retail,Inactive,530 Collins,530 Collins,1408,ft²,76,42
+Floor 12,12,Parking,Inactive,530 Collins,530 Collins,1492,ft²,236,48
+Floor 13,13,Mixed Use,Inactive,530 Collins,530 Collins,3013,m²,47,35
+Floor 14,14,Mixed Use,Active,530 Collins,530 Collins,923,m²,92,13
+Floor 15,15,Parking,Active,530 Collins,530 Collins,4097,ft²,29,39
+Floor 16,16,Retail,Inactive,530 Collins,530 Collins,3216,m²,74,47
