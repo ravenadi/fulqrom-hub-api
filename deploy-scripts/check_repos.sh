@@ -10,7 +10,11 @@ API_DIR="/var/www/fulqrom-hub-api"
 DEPLOY_SCRIPT="/var/www/fulqrom-hub-api/deploy-scripts/deploy_fulqrom.sh"
 STATE_FILE="/var/www/.deploy_state"
 LOCK_FILE="/var/www/.deploy.lock"
-LOG_FILE="/var/log/fulqrom-deploy.log"
+LOG_FILE="/var/www/fulqrom-hub-api/logs/fulqrom-deploy.log"
+
+# Create logs directory if it doesn't exist
+LOG_DIR="$(dirname "$LOG_FILE")"
+[ ! -d "$LOG_DIR" ] && mkdir -p "$LOG_DIR"
 
 # Logging function
 log_message() {
