@@ -10,6 +10,7 @@ router.get('/', async (req, res) => {
       page = 1,
       per_page = 10,
       search,
+      customer_id,
       site_id,
       building_type,
       operational_status,
@@ -28,6 +29,11 @@ router.get('/', async (req, res) => {
         { building_code: new RegExp(search, 'i') },
         { site_name: new RegExp(search, 'i') }
       ];
+    }
+
+    // Filter by customer
+    if (customer_id) {
+      filterQuery.customer_id = customer_id;
     }
 
     // Filter by site
