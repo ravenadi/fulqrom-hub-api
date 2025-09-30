@@ -3,7 +3,7 @@
 
 UI_DIR="/var/www/fulqrom-hub"
 API_DIR="/var/www/fulqrom-hub-api"
-DEPLOY_SCRIPT="/var/www/fulqrom-hub-api/deploy-scripts/check_repos.sh"
+DEPLOY_SCRIPT="/var/www/fulqrom-hub-api/deploy-scripts/deploy_fulqrom.sh"
 
 STATE_FILE="/var/www/.deploy_state"
 
