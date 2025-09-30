@@ -5,6 +5,10 @@
 UI_DIR="/var/www/fulqrom-hub"
 API_DIR="/var/www/fulqrom-hub-api"
 
+# --- URLs ---
+UI_URL="https://hub.ravenlabs.biz"
+API_URL="https://api.hub.ravenlabs.biz"
+
 # --- Function to update a project ---
 update_project() {
     local DIR=$1
