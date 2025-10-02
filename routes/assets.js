@@ -4,6 +4,76 @@ const Asset = require('../models/Asset');
 
 const router = express.Router();
 
+// GET /api/assets/dropdown - Lightweight dropdown data
+router.get('/dropdown', async (req, res) => {
+  try {
+    const {
+      customer_id,
+      site_id,
+      building_id,
+      category,
+      status,
+      condition,
+      is_active = 'true'
+    } = req.query;
+
+    // Build filter query
+    let filterQuery = {};
+
+    if (customer_id) {
+      filterQuery.customer_id = customer_id;
+    }
+
+    if (site_id) {
+      filterQuery.site_id = site_id;
+    }
+
+    if (building_id) {
+      filterQuery.building_id = building_id;
+    }
+
+    if (category) {
+      filterQuery.category = category;
+    }
+
+    if (status) {
+      filterQuery.status = status;
+    }
+
+    if (condition) {
+      filterQuery.condition = condition;
+    }
+
+    if (is_active !== undefined) {
+      filterQuery.is_active = is_active === 'true';
+    }
+
+    // Fetch only id and asset_no fields for dropdown
+    const assets = await Asset.find(filterQuery)
+      .select('_id asset_no asset_name asset_id')
+      .sort({ asset_no: 1 })
+      .lean(); // Use lean() for better performance
+
+    // Transform to simple dropdown format
+    const dropdownData = assets.map(asset => ({
+      id: asset._id.toString(),
+      asset_no: asset.asset_no || asset.asset_name || asset.asset_id || 'Unnamed Asset'
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: dropdownData.length,
+      data: dropdownData
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assets dropdown data',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/assets - List all assets
 router.get('/', async (req, res) => {
   try {
@@ -302,8 +372,31 @@ router.get('/:id', async (req, res) => {
 // POST /api/assets - Create new asset
 router.post('/', async (req, res) => {
   try {
-    const asset = new Asset(req.body);
+    // Ensure required fields are present
+    const { customer_id, site_id, building_id, ...otherFields } = req.body;
+
+    if (!customer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'customer_id is required'
+      });
+    }
+
+    // Create asset with all fields
+    const assetData = {
+      customer_id,
+      site_id: site_id || null,
+      building_id: building_id || null,
+      ...otherFields
+    };
+
+    const asset = new Asset(assetData);
     await asset.save();
+
+    // Populate references before returning
+    await asset.populate('customer_id', 'organisation.organisation_name');
+    await asset.populate('site_id', 'site_name address');
+    await asset.populate('building_id', 'building_name building_code');
 
     res.status(201).json({
       success: true,
@@ -322,11 +415,27 @@ router.post('/', async (req, res) => {
 // PUT /api/assets/:id - Update asset
 router.put('/:id', async (req, res) => {
   try {
+    // Extract fields to ensure proper handling
+    const { customer_id, site_id, building_id, ...otherFields } = req.body;
+
+    // Build update object
+    const updateData = {
+      ...otherFields
+    };
+
+    // Only update these fields if they are provided
+    if (customer_id !== undefined) updateData.customer_id = customer_id;
+    if (site_id !== undefined) updateData.site_id = site_id || null;
+    if (building_id !== undefined) updateData.building_id = building_id || null;
+
     const asset = await Asset.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
-    );
+    )
+    .populate('customer_id', 'organisation.organisation_name')
+    .populate('site_id', 'site_name address')
+    .populate('building_id', 'building_name building_code');
 
     if (!asset) {
       return res.status(404).json({
@@ -349,6 +458,43 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+
+// DELETE /api/assets/:id - Delete asset
+router.delete('/:id', async (req, res) => {
+  try {
+    const asset = await Asset.findById(req.params.id);
+
+    if (!asset) {
+      return res.status(404).json({
+        success: false,
+        message: 'Asset not found'
+      });
+    }
+
+    // Store asset info before deletion for response
+    const deletedAssetInfo = {
+      asset_id: asset.asset_id,
+      asset_no: asset.asset_no,
+      category: asset.category,
+      make: asset.make,
+      model: asset.model
+    };
+
+    await Asset.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Asset deleted successfully',
+      deleted_asset: deletedAssetInfo
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting asset',
+      error: error.message
+    });
+  }
+});
 
 // GET /api/assets/by-building/:buildingId - Get assets by building
 router.get('/by-building/:buildingId', async (req, res) => {

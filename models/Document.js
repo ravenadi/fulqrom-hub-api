@@ -89,6 +89,20 @@ const LocationSchema = new mongoose.Schema({
       trim: true
     }
   },
+  asset: {
+    asset_id: {
+      type: String,
+      trim: true
+    },
+    asset_name: {
+      type: String,
+      trim: true
+    },
+    asset_type: {
+      type: String,
+      trim: true
+    }
+  },
   tenant: {
     tenant_id: {
       type: String,
@@ -191,6 +205,14 @@ const DocumentSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Document Status
+  status: {
+    type: String,
+    enum: ['Approved', 'Under Review', 'Draft', 'Rejected', 'Archived'],
+    default: 'Draft',
+    trim: true
+  },
+
   // File Information
   file: FileSchema,
 
@@ -265,6 +287,7 @@ DocumentSchema.index({ 'customer.customer_id': 1 });
 DocumentSchema.index({ 'location.site.site_id': 1 });
 DocumentSchema.index({ 'location.building.building_id': 1 });
 DocumentSchema.index({ 'location.floor.floor_id': 1 });
+DocumentSchema.index({ 'location.asset.asset_id': 1 });
 DocumentSchema.index({ 'location.tenant.tenant_id': 1 });
 DocumentSchema.index({ created_at: -1 });
 DocumentSchema.index({ 'metadata.regulatory_framework': 1 });

@@ -5,6 +5,7 @@ const Customer = require('../models/Customer');
 const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Floor = require('../models/Floor');
+const Asset = require('../models/Asset');
 const Tenant = require('../models/Tenant');
 const { uploadFileToS3, generatePresignedUrl, generatePreviewUrl, deleteFileFromS3 } = require('../utils/s3Upload');
 const {
@@ -81,6 +82,15 @@ async function fetchEntityNames(documentData) {
       }
     }
 
+    // Fetch asset name
+    if (documentData.asset_id) {
+      const asset = await Asset.findById(documentData.asset_id.toString());
+      if (asset) {
+        entityNames.asset_name = asset.asset_name;
+        entityNames.asset_type = asset.asset_type;
+      }
+    }
+
     // Fetch tenant name
     if (documentData.tenant_id) {
       const tenant = await Tenant.findById(documentData.tenant_id.toString());
@@ -104,9 +114,11 @@ router.get('/', validateQueryParams, async (req, res) => {
       site_id,
       building_id,
       floor_id,
+      asset_id,
       tenant_id,
       category,
       type,
+      status,
       engineering_discipline,
       regulatory_framework,
       compliance_status,
@@ -126,11 +138,13 @@ router.get('/', validateQueryParams, async (req, res) => {
     if (site_id) filterQuery['location.site.site_id'] = site_id;
     if (building_id) filterQuery['location.building.building_id'] = building_id;
     if (floor_id) filterQuery['location.floor.floor_id'] = floor_id;
+    if (asset_id) filterQuery['location.asset.asset_id'] = asset_id;
     if (tenant_id) filterQuery['location.tenant.tenant_id'] = tenant_id;
 
     // Document filters
     if (category) filterQuery.category = category;
     if (type) filterQuery.type = type;
+    if (status) filterQuery.status = status;
     if (engineering_discipline) filterQuery.engineering_discipline = engineering_discipline;
 
     // Compliance filters
@@ -421,6 +435,14 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
       documentPayload.location.floor = {
         floor_id: documentData.floor_id,
         floor_name: entityNames.floor_name
+      };
+    }
+
+    if (documentData.asset_id && entityNames.asset_name) {
+      documentPayload.location.asset = {
+        asset_id: documentData.asset_id,
+        asset_name: entityNames.asset_name,
+        asset_type: entityNames.asset_type
       };
     }
 

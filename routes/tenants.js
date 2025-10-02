@@ -62,6 +62,71 @@ const validateTenantData = (req, res, next) => {
   next();
 };
 
+// GET /api/tenants/dropdown - Lightweight dropdown data
+router.get('/dropdown', async (req, res) => {
+  try {
+    const {
+      customer_id,
+      site_id,
+      building_id,
+      floor_id,
+      tenant_status,
+      is_active = 'true'
+    } = req.query;
+
+    // Build filter query
+    let filterQuery = {};
+
+    if (customer_id) {
+      filterQuery.customer_id = customer_id;
+    }
+
+    if (site_id) {
+      filterQuery.site_id = site_id;
+    }
+
+    if (building_id) {
+      filterQuery.building_id = building_id;
+    }
+
+    if (floor_id) {
+      filterQuery.floor_id = floor_id;
+    }
+
+    if (tenant_status) {
+      filterQuery.tenant_status = tenant_status;
+    }
+
+    if (is_active !== undefined) {
+      filterQuery.is_active = is_active === 'true';
+    }
+
+    // Fetch only id and tenant_name fields for dropdown
+    const tenants = await Tenant.find(filterQuery)
+      .select('_id tenant_legal_name tenant_trading_name')
+      .sort({ tenant_legal_name: 1 })
+      .lean(); // Use lean() for better performance
+
+    // Transform to simple dropdown format
+    const dropdownData = tenants.map(tenant => ({
+      id: tenant._id.toString(),
+      tenant_name: tenant.tenant_trading_name || tenant.tenant_legal_name || 'Unnamed Tenant'
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: dropdownData.length,
+      data: dropdownData
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching tenants dropdown data',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/tenants - List all tenants
 router.get('/', async (req, res) => {
   try {
