@@ -1,0 +1,721 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const Asset = require('../models/Asset');
+
+const router = express.Router();
+
+// GET /api/assets/dropdown - Lightweight dropdown data
+router.get('/dropdown', async (req, res) => {
+  try {
+    const {
+      customer_id,
+      site_id,
+      building_id,
+      category,
+      status,
+      condition,
+      is_active = 'true'
+    } = req.query;
+
+    // Build filter query
+    let filterQuery = {};
+
+    if (customer_id) {
+      filterQuery.customer_id = customer_id;
+    }
+
+    if (site_id) {
+      filterQuery.site_id = site_id;
+    }
+
+    if (building_id) {
+      filterQuery.building_id = building_id;
+    }
+
+    if (category) {
+      filterQuery.category = category;
+    }
+
+    if (status) {
+      filterQuery.status = status;
+    }
+
+    if (condition) {
+      filterQuery.condition = condition;
+    }
+
+    if (is_active !== undefined) {
+      filterQuery.is_active = is_active === 'true';
+    }
+
+    // Fetch only id and asset_no fields for dropdown
+    const assets = await Asset.find(filterQuery)
+      .select('_id asset_no asset_name asset_id')
+      .sort({ asset_no: 1 })
+      .lean(); // Use lean() for better performance
+
+    // Transform to simple dropdown format
+    const dropdownData = assets.map(asset => ({
+      id: asset._id.toString(),
+      asset_no: asset.asset_no || asset.asset_name || asset.asset_id || 'Unnamed Asset'
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: dropdownData.length,
+      data: dropdownData
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assets dropdown data',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/assets - List all assets
+router.get('/', async (req, res) => {
+  try {
+    const {
+      customer_id,
+      site_id,
+      building_id,
+      category,
+      status,
+      condition,
+      make,
+      model,
+      level,
+      area,
+      device_id,
+      asset_no,
+      asset_id,
+      refrigerant,
+      owner,
+      service_status,
+      age_min,
+      age_max,
+      purchase_cost_min,
+      purchase_cost_max,
+      current_value_min,
+      current_value_max,
+      test_result,
+      is_active,
+      search,
+      page = 1,
+      limit = 50,
+      sort_by = 'createdAt',
+      sort_order = 'desc'
+    } = req.query;
+
+    // Build filter query
+    let filterQuery = {};
+
+    if (customer_id) {
+      filterQuery.customer_id = customer_id;
+    }
+
+    if (site_id) {
+      filterQuery.site_id = site_id;
+    }
+
+    if (building_id) {
+      filterQuery.building_id = building_id;
+    }
+
+    if (category) {
+      filterQuery.category = category;
+    }
+
+    if (status) {
+      filterQuery.status = status;
+    }
+
+    if (condition) {
+      filterQuery.condition = condition;
+    }
+
+    if (make) {
+      filterQuery.make = new RegExp(make, 'i');
+    }
+
+    if (model) {
+      filterQuery.model = new RegExp(model, 'i');
+    }
+
+    if (level) {
+      filterQuery.level = level;
+    }
+
+    if (area) {
+      filterQuery.area = new RegExp(area, 'i');
+    }
+
+    if (device_id) {
+      filterQuery.device_id = device_id;
+    }
+
+    if (asset_no) {
+      filterQuery.asset_no = new RegExp(asset_no, 'i');
+    }
+
+    if (asset_id) {
+      filterQuery.asset_id = asset_id;
+    }
+
+    if (refrigerant) {
+      filterQuery.refrigerant = new RegExp(refrigerant, 'i');
+    }
+
+    if (owner) {
+      filterQuery.owner = new RegExp(owner, 'i');
+    }
+
+    if (service_status) {
+      filterQuery.service_status = service_status;
+    }
+
+    if (age_min || age_max) {
+      filterQuery.age = {};
+      if (age_min) filterQuery.age.$gte = parseInt(age_min);
+      if (age_max) filterQuery.age.$lte = parseInt(age_max);
+    }
+
+    if (purchase_cost_min || purchase_cost_max) {
+      filterQuery.purchase_cost_aud = {};
+      if (purchase_cost_min) filterQuery.purchase_cost_aud.$gte = parseFloat(purchase_cost_min);
+      if (purchase_cost_max) filterQuery.purchase_cost_aud.$lte = parseFloat(purchase_cost_max);
+    }
+
+    if (current_value_min || current_value_max) {
+      filterQuery.current_book_value_aud = {};
+      if (current_value_min) filterQuery.current_book_value_aud.$gte = parseFloat(current_value_min);
+      if (current_value_max) filterQuery.current_book_value_aud.$lte = parseFloat(current_value_max);
+    }
+
+    if (test_result) {
+      filterQuery.last_test_result = test_result;
+    }
+
+    // Text search across multiple fields
+    if (search) {
+      filterQuery.$or = [
+        { asset_no: new RegExp(search, 'i') },
+        { asset_id: new RegExp(search, 'i') },
+        { device_id: new RegExp(search, 'i') },
+        { make: new RegExp(search, 'i') },
+        { model: new RegExp(search, 'i') },
+        { serial: new RegExp(search, 'i') },
+        { area: new RegExp(search, 'i') },
+        { category: new RegExp(search, 'i') },
+        { type: new RegExp(search, 'i') }
+      ];
+    }
+
+    if (is_active !== undefined) {
+      filterQuery.is_active = is_active === 'true';
+    }
+
+    // Pagination
+    const pageNumber = Math.max(1, parseInt(page));
+    const limitNumber = Math.min(Math.max(1, parseInt(limit)), 200); // Max 200 per page
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Sort configuration
+    const sortField = ['createdAt', 'updatedAt', 'asset_no', 'asset_id', 'device_id', 'category', 'status', 'condition', 'make', 'model', 'level', 'area', 'age', 'purchase_cost_aud', 'current_book_value_aud'].includes(sort_by) ? sort_by : 'createdAt';
+    const sortDirection = sort_order === 'asc' ? 1 : -1;
+
+    // Get total count for pagination
+    const totalAssets = await Asset.countDocuments(filterQuery);
+
+    // Get paginated assets
+    const assets = await Asset.find(filterQuery)
+      .populate('customer_id', 'organisation.organisation_name')
+      .populate('site_id', 'site_name address')
+      .populate('building_id', 'building_name building_code')
+      .sort({ [sortField]: sortDirection })
+      .skip(skip)
+      .limit(limitNumber);
+
+    // Calculate summary statistics (on filtered data, not paginated)
+    const summaryStats = await Asset.aggregate([
+      { $match: filterQuery },
+      {
+        $group: {
+          _id: null,
+          total_assets: { $sum: 1 },
+          active_assets: {
+            $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] }
+          },
+          operational_assets: {
+            $sum: { $cond: [{ $eq: ['$status', 'Operational'] }, 1, 0] }
+          },
+          good_condition: {
+            $sum: { $cond: [{ $eq: ['$condition', 'Good'] }, 1, 0] }
+          },
+          poor_condition: {
+            $sum: { $cond: [{ $eq: ['$condition', 'Poor'] }, 1, 0] }
+          },
+          needs_maintenance: {
+            $sum: {
+              $cond: [
+                {
+                  $or: [
+                    { $eq: ['$status', 'Maintenance Required'] },
+                    { $eq: ['$condition', 'Poor'] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    const summary = summaryStats[0] || {
+      total_assets: 0,
+      active_assets: 0,
+      operational_assets: 0,
+      good_condition: 0,
+      poor_condition: 0,
+      needs_maintenance: 0
+    };
+
+    // Pagination metadata
+    const totalPages = Math.ceil(totalAssets / limitNumber);
+    const hasNextPage = pageNumber < totalPages;
+    const hasPrevPage = pageNumber > 1;
+
+    res.status(200).json({
+      success: true,
+      data: assets,
+      pagination: {
+        current_page: pageNumber,
+        per_page: limitNumber,
+        total_items: totalAssets,
+        total_pages: totalPages,
+        has_next_page: hasNextPage,
+        has_prev_page: hasPrevPage,
+        next_page: hasNextPage ? pageNumber + 1 : null,
+        prev_page: hasPrevPage ? pageNumber - 1 : null
+      },
+      summary: summary,
+      filters_applied: {
+        customer_id: customer_id || null,
+        site_id: site_id || null,
+        building_id: building_id || null,
+        category: category || null,
+        status: status || null,
+        condition: condition || null,
+        make: make || null,
+        model: model || null,
+        level: level || null,
+        area: area || null,
+        device_id: device_id || null,
+        asset_no: asset_no || null,
+        asset_id: asset_id || null,
+        refrigerant: refrigerant || null,
+        owner: owner || null,
+        service_status: service_status || null,
+        age_range: (age_min || age_max) ? `${age_min || 0}-${age_max || '∞'}` : null,
+        purchase_cost_range: (purchase_cost_min || purchase_cost_max) ? `$${purchase_cost_min || 0}-${purchase_cost_max || '∞'}` : null,
+        current_value_range: (current_value_min || current_value_max) ? `$${current_value_min || 0}-${current_value_max || '∞'}` : null,
+        test_result: test_result || null,
+        search: search || null,
+        is_active: is_active || null
+      },
+      sort: {
+        field: sortField,
+        order: sort_order
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assets',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/assets/:id - Get single asset
+router.get('/:id', async (req, res) => {
+  try {
+    const asset = await Asset.findById(req.params.id)
+      .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
+      .populate('site_id', 'site_name address')
+      .populate('building_id', 'building_name building_code');
+
+    if (!asset) {
+      return res.status(404).json({
+        success: false,
+        message: 'Asset not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: asset
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching asset',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/assets - Create new asset
+router.post('/', async (req, res) => {
+  try {
+    // Ensure required fields are present
+    const { customer_id, site_id, building_id, ...otherFields } = req.body;
+
+    if (!customer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'customer_id is required'
+      });
+    }
+
+    // Create asset with all fields
+    const assetData = {
+      customer_id,
+      site_id: site_id || null,
+      building_id: building_id || null,
+      ...otherFields
+    };
+
+    const asset = new Asset(assetData);
+    await asset.save();
+
+    // Populate references before returning
+    await asset.populate('customer_id', 'organisation.organisation_name');
+    await asset.populate('site_id', 'site_name address');
+    await asset.populate('building_id', 'building_name building_code');
+
+    res.status(201).json({
+      success: true,
+      message: 'Asset created successfully',
+      data: asset
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Error creating asset',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/assets/:id - Update asset
+router.put('/:id', async (req, res) => {
+  try {
+    // Extract fields to ensure proper handling
+    const { customer_id, site_id, building_id, ...otherFields } = req.body;
+
+    // Build update object
+    const updateData = {
+      ...otherFields
+    };
+
+    // Only update these fields if they are provided
+    if (customer_id !== undefined) updateData.customer_id = customer_id;
+    if (site_id !== undefined) updateData.site_id = site_id || null;
+    if (building_id !== undefined) updateData.building_id = building_id || null;
+
+    const asset = await Asset.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    )
+    .populate('customer_id', 'organisation.organisation_name')
+    .populate('site_id', 'site_name address')
+    .populate('building_id', 'building_name building_code');
+
+    if (!asset) {
+      return res.status(404).json({
+        success: false,
+        message: 'Asset not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Asset updated successfully',
+      data: asset
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Error updating asset',
+      error: error.message
+    });
+  }
+});
+
+
+// DELETE /api/assets/:id - Delete asset
+router.delete('/:id', async (req, res) => {
+  try {
+    const asset = await Asset.findById(req.params.id);
+
+    if (!asset) {
+      return res.status(404).json({
+        success: false,
+        message: 'Asset not found'
+      });
+    }
+
+    // Store asset info before deletion for response
+    const deletedAssetInfo = {
+      asset_id: asset.asset_id,
+      asset_no: asset.asset_no,
+      category: asset.category,
+      make: asset.make,
+      model: asset.model
+    };
+
+    await Asset.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Asset deleted successfully',
+      deleted_asset: deletedAssetInfo
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting asset',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/assets/by-building/:buildingId - Get assets by building
+router.get('/by-building/:buildingId', async (req, res) => {
+  try {
+    const { buildingId } = req.params;
+    const {
+      category,
+      status,
+      condition,
+      level,
+      area,
+      make,
+      page = 1,
+      limit = 50
+    } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(buildingId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid building ID format'
+      });
+    }
+
+    // Build filter query
+    let filterQuery = { building_id: new mongoose.Types.ObjectId(buildingId) };
+
+    if (category) filterQuery.category = category;
+    if (status) filterQuery.status = status;
+    if (condition) filterQuery.condition = condition;
+    if (level) filterQuery.level = level;
+    if (area) filterQuery.area = new RegExp(area, 'i');
+    if (make) filterQuery.make = new RegExp(make, 'i');
+
+    // Pagination
+    const pageNumber = Math.max(1, parseInt(page));
+    const limitNumber = Math.min(Math.max(1, parseInt(limit)), 200);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Get total count for pagination
+    const totalAssets = await Asset.countDocuments(filterQuery);
+
+    // Get paginated assets
+    const assets = await Asset.find(filterQuery)
+      .populate('customer_id', 'organisation.organisation_name')
+      .populate('site_id', 'site_name')
+      .populate('building_id', 'building_name building_code')
+      .sort({ level: 1, area: 1, asset_no: 1 })
+      .skip(skip)
+      .limit(limitNumber);
+
+    // Calculate summary statistics
+    const summaryStats = await Asset.aggregate([
+      { $match: filterQuery },
+      {
+        $group: {
+          _id: null,
+          total_assets: { $sum: 1 },
+          active_assets: { $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] } },
+          operational_assets: { $sum: { $cond: [{ $eq: ['$status', 'Operational'] }, 1, 0] } },
+          maintenance_required: { $sum: { $cond: [{ $eq: ['$status', 'Maintenance Required'] }, 1, 0] } },
+          good_condition: { $sum: { $cond: [{ $eq: ['$condition', 'Good'] }, 1, 0] } },
+          total_value: { $sum: '$current_book_value_aud' },
+          avg_age: { $avg: '$age' }
+        }
+      }
+    ]);
+
+    const summary = summaryStats[0] || {
+      total_assets: 0,
+      active_assets: 0,
+      operational_assets: 0,
+      maintenance_required: 0,
+      good_condition: 0,
+      total_value: 0,
+      avg_age: 0
+    };
+
+    // Pagination metadata
+    const totalPages = Math.ceil(totalAssets / limitNumber);
+
+    res.status(200).json({
+      success: true,
+      count: assets.length,
+      summary: summary,
+      data: assets,
+      pagination: {
+        current_page: pageNumber,
+        per_page: limitNumber,
+        total_items: totalAssets,
+        total_pages: totalPages,
+        has_next_page: pageNumber < totalPages,
+        has_prev_page: pageNumber > 1
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assets by building',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/assets/by-category - Group assets by category
+router.get('/by-category', async (req, res) => {
+  try {
+    const { customer_id, site_id, building_id } = req.query;
+
+    let matchQuery = {};
+    if (customer_id && mongoose.Types.ObjectId.isValid(customer_id)) {
+      matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+    }
+    if (site_id && mongoose.Types.ObjectId.isValid(site_id)) {
+      matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
+    }
+    if (building_id && mongoose.Types.ObjectId.isValid(building_id)) {
+      matchQuery.building_id = new mongoose.Types.ObjectId(building_id);
+    }
+
+    const categoryStats = await Asset.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: '$category',
+          count: { $sum: 1 },
+          active_count: { $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] } },
+          operational_count: { $sum: { $cond: [{ $eq: ['$status', 'Operational'] }, 1, 0] } },
+          maintenance_required: { $sum: { $cond: [{ $eq: ['$status', 'Maintenance Required'] }, 1, 0] } },
+          good_condition: { $sum: { $cond: [{ $eq: ['$condition', 'Good'] }, 1, 0] } },
+          total_value: { $sum: '$current_book_value_aud' },
+          avg_age: { $avg: '$age' }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: categoryStats.map(stat => ({
+        category: stat._id || 'Uncategorized',
+        count: stat.count,
+        active_count: stat.active_count,
+        operational_count: stat.operational_count,
+        maintenance_required: stat.maintenance_required,
+        good_condition: stat.good_condition,
+        total_value: Math.round(stat.total_value || 0),
+        avg_age: Math.round(stat.avg_age || 0)
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assets by category',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/assets/summary/stats - Get asset summary statistics
+router.get('/summary/stats', async (req, res) => {
+  try {
+    const { customer_id, site_id, building_id } = req.query;
+
+    let matchQuery = {};
+    if (customer_id && mongoose.Types.ObjectId.isValid(customer_id)) {
+      matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+    }
+    if (site_id && mongoose.Types.ObjectId.isValid(site_id)) {
+      matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
+    }
+    if (building_id && mongoose.Types.ObjectId.isValid(building_id)) {
+      matchQuery.building_id = new mongoose.Types.ObjectId(building_id);
+    }
+
+    const stats = await Asset.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: null,
+          totalAssets: { $sum: 1 },
+          activeAssets: { $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] } },
+          operationalAssets: { $sum: { $cond: [{ $eq: ['$status', 'Operational'] }, 1, 0] } },
+          maintenanceRequired: { $sum: { $cond: [{ $eq: ['$status', 'Maintenance Required'] }, 1, 0] } },
+          goodCondition: { $sum: { $cond: [{ $eq: ['$condition', 'Good'] }, 1, 0] } },
+          fairCondition: { $sum: { $cond: [{ $eq: ['$condition', 'Fair'] }, 1, 0] } },
+          poorCondition: { $sum: { $cond: [{ $eq: ['$condition', 'Poor'] }, 1, 0] } },
+          totalValue: { $sum: '$current_book_value_aud' },
+          totalPurchaseCost: { $sum: '$purchase_cost_aud' },
+          avgAge: { $avg: '$age' },
+          testsPassed: { $sum: { $cond: [{ $eq: ['$last_test_result', 'Pass'] }, 1, 0] } },
+          testsFailed: { $sum: { $cond: [{ $eq: ['$last_test_result', 'Fail'] }, 1, 0] } }
+        }
+      }
+    ]);
+
+    const result = stats[0] || {
+      totalAssets: 0,
+      activeAssets: 0,
+      operationalAssets: 0,
+      maintenanceRequired: 0,
+      goodCondition: 0,
+      fairCondition: 0,
+      poorCondition: 0,
+      totalValue: 0,
+      totalPurchaseCost: 0,
+      avgAge: 0,
+      testsPassed: 0,
+      testsFailed: 0
+    };
+
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching asset statistics',
+      error: error.message
+    });
+  }
+});
+
+module.exports = router;

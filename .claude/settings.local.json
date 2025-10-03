@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(kill:*)",
+      "Bash(npm start)",
+      "Bash(find:*)",
+      "Read(//Users/devensitapara/Documents/development/GKBLabs/falcrom/fulqrom-hub/**)",
+      "Bash(pkill:*)",
+      "Bash(git add:*)",
+      "Bash(node:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
