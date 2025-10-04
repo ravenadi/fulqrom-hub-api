@@ -4,15 +4,44 @@ const mongoose = require('mongoose');
 const EmergencyContactSchema = new mongoose.Schema({
   name: {
     type: String,
+    trim: true,
+    required: true
+  },
+  phone: {
+    type: String,
+    trim: true,
+    required: true
+  },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true
+  },
+  relationship: {
+    type: String,
     trim: true
+  }
+}, { _id: false });
+
+// Contact schema for multiple contacts with primary toggle
+const ContactSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true
   },
   phone: {
     type: String,
     trim: true
   },
-  relationship: {
-    type: String,
-    trim: true
+  is_primary: {
+    type: Boolean,
+    default: false
   }
 }, { _id: false });
 
@@ -47,7 +76,13 @@ const TenantSchema = new mongoose.Schema({
   },
   abn: {
     type: String,
-    trim: true
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return !v || /^\d{11}$/.test(v);
+      },
+      message: 'ABN must be exactly 11 digits'
+    }
   },
   acn: {
     type: String,
@@ -182,8 +217,36 @@ const TenantSchema = new mongoose.Schema({
     type: [String]
   },
   special_requirements: {
-    type: String,
-    trim: true
+    type: [String],
+    default: [],
+    enum: ['24_7_access', 'high_security', 'loading_dock', 'after_hours_hvac', 'dedicated_parking', 'signage_rights', 'kitchen_facilities', 'server_room']
+  },
+
+  // Business hours - consolidated from operating_hours_start/end
+  business_hours: {
+    start: {
+      type: String,
+      trim: true
+    },
+    end: {
+      type: String,
+      trim: true
+    }
+  },
+
+  // Multiple contacts with primary designation
+  contacts: [ContactSchema],
+
+  // Employee count (alias/replacement for number_of_employees)
+  employee_count: {
+    type: Number,
+    min: 0
+  },
+
+  // Parking allocation (alias/replacement for allocated_parking_spaces)
+  parking_allocation: {
+    type: Number,
+    min: 0
   },
 
   // Financial
@@ -293,13 +356,39 @@ TenantSchema.virtual('lease_duration_display').get(function() {
   return 'N/A';
 });
 
-// Pre-save middleware to calculate lease duration
+// Virtual for getting primary contact
+TenantSchema.virtual('primary_contact').get(function() {
+  if (this.contacts && this.contacts.length > 0) {
+    return this.contacts.find(c => c.is_primary) || this.contacts[0];
+  }
+  return null;
+});
+
+// Pre-save middleware to calculate lease duration and ensure only one primary contact
 TenantSchema.pre('save', function(next) {
+  // Ensure only one primary contact
+  if (this.contacts && this.contacts.length > 0) {
+    const primaryContacts = this.contacts.filter(c => c.is_primary);
+    if (primaryContacts.length > 1) {
+      // Keep only the first primary, set others to false
+      let foundPrimary = false;
+      this.contacts = this.contacts.map(contact => {
+        if (contact.is_primary && !foundPrimary) {
+          foundPrimary = true;
+          return contact;
+        }
+        return { ...contact.toObject ? contact.toObject() : contact, is_primary: false };
+      });
+    }
+  }
+
+  // Calculate lease duration
   if (this.lease_start_date && this.lease_end_date) {
     const start = new Date(this.lease_start_date);
     const end = new Date(this.lease_end_date);
     this.lease_duration_months = Math.round((end - start) / (1000 * 60 * 60 * 24 * 30));
   }
+
   next();
 });
 
@@ -314,6 +403,9 @@ TenantSchema.index({ customer_id: 1 });
 TenantSchema.index({ tenant_status: 1 });
 TenantSchema.index({ lease_end_date: 1 });
 TenantSchema.index({ is_active: 1 });
+TenantSchema.index({ 'contacts.email': 1 });
+TenantSchema.index({ 'contacts.is_primary': 1 });
+TenantSchema.index({ special_requirements: 1 });
 
 // Compound indexes
 TenantSchema.index({ building_id: 1, floor_id: 1 });

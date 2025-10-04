@@ -140,22 +140,61 @@ const VendorAddressSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
-// Main Vendor schema
-const VendorSchema = new mongoose.Schema({
+// Vendor Contact schema
+const VendorContactSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Vendor name is required'],
+    required: true,
+    trim: true
+  },
+  phone: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  email: {
+    type: String,
+    required: true,
+    trim: true,
+    lowercase: true,
+    validate: {
+      validator: function(v) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      },
+      message: 'Invalid email format'
+    }
+  },
+  is_primary: {
+    type: Boolean,
+    default: false
+  },
+  is_emergency: {
+    type: Boolean,
+    default: false
+  }
+}, { _id: true });
+
+// Main Vendor schema
+const VendorSchema = new mongoose.Schema({
+  // Core identification - renamed from 'name' to 'contractor_name'
+  contractor_name: {
+    type: String,
+    required: [true, 'Contractor name is required'],
     trim: true,
     index: true
   },
 
+  trading_name: {
+    type: String,
+    trim: true
+  },
+
   abn: {
     type: String,
-    required: [true, 'ABN is required'],
     trim: true,
     validate: {
       validator: function(v) {
-        // Remove spaces and validate 11 digits
+        if (!v) return true; // Optional
         const cleaned = v.replace(/\s/g, '');
         return /^\d{11}$/.test(cleaned);
       },
@@ -169,23 +208,21 @@ const VendorSchema = new mongoose.Schema({
     default: true
   },
 
+  // Legacy email/phone fields (will be deprecated in favor of contacts array)
   email: {
     type: String,
-    required: [true, 'Email is required'],
     trim: true,
     lowercase: true,
     validate: {
       validator: function(v) {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        return !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
       },
       message: 'Invalid email format'
-    },
-    index: true
+    }
   },
 
   phone: {
     type: String,
-    required: [true, 'Phone number is required'],
     trim: true
   },
 
@@ -199,17 +236,107 @@ const VendorSchema = new mongoose.Schema({
     required: true
   },
 
+  // Contractor Type - renamed from 'category'
+  contractor_type: {
+    type: String,
+    enum: ['HVAC Contractor', 'Electrical Contractor', 'Plumbing Contractor', 'Fire Safety Contractor', 'Building Consultant', 'General Contractor', 'Maintenance Contractor', 'Cleaning Contractor', 'Security Contractor', 'Construction Contractor', 'Landscaping Contractor', 'Pest Control Contractor'],
+    required: [true, 'Contractor type is required'],
+    index: true
+  },
+
+  // Consultant Specialisation
+  consultant_specialisation: {
+    type: String,
+    enum: ['Building Consultant', 'Engineering Consultant', 'Fire Safety Consultant', 'Mechanical Consultant', 'Electrical Consultant', 'Structural Consultant', 'Environmental Consultant', 'Energy Consultant']
+  },
+
+  // Keep old category for backward compatibility
   category: {
     type: String,
-    enum: ['fire-safety', 'hvac', 'electrical', 'plumbing', 'cleaning', 'security', 'maintenance', 'construction', 'landscaping', 'pest-control', 'other'],
-    required: [true, 'Category is required'],
-    index: true
+    enum: ['fire-safety', 'hvac', 'electrical', 'plumbing', 'cleaning', 'security', 'maintenance', 'construction', 'landscaping', 'pest-control', 'other']
   },
 
   subcategories: [{
     type: String,
     trim: true
   }],
+
+  // Vendor Contacts (new centralized contact management)
+  contacts: [VendorContactSchema],
+
+  // Professional Registration & Certification
+  professional_registration: {
+    type: String,
+    trim: true
+  },
+
+  building_consultant_id: {
+    type: String,
+    trim: true
+  },
+
+  building_consultant_registration: {
+    type: String,
+    trim: true
+  },
+
+  aibs_membership: {
+    type: String,
+    trim: true
+  },
+
+  certification_authority: {
+    type: String,
+    enum: ['Council-appointed', 'Private', 'Accredited']
+  },
+
+  // Insurance (simplified)
+  insurance_details: {
+    type: String,
+    trim: true
+  },
+
+  insurance_coverage: {
+    type: Number,
+    min: 0
+  },
+
+  licence_numbers: {
+    type: String,
+    trim: true
+  },
+
+  // Services Provided
+  services_provided: [{
+    type: String,
+    trim: true
+  }],
+
+  // Performance & Agreements
+  performance_rating: {
+    type: Number,
+    min: 1,
+    max: 5
+  },
+
+  preferred_provider: {
+    type: Boolean,
+    default: false
+  },
+
+  retainer_agreement: {
+    type: Boolean,
+    default: false
+  },
+
+  response_time_sla: {
+    type: String,
+    trim: true
+  },
+
+  annual_review_date: {
+    type: Date
+  },
 
   status: {
     type: String,
@@ -311,19 +438,29 @@ const VendorSchema = new mongoose.Schema({
 });
 
 // Indexes for performance
-VendorSchema.index({ name: 1 });
+VendorSchema.index({ contractor_name: 1 });
+VendorSchema.index({ trading_name: 1 });
 VendorSchema.index({ abn: 1 });
-VendorSchema.index({ email: 1 });
-VendorSchema.index({ category: 1 });
+VendorSchema.index({ contractor_type: 1 });
+VendorSchema.index({ consultant_specialisation: 1 });
 VendorSchema.index({ status: 1 });
-VendorSchema.index({ rating: -1 });
+VendorSchema.index({ performance_rating: -1 });
+VendorSchema.index({ preferred_provider: 1 });
+VendorSchema.index({ 'contacts.email': 1 });
+VendorSchema.index({ 'contacts.is_primary': 1 });
 VendorSchema.index({ 'address.state': 1 });
 VendorSchema.index({ is_active: 1 });
+VendorSchema.index({ annual_review_date: 1 });
+
+// Backward compatibility indexes
+VendorSchema.index({ category: 1 });
+VendorSchema.index({ rating: -1 });
 
 // Text index for search functionality
 VendorSchema.index({
-  name: 'text',
-  email: 'text',
+  contractor_name: 'text',
+  trading_name: 'text',
+  'contacts.email': 'text',
   'address.suburb': 'text'
 });
 
@@ -398,11 +535,28 @@ VendorSchema.virtual('compliance_status').get(function() {
 VendorSchema.set('toJSON', { virtuals: true });
 VendorSchema.set('toObject', { virtuals: true });
 
-// Pre-save middleware to update compliance statuses
+// Pre-save middleware to update compliance statuses and ensure only one primary contact
 VendorSchema.pre('save', function(next) {
   const today = new Date();
   const thirtyDaysFromNow = new Date();
   thirtyDaysFromNow.setDate(today.getDate() + 30);
+
+  // Ensure only one primary contact
+  if (this.contacts && this.contacts.length > 0) {
+    const primaryContacts = this.contacts.filter(c => c.is_primary);
+    if (primaryContacts.length > 1) {
+      // Keep only the first primary, set others to false
+      let foundPrimary = false;
+      this.contacts = this.contacts.map(contact => {
+        if (contact.is_primary && !foundPrimary) {
+          foundPrimary = true;
+          return contact;
+        }
+        const contactObj = contact.toObject ? contact.toObject() : contact;
+        return { ...contactObj, is_primary: false };
+      });
+    }
+  }
 
   // Update license statuses
   this.licenses.forEach(license => {

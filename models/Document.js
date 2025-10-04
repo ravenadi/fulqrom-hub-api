@@ -168,6 +168,59 @@ const MetadataSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+// Related drawings schema for cross-references
+const RelatedDrawingSchema = new mongoose.Schema({
+  document_id: {
+    type: String,
+    trim: true
+  },
+  document_name: {
+    type: String,
+    trim: true
+  }
+}, { _id: false });
+
+// Drawing Register information schema
+const DrawingInfoSchema = new mongoose.Schema({
+  date_issued: {
+    type: Date
+  },
+  drawing_status: {
+    type: String,
+    enum: ['draft', 'for_review', 'approved', 'as_built', 'superseded', 'obsolete'],
+    default: 'draft',
+    trim: true
+  },
+  prepared_by: {
+    type: String,
+    trim: true
+  },
+  drawing_scale: {
+    type: String,
+    enum: ['nts', '1:1', '1:5', '1:10', '1:20', '1:25', '1:50', '1:100', '1:200', '1:250', '1:500', '1:1000', '1:1250', '1:2500'],
+    trim: true
+  },
+  approved_by_user: {
+    type: String,
+    trim: true
+  },
+  related_drawings: [RelatedDrawingSchema]
+}, { _id: false });
+
+// Access control schema
+const AccessControlSchema = new mongoose.Schema({
+  access_level: {
+    type: String,
+    enum: ['public', 'internal', 'restricted', 'confidential'],
+    default: 'internal',
+    trim: true
+  },
+  access_users: [{
+    type: String,
+    trim: true
+  }]
+}, { _id: false });
+
 // Main Document schema
 const DocumentSchema = new mongoose.Schema({
   // Basic Information
@@ -227,6 +280,12 @@ const DocumentSchema = new mongoose.Schema({
 
   // Compliance & Regulatory Metadata
   metadata: MetadataSchema,
+
+  // Drawing Register Information (for category === 'drawing_register')
+  drawing_info: DrawingInfoSchema,
+
+  // Access Control
+  access_control: AccessControlSchema,
 
   // Audit Fields
   created_by: {
@@ -293,10 +352,21 @@ DocumentSchema.index({ created_at: -1 });
 DocumentSchema.index({ 'metadata.regulatory_framework': 1 });
 DocumentSchema.index({ 'metadata.compliance_status': 1 });
 
+// Drawing Register indexes
+DocumentSchema.index({ 'drawing_info.drawing_status': 1 });
+DocumentSchema.index({ 'drawing_info.prepared_by': 1 });
+DocumentSchema.index({ 'drawing_info.approved_by_user': 1 });
+DocumentSchema.index({ 'drawing_info.date_issued': -1 });
+
+// Access Control indexes
+DocumentSchema.index({ 'access_control.access_level': 1 });
+DocumentSchema.index({ 'access_control.access_users': 1 });
+
 // Compound indexes
 DocumentSchema.index({ 'customer.customer_id': 1, category: 1 });
 DocumentSchema.index({ 'location.building.building_id': 1, category: 1 });
 DocumentSchema.index({ category: 1, type: 1 });
+DocumentSchema.index({ category: 1, 'drawing_info.drawing_status': 1 });
 
 // Text index for search
 DocumentSchema.index({

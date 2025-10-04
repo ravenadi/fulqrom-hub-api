@@ -4,13 +4,21 @@ const Tenant = require('../models/Tenant');
 
 const router = express.Router();
 
+// Helper functions
+const isValidEmail = (email) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const isValidTimeFormat = (time) => {
+  return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
+};
+
 // Australian validation helpers
 const validateABN = (abn) => {
   if (!abn) return true; // Optional field
   const abnString = abn.replace(/\s/g, '');
   return /^\d{11}$/.test(abnString);
 };
-
 
 const validatePostcode = (postcode) => {
   if (!postcode) return true; // Optional field
@@ -20,33 +28,92 @@ const validatePostcode = (postcode) => {
 // Validation middleware
 const validateTenantData = (req, res, next) => {
   const errors = [];
-  const { abn, primary_contact_email } = req.body;
+  const tenant_data = req.body;
 
-  // ABN validation (11 digits)
-  if (abn && !validateABN(abn)) {
-    errors.push({
-      field: 'abn',
-      message: 'ABN must be exactly 11 digits'
+  // ABN Validation
+  if (tenant_data.abn) {
+    if (!/^\d{11}$/.test(tenant_data.abn)) {
+      errors.push('ABN must be exactly 11 digits');
+    }
+  }
+
+  // Emergency Contact Validation
+  if (tenant_data.emergency_contacts && Array.isArray(tenant_data.emergency_contacts)) {
+    tenant_data.emergency_contacts.forEach((contact, index) => {
+      if (!contact.name) {
+        errors.push(`Emergency contact ${index + 1}: Name is required`);
+      }
+      if (!contact.phone) {
+        errors.push(`Emergency contact ${index + 1}: Phone is required`);
+      }
+      if (contact.email && !isValidEmail(contact.email)) {
+        errors.push(`Emergency contact ${index + 1}: Email is invalid`);
+      }
     });
   }
 
-  // Email validation
-  if (primary_contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(primary_contact_email)) {
-    errors.push({
-      field: 'primary_contact_email',
-      message: 'Invalid email format'
+  // Employee Count Validation
+  if (tenant_data.employee_count !== undefined && tenant_data.employee_count < 0) {
+    errors.push('Employee count must be 0 or greater');
+  }
+
+  // Parking Allocation Validation
+  if (tenant_data.parking_allocation !== undefined && tenant_data.parking_allocation < 0) {
+    errors.push('Parking allocation must be 0 or greater');
+  }
+
+  // Business Hours Validation
+  if (tenant_data.business_hours) {
+    if (tenant_data.business_hours.start && !isValidTimeFormat(tenant_data.business_hours.start)) {
+      errors.push('Business hours start time is invalid');
+    }
+    if (tenant_data.business_hours.end && !isValidTimeFormat(tenant_data.business_hours.end)) {
+      errors.push('Business hours end time is invalid');
+    }
+  }
+
+  // Special Requirements Validation
+  const validRequirements = ['24_7_access', 'high_security', 'loading_dock', 'after_hours_hvac', 'dedicated_parking', 'signage_rights', 'kitchen_facilities', 'server_room'];
+  if (tenant_data.special_requirements) {
+    if (!Array.isArray(tenant_data.special_requirements)) {
+      errors.push('Special requirements must be an array');
+    } else {
+      const invalidReqs = tenant_data.special_requirements.filter(req => !validRequirements.includes(req));
+      if (invalidReqs.length > 0) {
+        errors.push(`Invalid special requirements: ${invalidReqs.join(', ')}`);
+      }
+    }
+  }
+
+  // Contacts Validation
+  if (tenant_data.contacts && Array.isArray(tenant_data.contacts)) {
+    tenant_data.contacts.forEach((contact, index) => {
+      if (!contact.name) {
+        errors.push(`Contact ${index + 1}: Name is required`);
+      }
+      if (contact.email && !isValidEmail(contact.email)) {
+        errors.push(`Contact ${index + 1}: Email is invalid`);
+      }
     });
+
+    // Ensure only one primary contact
+    const primaryCount = tenant_data.contacts.filter(c => c.is_primary).length;
+    if (primaryCount > 1) {
+      errors.push('Only one contact can be marked as primary');
+    }
+  }
+
+  // Legacy email validation
+  if (tenant_data.primary_contact_email && !isValidEmail(tenant_data.primary_contact_email)) {
+    errors.push('Invalid primary contact email format');
   }
 
   // Required fields validation
   if (req.method === 'POST') {
     const requiredFields = ['tenant_legal_name', 'building_id', 'customer_id'];
     requiredFields.forEach(field => {
-      if (!req.body[field]) {
-        errors.push({
-          field: field,
-          message: `${field.replace('_', ' ')} is required`
-        });
+      if (!tenant_data[field]) {
+        errors.push(`${field.replace('_', ' ')} is required`);
       }
     });
   }
@@ -54,7 +121,7 @@ const validateTenantData = (req, res, next) => {
   if (errors.length > 0) {
     return res.status(400).json({
       success: false,
-      message: 'Validation errors',
+      message: 'Validation failed',
       errors: errors
     });
   }

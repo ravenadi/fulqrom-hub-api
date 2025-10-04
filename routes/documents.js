@@ -122,6 +122,10 @@ router.get('/', validateQueryParams, async (req, res) => {
       engineering_discipline,
       regulatory_framework,
       compliance_status,
+      drawing_status,
+      prepared_by,
+      approved_by_user,
+      access_level,
       tags,
       search,
       page = 1,
@@ -150,6 +154,14 @@ router.get('/', validateQueryParams, async (req, res) => {
     // Compliance filters
     if (regulatory_framework) filterQuery['metadata.regulatory_framework'] = regulatory_framework;
     if (compliance_status) filterQuery['metadata.compliance_status'] = compliance_status;
+
+    // Drawing Register filters
+    if (drawing_status) filterQuery['drawing_info.drawing_status'] = drawing_status;
+    if (prepared_by) filterQuery['drawing_info.prepared_by'] = prepared_by;
+    if (approved_by_user) filterQuery['drawing_info.approved_by_user'] = approved_by_user;
+
+    // Access Control filters
+    if (access_level) filterQuery['access_control.access_level'] = access_level;
 
     // Tags filter
     if (tags) {
@@ -410,6 +422,22 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
         ...(documentData.review_date && documentData.review_date !== 'none' && { review_date: documentData.review_date })
       } : {},
 
+      // Drawing Register information (for drawing_register category)
+      drawing_info: documentData.category === 'drawing_register' ? {
+        ...(documentData.date_issued && { date_issued: documentData.date_issued }),
+        ...(documentData.drawing_status && { drawing_status: documentData.drawing_status }),
+        ...(documentData.prepared_by && { prepared_by: documentData.prepared_by }),
+        ...(documentData.drawing_scale && { drawing_scale: documentData.drawing_scale }),
+        ...(documentData.approved_by_user && { approved_by_user: documentData.approved_by_user }),
+        ...(documentData.related_drawings && { related_drawings: documentData.related_drawings })
+      } : {},
+
+      // Access Control
+      access_control: {
+        access_level: documentData.access_level || 'internal',
+        access_users: documentData.access_users || []
+      },
+
       // Audit fields
       created_by: documentData.created_by,
       created_at: new Date().toISOString(),
@@ -489,6 +517,30 @@ router.put('/:id', validateObjectId, async (req, res) => {
         }
       });
       updateData.metadata = Object.keys(cleanedMetadata).length > 0 ? cleanedMetadata : {};
+    }
+
+    // Clean drawing_info: remove "none" values and empty fields
+    if (updateData.drawing_info) {
+      const cleanedDrawingInfo = {};
+      Object.keys(updateData.drawing_info).forEach(key => {
+        const value = updateData.drawing_info[key];
+        if (value && value !== 'none' && value !== '') {
+          cleanedDrawingInfo[key] = value;
+        }
+      });
+      updateData.drawing_info = Object.keys(cleanedDrawingInfo).length > 0 ? cleanedDrawingInfo : {};
+    }
+
+    // Clean access_control: remove "none" values and empty fields
+    if (updateData.access_control) {
+      const cleanedAccessControl = {};
+      Object.keys(updateData.access_control).forEach(key => {
+        const value = updateData.access_control[key];
+        if (value && value !== 'none' && value !== '') {
+          cleanedAccessControl[key] = value;
+        }
+      });
+      updateData.access_control = Object.keys(cleanedAccessControl).length > 0 ? cleanedAccessControl : {};
     }
 
     const document = await Document.findByIdAndUpdate(

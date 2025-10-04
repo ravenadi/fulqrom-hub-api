@@ -274,29 +274,73 @@ router.get('/:id', async (req, res) => {
 // POST /api/vendors - Create new vendor
 router.post('/', async (req, res) => {
   try {
-    // Validate required fields
-    const requiredFields = ['name', 'abn', 'email', 'phone', 'category', 'businessType'];
-    const missingFields = requiredFields.filter(field => !req.body[field]);
+    const errors = [];
 
-    if (missingFields.length > 0) {
+    // Validate required fields (updated for new schema)
+    if (!req.body.contractor_name && !req.body.name) {
+      errors.push('Contractor name is required');
+    }
+
+    if (!req.body.contractor_type && !req.body.category) {
+      errors.push('Contractor type is required');
+    }
+
+    if (!req.body.address) {
+      errors.push('Address is required');
+    }
+
+    if (!req.body.businessType) {
+      errors.push('Business type is required');
+    }
+
+    // Validate contacts array (at least one contact required)
+    if (!req.body.contacts || !Array.isArray(req.body.contacts) || req.body.contacts.length === 0) {
+      errors.push('At least one contact is required');
+    } else {
+      req.body.contacts.forEach((contact, index) => {
+        if (!contact.name) errors.push(`Contact ${index + 1}: Name is required`);
+        if (!contact.phone) errors.push(`Contact ${index + 1}: Phone is required`);
+        if (!contact.email) errors.push(`Contact ${index + 1}: Email is required`);
+      });
+
+      // Ensure only one primary contact
+      const primaryCount = req.body.contacts.filter(c => c.is_primary).length;
+      if (primaryCount > 1) {
+        errors.push('Only one contact can be marked as primary');
+      }
+    }
+
+    // Building Consultant validation
+    if (req.body.contractor_type === 'Building Consultant') {
+      if (!req.body.consultant_specialisation) {
+        errors.push('Consultant specialisation is required for Building Consultant');
+      }
+      if (!req.body.building_consultant_id) {
+        errors.push('Building consultant ID is required for Building Consultant');
+      }
+    }
+
+    if (errors.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields',
-        missingFields
+        message: 'Validation failed',
+        errors
       });
     }
 
-    // Check for duplicate ABN
-    const existingVendor = await Vendor.findOne({
-      abn: req.body.abn.replace(/\s/g, '')
-    });
-
-    if (existingVendor) {
-      return res.status(400).json({
-        success: false,
-        message: 'A vendor with this ABN already exists',
-        field: 'abn'
+    // Check for duplicate ABN if provided
+    if (req.body.abn) {
+      const existingVendor = await Vendor.findOne({
+        abn: req.body.abn.replace(/\s/g, '')
       });
+
+      if (existingVendor) {
+        return res.status(400).json({
+          success: false,
+          message: 'A vendor with this ABN already exists',
+          field: 'abn'
+        });
+      }
     }
 
     // Create new vendor
