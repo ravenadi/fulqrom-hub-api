@@ -94,6 +94,8 @@ app.get('/', (req, res) => {
       documents: '/api/documents',
       hierarchy: '/api/hierarchy/:customer_id',
       dropdowns: '/api/dropdowns',
+      dropdown_entities: '/api/dropdowns/entities/:entity',
+      document_tags: '/api/dropdowns/document-tags',
       vendors: '/api/vendors'
     }
   });

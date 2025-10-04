@@ -357,27 +357,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET /api/buildings/options/dropdown - Get dropdown options
-router.get('/options/dropdown', async (req, res) => {
-  try {
-    const options = {
-      building_types: ['Office', 'Retail', 'Industrial', 'Mixed Use', 'Warehouse', 'Data Centre', 'Healthcare', 'Educational'],
-      statuses: ['Active', 'Under Construction', 'Renovation', 'Vacant', 'Demolished']
-    };
-
-    res.status(200).json({
-      success: true,
-      data: options
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching dropdown options',
-      error: error.message
-    });
-  }
-});
-
 // GET /api/buildings/summary/stats - Get building summary statistics
 router.get('/summary/stats', async (req, res) => {
   try {

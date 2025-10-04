@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-09-29T11:00:00.000Z"
+    "lastUpdated": "2025-10-04T00:00:00.000Z"
   },
   "endpoints": {
     "health": {
@@ -1477,6 +1477,250 @@
           }
         }
       }
+    },
+    "dropdowns": {
+      "getAllDropdowns": {
+        "method": "GET",
+        "path": "/api/dropdowns",
+        "description": "Get all dropdown values for all modules (flattened format)",
+        "status": "IMPLEMENTED",
+        "response": {
+          "success": true,
+          "data": "Flattened object with module_field keys (e.g., customer_industry_types, site_status_types)"
+        }
+      },
+      "getModuleDropdowns": {
+        "method": "GET",
+        "path": "/api/dropdowns/:module",
+        "description": "Get dropdown values for a specific module",
+        "status": "IMPLEMENTED",
+        "params": {
+          "module": "Module name (customer, site, building, floor, asset, etc.)"
+        },
+        "response": {
+          "success": true,
+          "module": "string",
+          "data": "Object with dropdown fields for the module"
+        }
+      },
+      "getFieldDropdown": {
+        "method": "GET",
+        "path": "/api/dropdowns/:module/:field",
+        "description": "Get specific field dropdown values",
+        "status": "IMPLEMENTED",
+        "params": {
+          "module": "Module name",
+          "field": "Field name"
+        },
+        "response": {
+          "success": true,
+          "module": "string",
+          "field": "string",
+          "data": "Array of dropdown values"
+        }
+      },
+      "updateDropdowns": {
+        "method": "POST",
+        "path": "/api/dropdowns",
+        "description": "Update all dropdown values (in-memory only)",
+        "status": "IMPLEMENTED",
+        "requestBody": "Flattened object with module_field keys",
+        "response": {
+          "success": true,
+          "message": "Dropdown values updated successfully",
+          "data": "Updated flattened dropdown object"
+        }
+      },
+      "getCustomersDropdown": {
+        "method": "GET",
+        "path": "/api/dropdowns/entities/customers",
+        "description": "Get all active customers for dropdown selection",
+        "status": "IMPLEMENTED",
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": [
+            {
+              "id": "MongoDB ObjectID",
+              "label": "Organisation name",
+              "value": "MongoDB ObjectID"
+            }
+          ]
+        }
+      },
+      "getSitesDropdown": {
+        "method": "GET",
+        "path": "/api/dropdowns/entities/sites",
+        "description": "Get all active sites for dropdown selection",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter sites by customer ID"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": [
+            {
+              "id": "MongoDB ObjectID",
+              "label": "Site name",
+              "value": "MongoDB ObjectID",
+              "site_name": "string",
+              "customer_id": "MongoDB ObjectID"
+            }
+          ]
+        }
+      },
+      "getBuildingsDropdown": {
+        "method": "GET",
+        "path": "/api/dropdowns/entities/buildings",
+        "description": "Get all active buildings for dropdown selection",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "site_id": "Filter buildings by site ID",
+          "customer_id": "Filter buildings by customer ID"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": [
+            {
+              "id": "MongoDB ObjectID",
+              "label": "Building name",
+              "value": "MongoDB ObjectID",
+              "building_name": "string",
+              "site_id": "MongoDB ObjectID",
+              "customer_id": "MongoDB ObjectID"
+            }
+          ]
+        }
+      },
+      "getFloorsDropdown": {
+        "method": "GET",
+        "path": "/api/dropdowns/entities/floors",
+        "description": "Get all active floors for dropdown selection",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "building_id": "Filter floors by building ID",
+          "site_id": "Filter floors by site ID",
+          "customer_id": "Filter floors by customer ID"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": [
+            {
+              "id": "MongoDB ObjectID",
+              "label": "Floor name (e.g., 'Level 1' or 'Lvl 20')",
+              "value": "MongoDB ObjectID",
+              "floor_name": "string",
+              "floor_level": "string",
+              "building_id": "MongoDB ObjectID",
+              "site_id": "MongoDB ObjectID",
+              "customer_id": "MongoDB ObjectID"
+            }
+          ]
+        }
+      },
+      "getAssetsDropdown": {
+        "method": "GET",
+        "path": "/api/dropdowns/entities/assets",
+        "description": "Get all active assets for dropdown selection",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "floor_id": "Filter assets by floor ID",
+          "building_id": "Filter assets by building ID",
+          "site_id": "Filter assets by site ID",
+          "customer_id": "Filter assets by customer ID",
+          "category": "Filter assets by category",
+          "status": "Filter assets by status",
+          "condition": "Filter assets by condition"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": [
+            {
+              "id": "MongoDB ObjectID",
+              "label": "Asset number/name",
+              "value": "MongoDB ObjectID",
+              "asset_no": "string",
+              "category": "string",
+              "status": "string",
+              "floor_id": "MongoDB ObjectID",
+              "building_id": "MongoDB ObjectID",
+              "site_id": "MongoDB ObjectID",
+              "customer_id": "MongoDB ObjectID"
+            }
+          ]
+        }
+      },
+      "getTenantsDropdown": {
+        "method": "GET",
+        "path": "/api/dropdowns/entities/tenants",
+        "description": "Get all active tenants for dropdown selection",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "building_id": "Filter tenants by building ID",
+          "site_id": "Filter tenants by site ID",
+          "customer_id": "Filter tenants by customer ID",
+          "floor_id": "Filter tenants by floor ID",
+          "tenant_status": "Filter tenants by status"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": [
+            {
+              "id": "MongoDB ObjectID",
+              "label": "Tenant name",
+              "value": "MongoDB ObjectID",
+              "tenant_name": "string",
+              "building_id": "MongoDB ObjectID",
+              "site_id": "MongoDB ObjectID",
+              "customer_id": "MongoDB ObjectID"
+            }
+          ]
+        }
+      },
+      "getVendorsDropdown": {
+        "method": "GET",
+        "path": "/api/dropdowns/entities/vendors",
+        "description": "Get all active vendors for dropdown selection",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "category": "Filter vendors by category"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": [
+            {
+              "id": "MongoDB ObjectID",
+              "label": "Vendor name",
+              "value": "MongoDB ObjectID",
+              "vendor_name": "string",
+              "category": "string"
+            }
+          ]
+        }
+      },
+      "getDocumentTags": {
+        "method": "GET",
+        "path": "/api/dropdowns/document-tags",
+        "description": "Get all unique document tags for dropdown selection",
+        "status": "IMPLEMENTED",
+        "response": {
+          "success": true,
+          "count": "number",
+          "data": [
+            {
+              "id": "string (tag value)",
+              "label": "string (tag value)",
+              "value": "string (tag value)"
+            }
+          ]
+        }
+      }
     }
   },
   "dataStructures": {
@@ -1824,6 +2068,21 @@
     "createFloor": "curl -X POST http://localhost:30001/api/floors -H 'Content-Type: application/json' -d '{\\\"floor_name\\\":\\\"Level 5\\\",\\\"floor_number\\\":5,\\\"floor_type\\\":\\\"Office\\\",\\\"building_id\\\":\\\"68d3e1de1bfdc3d6bd004643\\\",\\\"floor_area\\\":750,\\\"floor_area_unit\\\":\\\"m²\\\",\\\"assets_count\\\":15,\\\"status\\\":\\\"Active\\\"}'",
     "updateFloor": "curl -X PUT http://localhost:30001/api/floors/68d7da2fb488fd9b798db6bc -H 'Content-Type: application/json' -d '{\\\"floor_name\\\":\\\"Updated Floor\\\",\\\"occupancy\\\":50,\\\"assets_count\\\":20}'",
     "getFloorStats": "curl -X GET 'http://localhost:30001/api/floors/summary/stats?building_id=68d3e1de1bfdc3d6bd004643'",
+    "getAllDropdowns": "curl -X GET http://localhost:30001/api/dropdowns",
+    "getModuleDropdowns": "curl -X GET http://localhost:30001/api/dropdowns/customer",
+    "getCustomersDropdown": "curl -X GET http://localhost:30001/api/dropdowns/entities/customers",
+    "getSitesDropdown": "curl -X GET http://localhost:30001/api/dropdowns/entities/sites",
+    "getSitesDropdownByCustomer": "curl -X GET 'http://localhost:30001/api/dropdowns/entities/sites?customer_id=68d395f9c7ad6627ad607f07'",
+    "getBuildingsDropdown": "curl -X GET http://localhost:30001/api/dropdowns/entities/buildings",
+    "getBuildingsDropdownBySite": "curl -X GET 'http://localhost:30001/api/dropdowns/entities/buildings?site_id=68d3e1de1bfdc3d6bd004643'",
+    "getFloorsDropdown": "curl -X GET http://localhost:30001/api/dropdowns/entities/floors",
+    "getFloorsDropdownByBuilding": "curl -X GET 'http://localhost:30001/api/dropdowns/entities/floors?building_id=68d3e1de1bfdc3d6bd004643'",
+    "getAssetsDropdown": "curl -X GET http://localhost:30001/api/dropdowns/entities/assets",
+    "getAssetsDropdownByFloor": "curl -X GET 'http://localhost:30001/api/dropdowns/entities/assets?floor_id=68d7da2fb488fd9b798db6bc'",
+    "getTenantsDropdown": "curl -X GET http://localhost:30001/api/dropdowns/entities/tenants",
+    "getVendorsDropdown": "curl -X GET http://localhost:30001/api/dropdowns/entities/vendors",
+    "getVendorsDropdownByCategory": "curl -X GET 'http://localhost:30001/api/dropdowns/entities/vendors?category=hvac'",
+    "getDocumentTags": "curl -X GET http://localhost:30001/api/dropdowns/document-tags",
     "healthCheck": "curl -X GET http://localhost:30001/health"
   },
   "errorResponses": {
@@ -1908,6 +2167,8 @@
     "documentSearch": "Documents collection has comprehensive search with helper functions covering name, description, tags, customer, location, file metadata, and compliance fields",
     "customerStats": "Added customer statistics endpoint (/api/customers/:id/stats) that provides dynamic counts for sites, buildings, assets, and documents with proper nested field query for documents (customer.customer_id)",
     "contactManagement": "Comprehensive contact management APIs implemented: full CRUD operations (create, read, update, delete), primary contact management, search functionality, and nested contact operations within customer entities. Contacts are managed as subdocuments in the customer's contact_methods array.",
-    "multipleContactMethods": "Enhanced contact system to support multiple contact methods per contact. Each contact can have multiple communication methods (Email, Phone, SMS, WhatsApp) with individual add/edit/delete operations. Only one primary method per contact is enforced. Includes backward compatibility with legacy single-method structure and dedicated API endpoints for method management (/:id/methods)."
+    "multipleContactMethods": "Enhanced contact system to support multiple contact methods per contact. Each contact can have multiple communication methods (Email, Phone, SMS, WhatsApp) with individual add/edit/delete operations. Only one primary method per contact is enforced. Includes backward compatibility with legacy single-method structure and dedicated API endpoints for method management (/:id/methods).",
+    "dropdownApis": "Comprehensive dropdown/select APIs implemented for all entity types. Provides two categories: (1) Static dropdowns from constants (/api/dropdowns, /api/dropdowns/:module, /api/dropdowns/:module/:field) for predefined values like statuses, types, categories. (2) Dynamic entity dropdowns (/api/dropdowns/entities/*) that fetch active records from database for customers, sites, buildings, floors, assets, tenants, and vendors. All entity dropdowns support hierarchical filtering (e.g., sites by customer_id, buildings by site_id, floors by building_id). Document tags endpoint (/api/dropdowns/document-tags) returns all unique tags extracted from documents collection. All endpoints return consistent format with id, label, and value fields for easy integration with UI components.",
+    "dropdownHierarchicalFiltering": "Entity dropdown endpoints support hierarchical filtering to enable cascading selects: sites can be filtered by customer_id, buildings by site_id, floors by building_id, assets by floor_id/building_id/site_id, tenants by building_id, vendors by category. This enables building dependent dropdowns in the UI where selecting a parent entity (e.g., customer) automatically filters child entities (e.g., sites)."
   }
 }

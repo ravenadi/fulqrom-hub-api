@@ -218,27 +218,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET /api/floors/options/dropdown - Get dropdown options
-router.get('/options/dropdown', async (req, res) => {
-  try {
-    const options = {
-      floor_types: ['Office', 'Retail', 'Plant Room', 'Lab', 'Common Area', 'Residential'],
-      area_units: ['m²', 'sq ft']
-    };
-
-    res.status(200).json({
-      success: true,
-      data: options
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching dropdown options',
-      error: error.message
-    });
-  }
-});
-
 // GET /api/floors/by-building/:buildingId - Get floors by building
 router.get('/by-building/:buildingId', async (req, res) => {
   try {
