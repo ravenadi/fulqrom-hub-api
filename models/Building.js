@@ -91,6 +91,34 @@ const BuildingSchema = new mongoose.Schema({
     max: new Date().getFullYear() + 10
   },
 
+  // Primary Use - Important field for main building function
+  primary_use: {
+    type: String,
+    required: true,
+    enum: ['Office', 'Retail', 'Industrial', 'Warehouse', 'Mixed Use', 'Healthcare', 'Educational', 'Government', 'Hospitality', 'Other'],
+    default: 'Office',
+    trim: true
+  },
+
+  // Last Inspection Date - Important for compliance and maintenance tracking
+  last_inspection_date: {
+    type: Date
+  },
+
+  // Accessibility Features - Multi-select array for disabled access features
+  accessibility_features: {
+    type: [String],
+    default: [],
+    enum: ['lifts', 'ramps', 'disabled_parking', 'accessible_toilets', 'hearing_loops', 'braille_signage', 'automatic_doors', 'wheelchair_access']
+  },
+
+  // Parking Spaces - Total allocated parking for the building
+  parking_spaces: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+
   // NABERS Rating (0-6 star rating as per requirements)
   nabers_rating: {
     type: Number,
@@ -156,6 +184,9 @@ BuildingSchema.index({ customer_id: 1 });
 BuildingSchema.index({ building_type: 1 });
 BuildingSchema.index({ status: 1 });
 BuildingSchema.index({ is_active: 1 });
+BuildingSchema.index({ primary_use: 1 });
+BuildingSchema.index({ last_inspection_date: 1 });
+BuildingSchema.index({ accessibility_features: 1 });
 
 // Compound indexes
 BuildingSchema.index({ customer_id: 1, site_id: 1 });

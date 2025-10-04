@@ -44,11 +44,42 @@ const FloorSchema = new mongoose.Schema({
     trim: true
   },
 
-  // Occupancy
-  occupancy: {
+  // Occupancy (renamed to maximum_occupancy)
+  maximum_occupancy: {
     type: Number,
     min: 0,
     default: 0
+  },
+
+  // Occupancy Type - Tenancy arrangement
+  occupancy_type: {
+    type: String,
+    enum: ['Single Tenant', 'Multi Tenant', 'Common Area']
+  },
+
+  // Access Control - Security level
+  access_control: {
+    type: String,
+    enum: ['Public', 'Keycard Required', 'Restricted']
+  },
+
+  // Fire Compartment - Emergency planning/safety designation
+  fire_compartment: {
+    type: String,
+    trim: true
+  },
+
+  // HVAC Zones - System coordination/climate control
+  hvac_zones: {
+    type: Number,
+    min: 0
+  },
+
+  // Special Features - Notable characteristics
+  special_features: {
+    type: [String],
+    enum: ['Equipment Room', 'Common Area', 'Server Room', 'Meeting Room', 'Kitchen', 'Storage'],
+    default: []
   },
 
   // Area specifications
@@ -124,6 +155,13 @@ FloorSchema.virtual('formatted_area').get(function() {
   return 'N/A';
 });
 
+// Virtual for backward compatibility - occupancy maps to maximum_occupancy
+FloorSchema.virtual('occupancy').get(function() {
+  return this.maximum_occupancy;
+}).set(function(value) {
+  this.maximum_occupancy = value;
+});
+
 // Indexes for performance
 FloorSchema.index({ floor_name: 1 });
 FloorSchema.index({ site_id: 1 });
@@ -132,6 +170,9 @@ FloorSchema.index({ customer_id: 1 });
 FloorSchema.index({ floor_type: 1 });
 FloorSchema.index({ status: 1 });
 FloorSchema.index({ is_active: 1 });
+FloorSchema.index({ occupancy_type: 1 });
+FloorSchema.index({ access_control: 1 });
+FloorSchema.index({ special_features: 1 });
 
 // Compound indexes
 FloorSchema.index({ building_id: 1, floor_name: 1 });

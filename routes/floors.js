@@ -138,7 +138,64 @@ router.get('/:id', async (req, res) => {
 // POST /api/floors - Create new floor
 router.post('/', async (req, res) => {
   try {
-    const floor = new Floor(req.body);
+    // Validation for new fields
+    const errors = [];
+    const floorData = { ...req.body };
+
+    // Handle backward compatibility: occupancy -> maximum_occupancy
+    if (floorData.occupancy !== undefined && floorData.maximum_occupancy === undefined) {
+      floorData.maximum_occupancy = floorData.occupancy;
+      delete floorData.occupancy;
+    }
+
+    // Ceiling Height - Validate if provided
+    if (floorData.ceiling_height !== undefined && floorData.ceiling_height < 0) {
+      errors.push('Ceiling height must be a positive number');
+    }
+
+    // Occupancy Type - Validate enum if provided
+    if (floorData.occupancy_type && !['Single Tenant', 'Multi Tenant', 'Common Area'].includes(floorData.occupancy_type)) {
+      errors.push('Invalid occupancy type');
+    }
+
+    // Access Control - Validate enum if provided
+    if (floorData.access_control && !['Public', 'Keycard Required', 'Restricted'].includes(floorData.access_control)) {
+      errors.push('Invalid access control level');
+    }
+
+    // HVAC Zones - Validate if provided
+    if (floorData.hvac_zones !== undefined && (floorData.hvac_zones < 0 || !Number.isInteger(floorData.hvac_zones))) {
+      errors.push('HVAC zones must be a non-negative integer');
+    }
+
+    // Special Features - Validate array if provided
+    if (floorData.special_features) {
+      if (!Array.isArray(floorData.special_features)) {
+        errors.push('Special features must be an array');
+      } else {
+        const validFeatures = ['Equipment Room', 'Common Area', 'Server Room', 'Meeting Room', 'Kitchen', 'Storage'];
+        const invalidFeatures = floorData.special_features.filter(f => !validFeatures.includes(f));
+        if (invalidFeatures.length > 0) {
+          errors.push(`Invalid special features: ${invalidFeatures.join(', ')}`);
+        }
+      }
+    }
+
+    // Maximum Occupancy - Validate if provided
+    if (floorData.maximum_occupancy !== undefined && (floorData.maximum_occupancy < 0 || !Number.isInteger(floorData.maximum_occupancy))) {
+      errors.push('Maximum occupancy must be a non-negative integer');
+    }
+
+    // If validation errors exist, return them
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors
+      });
+    }
+
+    const floor = new Floor(floorData);
     await floor.save();
 
     // Populate the created floor before returning
@@ -163,9 +220,66 @@ router.post('/', async (req, res) => {
 // PUT /api/floors/:id - Update floor
 router.put('/:id', async (req, res) => {
   try {
+    // Validation for new fields
+    const errors = [];
+    const floorData = { ...req.body };
+
+    // Handle backward compatibility: occupancy -> maximum_occupancy
+    if (floorData.occupancy !== undefined && floorData.maximum_occupancy === undefined) {
+      floorData.maximum_occupancy = floorData.occupancy;
+      delete floorData.occupancy;
+    }
+
+    // Ceiling Height - Validate if provided
+    if (floorData.ceiling_height !== undefined && floorData.ceiling_height < 0) {
+      errors.push('Ceiling height must be a positive number');
+    }
+
+    // Occupancy Type - Validate enum if provided
+    if (floorData.occupancy_type && !['Single Tenant', 'Multi Tenant', 'Common Area'].includes(floorData.occupancy_type)) {
+      errors.push('Invalid occupancy type');
+    }
+
+    // Access Control - Validate enum if provided
+    if (floorData.access_control && !['Public', 'Keycard Required', 'Restricted'].includes(floorData.access_control)) {
+      errors.push('Invalid access control level');
+    }
+
+    // HVAC Zones - Validate if provided
+    if (floorData.hvac_zones !== undefined && (floorData.hvac_zones < 0 || !Number.isInteger(floorData.hvac_zones))) {
+      errors.push('HVAC zones must be a non-negative integer');
+    }
+
+    // Special Features - Validate array if provided
+    if (floorData.special_features) {
+      if (!Array.isArray(floorData.special_features)) {
+        errors.push('Special features must be an array');
+      } else {
+        const validFeatures = ['Equipment Room', 'Common Area', 'Server Room', 'Meeting Room', 'Kitchen', 'Storage'];
+        const invalidFeatures = floorData.special_features.filter(f => !validFeatures.includes(f));
+        if (invalidFeatures.length > 0) {
+          errors.push(`Invalid special features: ${invalidFeatures.join(', ')}`);
+        }
+      }
+    }
+
+    // Maximum Occupancy - Validate if provided
+    if (floorData.maximum_occupancy !== undefined && (floorData.maximum_occupancy < 0 || !Number.isInteger(floorData.maximum_occupancy))) {
+      errors.push('Maximum occupancy must be a non-negative integer');
+    }
+
+    // If validation errors exist, return them
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors
+      });
+    }
+
     const floor = await Floor.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      floorData,
       { new: true, runValidators: true }
     )
     .populate('site_id', 'site_name address')
@@ -232,7 +346,7 @@ router.get('/by-building/:buildingId', async (req, res) => {
       total_area: floors.reduce((sum, f) => sum + (f.floor_area || 0), 0),
       total_assets: floors.reduce((sum, f) => sum + (f.assets_count || 0), 0),
       avg_occupancy: floors.length > 0 ?
-        Math.round(floors.reduce((sum, f) => sum + (f.occupancy || 0), 0) / floors.length) : 0
+        Math.round(floors.reduce((sum, f) => sum + (f.maximum_occupancy || f.occupancy || 0), 0) / floors.length) : 0
     };
 
     res.status(200).json({
@@ -274,7 +388,7 @@ router.get('/summary/stats', async (req, res) => {
           },
           totalArea: { $sum: '$floor_area' },
           totalAssets: { $sum: '$assets_count' },
-          avgOccupancy: { $avg: '$occupancy' },
+          avgOccupancy: { $avg: '$maximum_occupancy' },
           avgCeilingHeight: { $avg: '$ceiling_height' }
         }
       }
@@ -323,7 +437,7 @@ router.get('/by-type', async (req, res) => {
             $sum: { $cond: [{ $eq: ['$status', 'Active'] }, 1, 0] }
           },
           totalArea: { $sum: '$floor_area' },
-          avgOccupancy: { $avg: '$occupancy' },
+          avgOccupancy: { $avg: '$maximum_occupancy' },
           totalAssets: { $sum: '$assets_count' }
         }
       },

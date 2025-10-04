@@ -189,6 +189,11 @@ router.get('/', async (req, res) => {
           tenants_count: {
             $ifNull: [{ $arrayElemAt: ['$tenants_data.count', 0] }, 0]
           },
+          // Apply defaults for new fields if missing
+          primary_use: { $ifNull: ['$primary_use', 'Office'] },
+          last_inspection_date: { $ifNull: ['$last_inspection_date', null] },
+          accessibility_features: { $ifNull: ['$accessibility_features', []] },
+          parking_spaces: { $ifNull: ['$parking_spaces', 0] },
           onboarding_status: {
             $cond: {
               if: { $eq: ['$status', 'Active'] },
@@ -279,6 +284,41 @@ router.get('/:id', async (req, res) => {
 // POST /api/buildings - Create new building
 router.post('/', async (req, res) => {
   try {
+    // Validation for new fields
+    const errors = [];
+
+    // Primary Use - Required field (Mongoose will handle this, but we can add explicit check)
+    if (!req.body.primary_use) {
+      errors.push('Primary use is required');
+    }
+
+    // Last Inspection Date - Optional, validate date format if provided
+    if (req.body.last_inspection_date) {
+      const inspectionDate = new Date(req.body.last_inspection_date);
+      if (isNaN(inspectionDate.getTime())) {
+        errors.push('Invalid last inspection date format');
+      }
+    }
+
+    // Accessibility Features - Optional array validation
+    if (req.body.accessibility_features && !Array.isArray(req.body.accessibility_features)) {
+      errors.push('Accessibility features must be an array');
+    }
+
+    // Parking Spaces - Optional, validate minimum value
+    if (req.body.parking_spaces !== undefined && req.body.parking_spaces < 0) {
+      errors.push('Parking spaces must be 0 or greater');
+    }
+
+    // If validation errors exist, return them
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors
+      });
+    }
+
     const building = new Building(req.body);
     await building.save();
 
@@ -303,6 +343,36 @@ router.post('/', async (req, res) => {
 // PUT /api/buildings/:id - Update building
 router.put('/:id', async (req, res) => {
   try {
+    // Validation for new fields
+    const errors = [];
+
+    // Last Inspection Date - Optional, validate date format if provided
+    if (req.body.last_inspection_date) {
+      const inspectionDate = new Date(req.body.last_inspection_date);
+      if (isNaN(inspectionDate.getTime())) {
+        errors.push('Invalid last inspection date format');
+      }
+    }
+
+    // Accessibility Features - Optional array validation
+    if (req.body.accessibility_features && !Array.isArray(req.body.accessibility_features)) {
+      errors.push('Accessibility features must be an array');
+    }
+
+    // Parking Spaces - Optional, validate minimum value
+    if (req.body.parking_spaces !== undefined && req.body.parking_spaces < 0) {
+      errors.push('Parking spaces must be 0 or greater');
+    }
+
+    // If validation errors exist, return them
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors
+      });
+    }
+
     const building = await Building.findByIdAndUpdate(
       req.params.id,
       req.body,

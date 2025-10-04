@@ -170,6 +170,13 @@ router.get('/', async (req, res) => {
           assets_count: {
             $ifNull: [{ $arrayElemAt: ['$assets_data.count', 0] }, 0]
           },
+          // Apply defaults for new fields if missing
+          land_area: { $ifNull: ['$land_area', 0] },
+          land_area_unit: { $ifNull: ['$land_area_unit', 'm²'] },
+          shared_facilities: { $ifNull: ['$shared_facilities', []] },
+          note: { $ifNull: ['$note', ''] },
+          local_council: { $ifNull: ['$local_council', ''] },
+          security_level: { $ifNull: ['$security_level', ''] },
           display_address: {
             $cond: {
               if: { $eq: [{ $type: '$address' }, 'string'] },
@@ -330,6 +337,13 @@ router.get('/:id', async (req, res) => {
           assets_count: {
             $ifNull: [{ $arrayElemAt: ['$assets_data.count', 0] }, 0]
           },
+          // Apply defaults for new fields if missing
+          land_area: { $ifNull: ['$land_area', 0] },
+          land_area_unit: { $ifNull: ['$land_area_unit', 'm²'] },
+          shared_facilities: { $ifNull: ['$shared_facilities', []] },
+          note: { $ifNull: ['$note', ''] },
+          local_council: { $ifNull: ['$local_council', ''] },
+          security_level: { $ifNull: ['$security_level', ''] },
           display_address: {
             $cond: {
               if: { $eq: [{ $type: '$address' }, 'string'] },
@@ -399,6 +413,14 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Validate land_area if provided
+    if (req.body.land_area !== undefined && req.body.land_area < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'land_area must be greater than or equal to 0'
+      });
+    }
+
     const site = new Site(req.body);
     await site.save();
 
@@ -424,6 +446,14 @@ router.post('/', async (req, res) => {
 // PUT /api/sites/:id - Update site
 router.put('/:id', async (req, res) => {
   try {
+    // Validate land_area if provided
+    if (req.body.land_area !== undefined && req.body.land_area < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'land_area must be greater than or equal to 0'
+      });
+    }
+
     const site = await Site.findByIdAndUpdate(
       req.params.id,
       req.body,

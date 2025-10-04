@@ -100,8 +100,8 @@ const SiteSchema = new mongoose.Schema({
 
   security_level: {
     type: String,
-    enum: ['Public Access', 'Controlled Access', 'High Security'],
-    default: 'Controlled Access'
+    enum: ['Public Access', 'Controlled', 'High Security'],
+    default: 'Controlled'
   },
 
   site_logo: {
@@ -120,6 +120,29 @@ const SiteSchema = new mongoose.Schema({
   },
 
   local_council: {
+    type: String,
+    trim: true
+  },
+
+  land_area: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: 0
+  },
+
+  land_area_unit: {
+    type: String,
+    default: 'm²',
+    trim: true
+  },
+
+  shared_facilities: {
+    type: [String],
+    default: []
+  },
+
+  note: {
     type: String,
     trim: true
   },

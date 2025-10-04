@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-10-04T00:00:00.000Z"
+    "lastUpdated": "2025-10-05T00:00:00.000Z"
   },
   "endpoints": {
     "health": {
@@ -441,9 +441,15 @@
         "status": "IMPLEMENTED",
         "requestBody": {
           "site_name": "string",
-          "address": "string",
+          "address": "string or object (structured address with street, suburb, state, postcode, coordinates)",
           "status": "string (Active, Under Construction, Planning, Inactive)",
           "customer_id": "ObjectId (reference to Customer)",
+          "land_area": "number (required, square metres, min: 0)",
+          "land_area_unit": "string (default: 'm²')",
+          "local_council": "string (optional)",
+          "security_level": "string (enum: 'Public Access', 'Controlled', 'High Security')",
+          "shared_facilities": "array of strings (optional, options: 'Car parks', 'Loading docks')",
+          "note": "string (optional)",
           "manager": {
             "name": "string",
             "email": "string",
@@ -457,6 +463,21 @@
           "success": true,
           "message": "Site created successfully",
           "data": "Created site object"
+        }
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/sites/:id",
+        "description": "Update site",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": "Partial site object with new fields support",
+        "response": {
+          "success": true,
+          "message": "Site updated successfully",
+          "data": "Updated site object"
         }
       }
     },
@@ -509,18 +530,22 @@
         "description": "Create new building",
         "status": "IMPLEMENTED",
         "requestBody": {
-          "building_name": "string",
+          "building_name": "string (required)",
           "building_code": "string",
-          "site_id": "ObjectId (reference to Site)",
+          "site_id": "ObjectId (reference to Site, required)",
           "customer_id": "ObjectId (reference to Customer)",
           "manager": "object { name, email, phone, title }",
-          "category": "string",
-          "building_type": "string",
+          "building_type": "string (required)",
           "building_grade": "string (Grade A, Grade B, Grade C, Premium)",
-          "primary_use": "string",
-          "number_of_floors": "number",
-          "energy_rating": "number (0-100)",
-          "status": "string",
+          "primary_use": "string (required, enum: 'Office', 'Retail', 'Industrial', 'Warehouse', 'Mixed Use', 'Healthcare', 'Educational', 'Government', 'Hospitality', 'Other')",
+          "last_inspection_date": "Date (optional, for compliance tracking)",
+          "accessibility_features": "array of strings (optional, enum: 'lifts', 'ramps', 'disabled_parking', 'accessible_toilets', 'hearing_loops', 'braille_signage', 'automatic_doors', 'wheelchair_access')",
+          "parking_spaces": "number (optional, min: 0, default: 0)",
+          "number_of_floors": "number (required, min: 1)",
+          "total_area": "number (optional, min: 0)",
+          "year_built": "number (optional)",
+          "nabers_rating": "number (optional, 0-6 stars)",
+          "status": "string (default: 'Active')",
           "metadata": "array (optional)",
           "is_active": "boolean (default: true)"
         },
@@ -528,6 +553,21 @@
           "success": true,
           "message": "Building created successfully",
           "data": "Created building object with populated references"
+        }
+      },
+      "update": {
+        "method": "PUT",
+        "path": "/api/buildings/:id",
+        "description": "Update building",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": "Partial building object with new fields support",
+        "response": {
+          "success": true,
+          "message": "Building updated successfully",
+          "data": "Updated building object"
         }
       },
       "stats": {
@@ -617,18 +657,24 @@
         "description": "Create new floor",
         "status": "IMPLEMENTED",
         "requestBody": {
-          "site_id": "ObjectId (reference to Site)",
-          "building_id": "ObjectId (reference to Building)",
+          "site_id": "ObjectId (reference to Site, required)",
+          "building_id": "ObjectId (reference to Building, required)",
           "customer_id": "ObjectId (reference to Customer)",
-          "floor_name": "string",
+          "floor_name": "string (required)",
           "floor_number": "number",
-          "floor_type": "string (Office, Retail, Plant Room, Lab, Common Area, Residential)",
-          "occupancy": "number (default: 0)",
+          "floor_type": "string (required, enum: 'Office', 'Retail', 'Plant Room', 'Lab', 'Common Area', 'Residential')",
+          "maximum_occupancy": "number (optional, min: 0, default: 0) - replaces 'occupancy'",
+          "occupancy": "number (deprecated, use 'maximum_occupancy') - maintained for backward compatibility",
+          "occupancy_type": "string (optional, enum: 'Single Tenant', 'Multi Tenant', 'Common Area')",
+          "access_control": "string (optional, enum: 'Public', 'Keycard Required', 'Restricted')",
+          "fire_compartment": "string (optional, emergency planning/safety designation)",
+          "hvac_zones": "number (optional, min: 0, climate control zones)",
+          "special_features": "array of strings (optional, enum: 'Equipment Room', 'Common Area', 'Server Room', 'Meeting Room', 'Kitchen', 'Storage')",
           "area_number": "number",
           "area_unit": "string (m²|sq ft, default: m²)",
           "floor_area": "number",
           "floor_area_unit": "string (m²|sq ft, default: m²)",
-          "ceiling_height": "number",
+          "ceiling_height": "number (optional, in metres)",
           "ceiling_height_unit": "string (m|ft, default: m)",
           "status": "string (default: Active)",
           "assets_count": "number (default: 0)",
@@ -638,22 +684,22 @@
         "response": {
           "success": true,
           "message": "Floor created successfully",
-          "data": "Created floor object with populated references"
+          "data": "Created floor object with populated references (includes both maximum_occupancy and occupancy virtual field)"
         }
       },
       "update": {
         "method": "PUT",
         "path": "/api/floors/:id",
-        "description": "Update floor",
+        "description": "Update floor with backward compatibility for occupancy field",
         "status": "IMPLEMENTED",
         "params": {
           "id": "MongoDB ObjectID"
         },
-        "requestBody": "Partial floor object",
+        "requestBody": "Partial floor object (supports both 'occupancy' and 'maximum_occupancy', 'occupancy' auto-mapped to 'maximum_occupancy')",
         "response": {
           "success": true,
           "message": "Floor updated successfully",
-          "data": "Updated floor object"
+          "data": "Updated floor object (includes both maximum_occupancy and occupancy virtual field)"
         }
       },
       "byBuilding": {
@@ -1799,8 +1845,14 @@
     "siteStructure": {
       "_id": "MongoDB ObjectID",
       "site_name": "string",
-      "address": "string",
+      "address": "string or object (structured with street, suburb, state, postcode, latitude, longitude, full_address)",
       "status": "string (Active, Under Construction, Planning, Inactive)",
+      "land_area": "number (square metres, required, min: 0, default: 0)",
+      "land_area_unit": "string (default: 'm²')",
+      "local_council": "string (local government area)",
+      "security_level": "string (enum: 'Public Access', 'Controlled', 'High Security')",
+      "shared_facilities": "array of strings (options: 'Car parks', 'Loading docks', default: [])",
+      "note": "string (additional site notes)",
       "buildings_count": "number",
       "floors_count": "number",
       "tenants_count": "number",
@@ -1831,12 +1883,16 @@
       "site_id": "ObjectId (reference to Site)",
       "manager": "object { name, email, phone, title }",
       "customer_id": "ObjectId (reference to Customer)",
-      "category": "string",
-      "building_type": "string",
+      "building_type": "string (required)",
       "building_grade": "string (Grade A, Grade B, Grade C, Premium)",
-      "primary_use": "string",
-      "number_of_floors": "number",
-      "energy_rating": "number (0-100)",
+      "primary_use": "string (required, enum: 'Office', 'Retail', 'Industrial', 'Warehouse', 'Mixed Use', 'Healthcare', 'Educational', 'Government', 'Hospitality', 'Other')",
+      "last_inspection_date": "Date (optional, for compliance tracking - AS1851, AS3666)",
+      "accessibility_features": "array of strings (enum: 'lifts', 'ramps', 'disabled_parking', 'accessible_toilets', 'hearing_loops', 'braille_signage', 'automatic_doors', 'wheelchair_access', default: [])",
+      "parking_spaces": "number (min: 0, default: 0)",
+      "number_of_floors": "number (required, min: 1)",
+      "total_area": "number (square metres)",
+      "year_built": "number",
+      "nabers_rating": "number (0-6 stars, Australian energy rating)",
       "status": "string",
       "total_floors": "number",
       "active_floors": "number",
@@ -1857,15 +1913,21 @@
       "site_id": "ObjectId (reference to Site)",
       "building_id": "ObjectId (reference to Building)",
       "customer_id": "ObjectId (reference to Customer)",
-      "floor_name": "string",
+      "floor_name": "string (required)",
       "floor_number": "number",
-      "floor_type": "string (Office, Retail, Plant Room, Lab, Common Area, Residential)",
-      "occupancy": "number (default: 0)",
+      "floor_type": "string (required, enum: 'Office', 'Retail', 'Plant Room', 'Lab', 'Common Area', 'Residential')",
+      "maximum_occupancy": "number (min: 0, default: 0) - renamed from occupancy",
+      "occupancy": "number (virtual field, maps to maximum_occupancy for backward compatibility)",
+      "occupancy_type": "string (enum: 'Single Tenant', 'Multi Tenant', 'Common Area')",
+      "access_control": "string (enum: 'Public', 'Keycard Required', 'Restricted')",
+      "fire_compartment": "string (emergency planning/safety designation)",
+      "hvac_zones": "number (min: 0, climate control zones)",
+      "special_features": "array of strings (enum: 'Equipment Room', 'Common Area', 'Server Room', 'Meeting Room', 'Kitchen', 'Storage', default: [])",
       "area_number": "number",
       "area_unit": "string (m²|sq ft, default: m²)",
       "floor_area": "number",
       "floor_area_unit": "string (m²|sq ft, default: m²)",
-      "ceiling_height": "number",
+      "ceiling_height": "number (metres)",
       "ceiling_height_unit": "string (m|ft, default: m)",
       "status": "string (default: Active)",
       "assets_count": "number (default: 0)",
@@ -2169,6 +2231,10 @@
     "contactManagement": "Comprehensive contact management APIs implemented: full CRUD operations (create, read, update, delete), primary contact management, search functionality, and nested contact operations within customer entities. Contacts are managed as subdocuments in the customer's contact_methods array.",
     "multipleContactMethods": "Enhanced contact system to support multiple contact methods per contact. Each contact can have multiple communication methods (Email, Phone, SMS, WhatsApp) with individual add/edit/delete operations. Only one primary method per contact is enforced. Includes backward compatibility with legacy single-method structure and dedicated API endpoints for method management (/:id/methods).",
     "dropdownApis": "Comprehensive dropdown/select APIs implemented for all entity types. Provides two categories: (1) Static dropdowns from constants (/api/dropdowns, /api/dropdowns/:module, /api/dropdowns/:module/:field) for predefined values like statuses, types, categories. (2) Dynamic entity dropdowns (/api/dropdowns/entities/*) that fetch active records from database for customers, sites, buildings, floors, assets, tenants, and vendors. All entity dropdowns support hierarchical filtering (e.g., sites by customer_id, buildings by site_id, floors by building_id). Document tags endpoint (/api/dropdowns/document-tags) returns all unique tags extracted from documents collection. All endpoints return consistent format with id, label, and value fields for easy integration with UI components.",
-    "dropdownHierarchicalFiltering": "Entity dropdown endpoints support hierarchical filtering to enable cascading selects: sites can be filtered by customer_id, buildings by site_id, floors by building_id, assets by floor_id/building_id/site_id, tenants by building_id, vendors by category. This enables building dependent dropdowns in the UI where selecting a parent entity (e.g., customer) automatically filters child entities (e.g., sites)."
+    "dropdownHierarchicalFiltering": "Entity dropdown endpoints support hierarchical filtering to enable cascading selects: sites can be filtered by customer_id, buildings by site_id, floors by building_id, assets by floor_id/building_id/site_id, tenants by building_id, vendors by category. This enables building dependent dropdowns in the UI where selecting a parent entity (e.g., customer) automatically filters child entities (e.g., sites).",
+    "sitesSchemaEnhancement": "Sites schema updated (2025-10-05) with comprehensive property management fields: land_area (required, square metres), land_area_unit (default: m²), local_council (local government area), security_level (enum: Public Access, Controlled, High Security), shared_facilities (array: Car parks, Loading docks), note (additional information). Structured address support with street, suburb, state, postcode, coordinates, and full_address fields. All new fields optional for backward compatibility with existing records, defaults applied via aggregation pipeline.",
+    "buildingsSchemaEnhancement": "Buildings schema updated (2025-10-05) with Australian compliance and accessibility features: primary_use (required enum: Office, Retail, Industrial, Warehouse, Mixed Use, Healthcare, Educational, Government, Hospitality, Other), last_inspection_date (Date, for AS1851 and AS3666 compliance tracking), accessibility_features (multi-select array: lifts, ramps, disabled_parking, accessible_toilets, hearing_loops, braille_signage, automatic_doors, wheelchair_access), parking_spaces (number, min: 0). Comprehensive validation on POST/PUT endpoints with field-specific error messages. NABERS rating (0-6 stars) for Australian energy compliance.",
+    "floorsSchemaEnhancement": "Floors schema updated (2025-10-05) with enhanced operational fields and backward compatibility: occupancy field renamed to maximum_occupancy with virtual getter/setter maintaining full backward compatibility (both fields available in responses). New fields: occupancy_type (enum: Single Tenant, Multi Tenant, Common Area), access_control (enum: Public, Keycard Required, Restricted), fire_compartment (emergency planning/safety designation), hvac_zones (number, climate control zones), special_features (multi-select array: Equipment Room, Common Area, Server Room, Meeting Room, Kitchen, Storage). API layer automatically maps legacy 'occupancy' field to 'maximum_occupancy' in POST/PUT requests. Aggregation pipelines updated to use maximum_occupancy. All new fields optional with comprehensive validation.",
+    "schemaUpdateValidation": "All schema updates include comprehensive API-level validation with clear, actionable error messages. Validation rules enforce data integrity (min/max values, enum restrictions, array validation) while maintaining backward compatibility. Australian standards compliance for all new fields (BCA accessibility, AS1851/AS3666 inspection tracking, NABERS energy ratings, local council requirements)."
   }
 }
