@@ -216,10 +216,10 @@ const TenantSchema = new mongoose.Schema({
   services_included: {
     type: [String]
   },
+  // Special requirements - validation removed
   special_requirements: {
     type: [String],
-    default: [],
-    enum: ['24_7_access', 'high_security', 'loading_dock', 'after_hours_hvac', 'dedicated_parking', 'signage_rights', 'kitchen_facilities', 'server_room']
+    default: []
   },
 
   // Business hours - consolidated from operating_hours_start/end

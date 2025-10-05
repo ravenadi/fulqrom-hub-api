@@ -130,15 +130,14 @@ const CustomerSchema = new mongoose.Schema({
 }, { _id: false });
 
 // Compliance and regulatory metadata schema
+// NOTE: Enum validation removed - values loaded from GET /api/dropdowns
 const MetadataSchema = new mongoose.Schema({
   engineering_discipline: {
     type: String,
-    enum: ['Mechanical', 'Electrical', 'Plumbing', 'Structural', 'Civil', 'Fire Protection', 'HVAC', 'Telecommunications'],
     trim: true
   },
   regulatory_framework: {
     type: String,
-    enum: ['as1851_fire_systems', 'as3745_emergency_control', 'nabers_energy', 'green_star', 'whs_compliance', 'essential_safety_measures'],
     trim: true
   },
   certification_number: {
@@ -151,7 +150,6 @@ const MetadataSchema = new mongoose.Schema({
   },
   compliance_status: {
     type: String,
-    enum: ['current', 'expiring_30_days', 'overdue', 'under_review'],
     trim: true
   },
   issue_date: {
@@ -181,13 +179,13 @@ const RelatedDrawingSchema = new mongoose.Schema({
 }, { _id: false });
 
 // Drawing Register information schema
+// NOTE: Enum validation removed - values loaded from GET /api/dropdowns
 const DrawingInfoSchema = new mongoose.Schema({
   date_issued: {
     type: Date
   },
   drawing_status: {
     type: String,
-    enum: ['draft', 'for_review', 'approved', 'as_built', 'superseded', 'obsolete'],
     default: 'draft',
     trim: true
   },
@@ -197,7 +195,6 @@ const DrawingInfoSchema = new mongoose.Schema({
   },
   drawing_scale: {
     type: String,
-    enum: ['nts', '1:1', '1:5', '1:10', '1:20', '1:25', '1:50', '1:100', '1:200', '1:250', '1:500', '1:1000', '1:1250', '1:2500'],
     trim: true
   },
   approved_by_user: {
@@ -208,10 +205,10 @@ const DrawingInfoSchema = new mongoose.Schema({
 }, { _id: false });
 
 // Access control schema
+// NOTE: Enum validation removed - values loaded from GET /api/dropdowns
 const AccessControlSchema = new mongoose.Schema({
   access_level: {
     type: String,
-    enum: ['public', 'internal', 'restricted', 'confidential'],
     default: 'internal',
     trim: true
   },
@@ -240,28 +237,26 @@ const DocumentSchema = new mongoose.Schema({
   },
 
   // Document Classification
+  // NOTE: Enum validation removed - values loaded from GET /api/dropdowns (document_document_categories, document_document_types, etc.)
   category: {
     type: String,
     required: true,
-    enum: ['drawing_register', 'compliance_regulatory', 'standards_procedures', 'building_management', 'general_repository'],
     trim: true
   },
   type: {
     type: String,
     required: true,
-    enum: ['PDF', 'Word', 'Excel', 'Image', 'CAD', 'BIM', 'Other'],
     trim: true
   },
   engineering_discipline: {
     type: String,
-    enum: ['Mechanical', 'Electrical', 'Plumbing', 'Structural', 'Civil', 'Fire Protection', 'HVAC', 'Telecommunications'],
     trim: true
   },
 
   // Document Status
+  // NOTE: Enum validation removed - values loaded from GET /api/dropdowns (document_document_statuses)
   status: {
     type: String,
-    enum: ['Approved', 'Under Review', 'Draft', 'Rejected', 'Archived'],
     default: 'Draft',
     trim: true
   },
@@ -288,6 +283,7 @@ const DocumentSchema = new mongoose.Schema({
   access_control: AccessControlSchema,
 
   // Approval workflow
+  // NOTE: Enum validation removed - values loaded from GET /api/dropdowns (document_document_approval_statuses)
   approval_required: {
     type: Boolean,
     default: false
@@ -298,7 +294,6 @@ const DocumentSchema = new mongoose.Schema({
   },
   approval_status: {
     type: String,
-    enum: ['Pending', 'Approved', 'Rejected'],
     default: 'Pending',
     trim: true
   },

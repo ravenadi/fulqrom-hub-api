@@ -414,8 +414,8 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
       // Location associations
       location: {},
 
-      // Compliance metadata (only for compliance_regulatory category and only real values)
-      metadata: documentData.category === 'compliance_regulatory' ? {
+      // Compliance metadata - category restriction removed, allow for all documents
+      metadata: {
         ...(documentData.engineering_discipline && documentData.engineering_discipline !== 'none' && { engineering_discipline: documentData.engineering_discipline }),
         ...(documentData.regulatory_framework && documentData.regulatory_framework !== 'none' && { regulatory_framework: documentData.regulatory_framework }),
         ...(documentData.certification_number && documentData.certification_number !== 'none' && { certification_number: documentData.certification_number }),
@@ -424,17 +424,17 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
         ...(documentData.issue_date && documentData.issue_date !== 'none' && { issue_date: documentData.issue_date }),
         ...(documentData.expiry_date && documentData.expiry_date !== 'none' && { expiry_date: documentData.expiry_date }),
         ...(documentData.review_date && documentData.review_date !== 'none' && { review_date: documentData.review_date })
-      } : {},
+      },
 
-      // Drawing Register information (for drawing_register category)
-      drawing_info: documentData.category === 'drawing_register' ? {
+      // Drawing Register information - category restriction removed, allow for all documents
+      drawing_info: {
         ...(documentData.date_issued && { date_issued: documentData.date_issued }),
         ...(documentData.drawing_status && { drawing_status: documentData.drawing_status }),
         ...(documentData.prepared_by && { prepared_by: documentData.prepared_by }),
         ...(documentData.drawing_scale && { drawing_scale: documentData.drawing_scale }),
         ...(documentData.approved_by_user && { approved_by_user: documentData.approved_by_user }),
         ...(documentData.related_drawings && { related_drawings: documentData.related_drawings })
-      } : {},
+      },
 
       // Access Control
       access_control: {

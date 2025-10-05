@@ -10,9 +10,9 @@ const SiteAddressSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // State - loaded from GET /api/dropdowns (site_site_states)
   state: {
     type: String,
-    enum: ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'NT', 'ACT'],
     trim: true
   },
   postcode: {
@@ -92,15 +92,15 @@ const SiteSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Type - loaded from GET /api/dropdowns (site_site_types)
   type: {
     type: String,
-    enum: ['commercial', 'mixed-use', 'industrial', 'University Campus', 'Shopping Centre', 'Corporate Office', 'Industrial Park', 'Data Center', 'Healthcare'],
     default: 'commercial'
   },
 
+  // Security level - loaded from GET /api/dropdowns (site_site_security_levels)
   security_level: {
     type: String,
-    enum: ['Public Access', 'Controlled', 'High Security'],
     default: 'Controlled'
   },
 
@@ -159,7 +159,6 @@ const SiteSchema = new mongoose.Schema({
     },
     trend: {
       type: String,
-      enum: ['up', 'down', 'stable'],
       default: 'stable'
     },
     yoy_change: {
@@ -186,7 +185,6 @@ const SiteSchema = new mongoose.Schema({
   comfort_score: {
     rating: {
       type: String,
-      enum: ['excellent', 'good', 'average', 'poor'],
       default: 'good'
     },
     score: {
@@ -200,7 +198,6 @@ const SiteSchema = new mongoose.Schema({
   equipment_health: {
     status: {
       type: String,
-      enum: ['excellent', 'good', 'average', 'poor'],
       default: 'good'
     },
     score: {
@@ -211,9 +208,9 @@ const SiteSchema = new mongoose.Schema({
     }
   },
 
+  // Status - loaded from GET /api/dropdowns (site_site_statuses)
   status: {
     type: String,
-    enum: ['active', 'development', 'maintenance', 'inactive', 'planning', 'Operational', 'In Development', 'Maintenance', 'Inactive', 'Decommissioned', 'Planned'],
     default: 'active'
   },
 

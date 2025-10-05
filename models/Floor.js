@@ -36,10 +36,9 @@ const FloorSchema = new mongoose.Schema({
     type: Number
   },
 
-  // Floor Type - Simplified dropdown
+  // Floor Type - loaded from GET /api/dropdowns (floor_floor_types)
   floor_type: {
     type: String,
-    enum: ['Office', 'Retail', 'Plant Room', 'Lab', 'Common Area', 'Residential'],
     required: true,
     trim: true
   },
@@ -54,13 +53,13 @@ const FloorSchema = new mongoose.Schema({
   // Occupancy Type - Tenancy arrangement
   occupancy_type: {
     type: String,
-    enum: ['Single Tenant', 'Multi Tenant', 'Common Area']
+    trim: true
   },
 
   // Access Control - Security level
   access_control: {
     type: String,
-    enum: ['Public', 'Keycard Required', 'Restricted']
+    trim: true
   },
 
   // Fire Compartment - Emergency planning/safety designation
@@ -78,18 +77,16 @@ const FloorSchema = new mongoose.Schema({
   // Special Features - Notable characteristics
   special_features: {
     type: [String],
-    enum: ['Equipment Room', 'Common Area', 'Server Room', 'Meeting Room', 'Kitchen', 'Storage'],
     default: []
   },
 
-  // Area specifications
+  // Area specifications - units loaded from GET /api/dropdowns (floor_floor_area_units)
   area_number: {
     type: Number,
     min: 0
   },
   area_unit: {
     type: String,
-    enum: ['m²', 'sq ft'],
     default: 'm²'
   },
   floor_area: {
@@ -98,7 +95,6 @@ const FloorSchema = new mongoose.Schema({
   },
   floor_area_unit: {
     type: String,
-    enum: ['m²', 'sq ft'],
     default: 'm²'
   },
   ceiling_height: {
@@ -107,7 +103,6 @@ const FloorSchema = new mongoose.Schema({
   },
   ceiling_height_unit: {
     type: String,
-    enum: ['m', 'ft'],
     default: 'm'
   },
 

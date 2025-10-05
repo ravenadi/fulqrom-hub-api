@@ -1,10 +1,10 @@
 const mongoose = require('mongoose');
 
 // Vendor License schema
+// NOTE: Enum validations removed - values loaded from GET /api/dropdowns if needed
 const VendorLicenseSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['electrical', 'plumbing', 'gas-fitting', 'fire-safety', 'builders', 'asbestos-removal', 'refrigeration', 'crane-operator', 'scaffolding', 'demolition', 'other'],
     required: true
   },
   number: {
@@ -27,7 +27,6 @@ const VendorLicenseSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['current', 'expiring-soon', 'expired', 'pending', 'not-required'],
     default: 'current'
   },
   documentUrl: {
@@ -37,10 +36,10 @@ const VendorLicenseSchema = new mongoose.Schema({
 }, { _id: true });
 
 // Vendor Insurance schema
+// NOTE: Enum validations removed - values loaded from GET /api/dropdowns if needed
 const VendorInsuranceSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['public-liability', 'professional-indemnity', 'workers-compensation', 'product-liability', 'directors-officers', 'cyber-liability'],
     required: true
   },
   provider: {
@@ -64,7 +63,6 @@ const VendorInsuranceSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['current', 'expiring-soon', 'expired', 'pending', 'not-required'],
     default: 'current'
   },
   documentUrl: {
@@ -74,6 +72,7 @@ const VendorInsuranceSchema = new mongoose.Schema({
 }, { _id: true });
 
 // Vendor Certification schema
+// NOTE: Enum validations removed - values loaded from GET /api/dropdowns if needed
 const VendorCertificationSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -99,7 +98,6 @@ const VendorCertificationSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['current', 'expiring-soon', 'expired', 'pending', 'not-required'],
     default: 'current'
   },
   documentUrl: {
@@ -118,9 +116,9 @@ const VendorAddressSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // State - loaded from GET /api/dropdowns
   state: {
     type: String,
-    enum: ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'NT', 'ACT'],
     trim: true
   },
   postcode: {
@@ -236,24 +234,21 @@ const VendorSchema = new mongoose.Schema({
     required: true
   },
 
-  // Contractor Type - renamed from 'category'
+  // Contractor Type - loaded from GET /api/dropdowns
   contractor_type: {
     type: String,
-    enum: ['HVAC Contractor', 'Electrical Contractor', 'Plumbing Contractor', 'Fire Safety Contractor', 'Building Consultant', 'General Contractor', 'Maintenance Contractor', 'Cleaning Contractor', 'Security Contractor', 'Construction Contractor', 'Landscaping Contractor', 'Pest Control Contractor'],
     required: [true, 'Contractor type is required'],
     index: true
   },
 
-  // Consultant Specialisation
+  // Consultant Specialisation - loaded from GET /api/dropdowns
   consultant_specialisation: {
-    type: String,
-    enum: ['Building Consultant', 'Engineering Consultant', 'Fire Safety Consultant', 'Mechanical Consultant', 'Electrical Consultant', 'Structural Consultant', 'Environmental Consultant', 'Energy Consultant']
+    type: String
   },
 
-  // Keep old category for backward compatibility
+  // Category - loaded from GET /api/dropdowns
   category: {
-    type: String,
-    enum: ['fire-safety', 'hvac', 'electrical', 'plumbing', 'cleaning', 'security', 'maintenance', 'construction', 'landscaping', 'pest-control', 'other']
+    type: String
   },
 
   subcategories: [{
@@ -285,9 +280,9 @@ const VendorSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Certification authority - loaded from GET /api/dropdowns
   certification_authority: {
-    type: String,
-    enum: ['Council-appointed', 'Private', 'Accredited']
+    type: String
   },
 
   // Insurance (simplified)
@@ -338,9 +333,9 @@ const VendorSchema = new mongoose.Schema({
     type: Date
   },
 
+  // Status - loaded from GET /api/dropdowns
   status: {
     type: String,
-    enum: ['active', 'inactive', 'suspended', 'pending-approval', 'under-review'],
     default: 'active',
     index: true
   },
@@ -383,10 +378,9 @@ const VendorSchema = new mongoose.Schema({
   insurances: [VendorInsuranceSchema],
   certifications: [VendorCertificationSchema],
 
-  // Business Details
+  // Business Details - loaded from GET /api/dropdowns
   businessType: {
     type: String,
-    enum: ['sole-trader', 'partnership', 'company', 'trust', 'other'],
     required: [true, 'Business type is required']
   },
 

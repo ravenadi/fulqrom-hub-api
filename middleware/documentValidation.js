@@ -7,36 +7,17 @@ const createDocumentSchema = Joi.object({
   description: Joi.string().optional().trim().max(1000),
   version: Joi.string().optional().trim().default('1.0'),
 
-  category: Joi.string().required().valid(
-    'drawing_register',
-    'compliance_regulatory',
-    'standards_procedures',
-    'building_management',
-    'general_repository'
-  ),
+  // Category - loaded from GET /api/dropdowns (document_document_categories)
+  category: Joi.string().required().trim(),
 
-  type: Joi.string().required().valid(
-    'compliance',
-    'standards',
-    'management',
-    'general',
-    'service_report'
-  ),
+  // Type - loaded from GET /api/dropdowns (document_document_types)
+  type: Joi.string().required().trim(),
 
-  status: Joi.string().optional().valid(
-    'Approved',
-    'Under Review',
-    'Draft',
-    'Rejected',
-    'Archived'
-  ).default('Draft'),
+  // Status - loaded from GET /api/dropdowns (document_document_statuses)
+  status: Joi.string().optional().trim().default('Draft'),
 
-  engineering_discipline: Joi.string().optional().valid(
-    'Architectural',
-    'Structural',
-    'Electrical',
-    'Mechanical'
-  ),
+  // Engineering discipline - loaded from GET /api/dropdowns (document_document_engineering_disciplines)
+  engineering_discipline: Joi.string().optional().trim(),
 
   // Customer information (required)
   customer_id: Joi.string().required(),
@@ -61,60 +42,19 @@ const createDocumentSchema = Joi.object({
     Joi.string().trim()
   ).optional(),
 
-  // Compliance fields (conditional on category)
-  regulatory_framework: Joi.when('category', {
-    is: 'compliance_regulatory',
-    then: Joi.string().optional().valid(
-      'as1851_fire_systems',
-      'as3745_emergency_control',
-      'nabers_energy',
-      'green_star',
-      'whs_compliance',
-      'essential_safety_measures'
-    ),
-    otherwise: Joi.forbidden()
-  }),
+  // Compliance fields - validation removed, loaded from dropdowns
+  regulatory_framework: Joi.string().optional().trim(),
+  certification_number: Joi.string().optional().trim(),
+  compliance_framework: Joi.string().optional().trim(),
+  compliance_status: Joi.string().optional().trim(),
+  issue_date: Joi.string().optional().isoDate(),
+  expiry_date: Joi.string().optional().isoDate(),
+  review_date: Joi.string().optional().isoDate(),
 
-  certification_number: Joi.when('category', {
-    is: 'compliance_regulatory',
-    then: Joi.string().optional().trim(),
-    otherwise: Joi.forbidden()
-  }),
-
-  compliance_framework: Joi.when('category', {
-    is: 'compliance_regulatory',
-    then: Joi.string().optional().trim(),
-    otherwise: Joi.forbidden()
-  }),
-
-  compliance_status: Joi.when('category', {
-    is: 'compliance_regulatory',
-    then: Joi.string().optional().valid(
-      'current',
-      'expiring_30_days',
-      'overdue',
-      'under_review'
-    ),
-    otherwise: Joi.forbidden()
-  }),
-
-  issue_date: Joi.when('category', {
-    is: 'compliance_regulatory',
-    then: Joi.string().optional().isoDate(),
-    otherwise: Joi.forbidden()
-  }),
-
-  expiry_date: Joi.when('category', {
-    is: 'compliance_regulatory',
-    then: Joi.string().optional().isoDate(),
-    otherwise: Joi.forbidden()
-  }),
-
-  review_date: Joi.when('category', {
-    is: 'compliance_regulatory',
-    then: Joi.string().optional().isoDate(),
-    otherwise: Joi.forbidden()
-  }),
+  // Approval fields - loaded from GET /api/dropdowns (document_document_approval_statuses)
+  approval_required: Joi.boolean().optional(),
+  approved_by: Joi.string().optional().trim(),
+  approval_status: Joi.string().optional().trim(),
 
   // Audit fields
   created_by: Joi.string().optional().trim()
@@ -126,36 +66,17 @@ const updateDocumentSchema = Joi.object({
   description: Joi.string().optional().trim().max(1000),
   version: Joi.string().optional().trim(),
 
-  category: Joi.string().optional().valid(
-    'drawing_register',
-    'compliance_regulatory',
-    'standards_procedures',
-    'building_management',
-    'general_repository'
-  ),
+  // Category - loaded from GET /api/dropdowns
+  category: Joi.string().optional().trim(),
 
-  type: Joi.string().optional().valid(
-    'compliance',
-    'standards',
-    'management',
-    'general',
-    'service_report'
-  ),
+  // Type - loaded from GET /api/dropdowns
+  type: Joi.string().optional().trim(),
 
-  status: Joi.string().optional().valid(
-    'Approved',
-    'Under Review',
-    'Draft',
-    'Rejected',
-    'Archived'
-  ),
+  // Status - loaded from GET /api/dropdowns
+  status: Joi.string().optional().trim(),
 
-  engineering_discipline: Joi.string().optional().valid(
-    'Architectural',
-    'Structural',
-    'Electrical',
-    'Mechanical'
-  ),
+  // Engineering discipline - loaded from GET /api/dropdowns
+  engineering_discipline: Joi.string().optional().trim(),
 
   // Tags
   tags: Joi.object({
@@ -188,22 +109,13 @@ const updateDocumentSchema = Joi.object({
     }).optional()
   }).optional(),
 
-  // Compliance metadata
+  // Compliance metadata - validation removed, loaded from dropdowns
   metadata: Joi.object({
-    engineering_discipline: Joi.alternatives().try(
-      Joi.string().valid('Architectural', 'Structural', 'Electrical', 'Mechanical'),
-      Joi.string().valid('none', '').allow(null)
-    ).optional(),
-    regulatory_framework: Joi.alternatives().try(
-      Joi.string().valid('as1851_fire_systems', 'as3745_emergency_control', 'nabers_energy', 'green_star', 'whs_compliance', 'essential_safety_measures'),
-      Joi.string().valid('none', '').allow(null)
-    ).optional(),
+    engineering_discipline: Joi.string().optional().trim().allow('', null),
+    regulatory_framework: Joi.string().optional().trim().allow('', null),
     certification_number: Joi.string().optional().trim().allow(''),
     compliance_framework: Joi.string().optional().trim().allow(''),
-    compliance_status: Joi.alternatives().try(
-      Joi.string().valid('current', 'expiring_30_days', 'overdue', 'under_review'),
-      Joi.string().valid('none', '').allow(null)
-    ).optional(),
+    compliance_status: Joi.string().optional().trim().allow('', null),
     issue_date: Joi.string().optional().isoDate().allow(''),
     expiry_date: Joi.string().optional().isoDate().allow(''),
     review_date: Joi.string().optional().isoDate().allow('')
@@ -221,47 +133,13 @@ const queryParamsSchema = Joi.object({
   floor_id: Joi.string().optional(),
   asset_id: Joi.string().optional(),
   tenant_id: Joi.string().optional(),
-  category: Joi.string().optional().valid(
-    'drawing_register',
-    'compliance_regulatory',
-    'standards_procedures',
-    'building_management',
-    'general_repository'
-  ),
-  type: Joi.string().optional().valid(
-    'compliance',
-    'standards',
-    'management',
-    'general',
-    'service_report'
-  ),
-  engineering_discipline: Joi.string().optional().valid(
-    'Architectural',
-    'Structural',
-    'Electrical',
-    'Mechanical'
-  ),
-  regulatory_framework: Joi.string().optional().valid(
-    'as1851_fire_systems',
-    'as3745_emergency_control',
-    'nabers_energy',
-    'green_star',
-    'whs_compliance',
-    'essential_safety_measures'
-  ),
-  compliance_status: Joi.string().optional().valid(
-    'current',
-    'expiring_30_days',
-    'overdue',
-    'under_review'
-  ),
-  status: Joi.string().optional().valid(
-    'Approved',
-    'Under Review',
-    'Draft',
-    'Rejected',
-    'Archived'
-  ),
+  // All dropdown values loaded from GET /api/dropdowns
+  category: Joi.string().optional().trim(),
+  type: Joi.string().optional().trim(),
+  engineering_discipline: Joi.string().optional().trim(),
+  regulatory_framework: Joi.string().optional().trim(),
+  compliance_status: Joi.string().optional().trim(),
+  status: Joi.string().optional().trim(),
   tags: Joi.alternatives().try(
     Joi.array().items(Joi.string()),
     Joi.string()
