@@ -1632,9 +1632,17 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     // Get document_group_id (initialize if this is first version)
     const documentGroupId = currentDocument.document_group_id || currentDocument._id.toString();
 
-    // Calculate new version number
+    // Get current document version (for superseded_version field)
     const currentVersionNumber = currentDocument.version_number || currentDocument.version || '1.0';
-    const newVersionNumber = req.body.version_number || calculateNextVersion(currentVersionNumber);
+
+    // Find HIGHEST version in the document group by version_sequence (reliable number sorting)
+    const highestVersionDoc = await Document.findOne({ document_group_id: documentGroupId })
+      .sort({ version_sequence: -1 })
+      .limit(1);
+
+    // Calculate new version number based on HIGHEST existing version (not current)
+    const highestVersionNumber = highestVersionDoc?.version_number || currentVersionNumber;
+    const newVersionNumber = req.body.version_number || calculateNextVersion(highestVersionNumber);
 
     // Validate version number format
     if (!/^\d+\.\d+$/.test(newVersionNumber)) {
@@ -1666,12 +1674,17 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
 
     const newVersionSequence = (maxSequenceDoc?.version_sequence || 0) + 1;
 
-    // Upload new file to S3 with versioned key
+    // Upload new file to S3 with date-based versioned key
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+
     const versionedFileName = `v${newVersionNumber}_${req.file.originalname}`;
     const uploadResult = await uploadFileToS3(
       { ...req.file, originalname: versionedFileName },
       currentDocument.customer.customer_id,
-      `documents/${documentGroupId}`
+      `documents/${documentGroupId}/${year}/${month}/${day}`
     );
 
     if (!uploadResult.success) {
@@ -1704,20 +1717,24 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       { $set: { document_group_id: documentGroupId } }
     );
 
-    // Create new version document
-    const currentDocData = currentDocument.toObject();
-
-    // Delete _id to let MongoDB generate a new one
-    delete currentDocData._id;
-
+    // Create minimal version document - ONLY file data and version metadata
     const newVersionData = {
-      ...currentDocData,
+      // Minimal required fields (schema requires these)
+      name: `${currentDocument.name} - v${newVersionNumber}`,
+      category: 'Version',
+      type: 'Version',
+
+      // File data
+      file: uploadResult.data,
+
+      // Version tracking
+      version: newVersionNumber,
       document_group_id: documentGroupId,
       version_number: newVersionNumber,
       is_current_version: true,
       version_sequence: newVersionSequence,
-      version: newVersionNumber, // Also update legacy version field
-      file: uploadResult.data,
+
+      // Version metadata - WHO, WHEN, WHERE uploaded
       version_metadata: {
         uploaded_by: {
           user_id: uploadedBy.user_id,
@@ -1733,6 +1750,8 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
           file_hash: req.body.file_hash || ''
         }
       },
+
+      // Timestamps
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -1923,18 +1942,24 @@ router.post('/versions/:versionId/restore', validateObjectId, async (req, res) =
       );
     }
 
-    // Create new document as restored version
-    const restoreDocData = versionToRestore.toObject();
-
-    // Delete _id to let MongoDB generate a new one
-    delete restoreDocData._id;
-
+    // Create minimal restored version document - ONLY file data and version metadata
     const restoredVersionData = {
-      ...restoreDocData,
-      version_number: newVersionNumber,
+      // Minimal required fields (schema requires these)
+      name: `${versionToRestore.name} - v${newVersionNumber}`,
+      category: 'Version',
+      type: 'Version',
+
+      // File data (from version being restored)
+      file: versionToRestore.file,
+
+      // Version tracking
       version: newVersionNumber,
+      document_group_id: documentGroupId,
+      version_number: newVersionNumber,
       is_current_version: true,
       version_sequence: newVersionSequence,
+
+      // Version metadata - WHO, WHEN, WHERE restored
       version_metadata: {
         uploaded_by: {
           user_id: restored_by.user_id,
@@ -1949,6 +1974,8 @@ router.post('/versions/:versionId/restore', validateObjectId, async (req, res) =
           file_size_bytes: versionToRestore.file?.file_meta?.file_size || 0
         }
       },
+
+      // Timestamps
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };

@@ -2,11 +2,30 @@
   "apiInfo": {
     "title": "Fulqrom Hub REST API",
     "description": "Australian Commercial Real Estate & HVAC Building Management System API",
-    "version": "1.6.0",
+    "version": "1.7.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - hub_fulqrom database",
-    "lastUpdated": "2025-10-06T00:00:00.000Z",
+    "lastUpdated": "2025-10-06T12:00:00.000Z",
     "changeLog": {
+      "v1.7.0": {
+        "date": "2025-10-06",
+        "changes": [
+          "Added Document Versioning System with 3 new endpoints",
+          "POST /api/documents/:id/versions - Upload new document version with file",
+          "GET /api/documents/versions/:documentGroupId - Get all versions of a document",
+          "POST /api/documents/versions/:versionId/restore - Restore previous version as new current version",
+          "Minimal version documents storing only file data and metadata (WHO, WHEN, WHERE)",
+          "Automatic version numbering (1.0, 1.1, 2.0) with version_sequence tracking",
+          "Document grouping via document_group_id for version management",
+          "S3 date-based file organization: bucket/year/month/day/timestamp-uuid-filename",
+          "Version metadata tracks uploaded_by, upload_timestamp, change_notes, superseded_version",
+          "Added Email Notification Infrastructure (EmailNotification model, EmailService utility)",
+          "Multi-provider email support (SMTP via Zoho, SendGrid, AWS SES, console logging)",
+          "HTML email templates with Australian formatting (documentAssignment, documentUpdate)",
+          "Australian date/time formatting utility (DD/MM/YYYY, Australia/Sydney timezone)",
+          "Email audit trail with sent/failed/pending status tracking and retry capability"
+        ]
+      },
       "v1.6.0": {
         "date": "2025-10-06",
         "changes": [
@@ -1731,6 +1750,124 @@
           "document_name": "string",
           "current_approval_status": "string",
           "data": "Array of approval history records (action, performed_by, comments, created_at, etc.)"
+        }
+      },
+      "uploadVersion": {
+        "method": "POST",
+        "path": "/api/documents/:id/versions",
+        "description": "Upload new version of existing document with file upload",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID (current document ID)"
+        },
+        "requestBody": {
+          "file": "multipart/form-data (required) - Document file to upload",
+          "uploaded_by": "JSON string (required) - { user_id, user_name, email }",
+          "change_notes": "string (optional) - Notes about changes in this version",
+          "version_number": "string (optional) - Manual version number (X.Y format, auto-calculated if not provided)",
+          "file_hash": "string (optional) - File hash for integrity verification"
+        },
+        "notes": [
+          "Creates minimal version document with ONLY file data and metadata",
+          "Version documents store: file, version_metadata (WHO, WHEN, WHERE), minimal reference fields",
+          "Automatic version numbering: 1.0 -> 1.1 (minor), 1.9 -> 2.0 (major)",
+          "File uploaded to S3: documents/documentGroupId/year/month/day/timestamp-uuid-vX.Y_filename",
+          "Previous current version marked as is_current_version: false",
+          "New version marked as is_current_version: true",
+          "All versions linked via document_group_id"
+        ],
+        "response": {
+          "success": true,
+          "message": "New version uploaded successfully",
+          "data": {
+            "_id": "ObjectId (new version document ID)",
+            "name": "string (Document Name - v2.0)",
+            "category": "Version",
+            "type": "Version",
+            "file": "object (S3 file metadata)",
+            "version": "string (2.0)",
+            "version_number": "string (2.0)",
+            "version_sequence": "number (incremental sequence)",
+            "is_current_version": true,
+            "document_group_id": "string",
+            "version_metadata": {
+              "uploaded_by": {
+                "user_id": "string",
+                "user_name": "string",
+                "email": "string"
+              },
+              "upload_timestamp": "Date",
+              "change_notes": "string",
+              "superseded_version": "string (previous version number)",
+              "file_changes": {
+                "original_filename": "string",
+                "file_size_bytes": "number",
+                "file_hash": "string"
+              }
+            }
+          }
+        }
+      },
+      "getVersions": {
+        "method": "GET",
+        "path": "/api/documents/versions/:documentGroupId",
+        "description": "Get all versions of a document by document group ID",
+        "status": "IMPLEMENTED",
+        "params": {
+          "documentGroupId": "string (document_group_id to retrieve all versions)"
+        },
+        "response": {
+          "success": true,
+          "data": [
+            {
+              "_id": "ObjectId",
+              "version_number": "string (1.0, 2.0, etc.)",
+              "version_sequence": "number (1, 2, 3...)",
+              "is_current_version": "boolean",
+              "created_at": "Date (upload timestamp)",
+              "created_by": "string (user name)",
+              "file_name": "string",
+              "file_size": "number (bytes)",
+              "file_url": "string (S3 URL)",
+              "change_notes": "string (version change notes)"
+            }
+          ]
+        }
+      },
+      "restoreVersion": {
+        "method": "POST",
+        "path": "/api/documents/versions/:versionId/restore",
+        "description": "Restore a previous version as new current version",
+        "status": "IMPLEMENTED",
+        "params": {
+          "versionId": "MongoDB ObjectID (version to restore)"
+        },
+        "requestBody": {
+          "restored_by": "JSON string (required) - { user_id, user_name, email }"
+        },
+        "notes": [
+          "Creates new minimal version document with restored file",
+          "Marks previous current version as is_current_version: false",
+          "Increments version_number automatically (e.g., 2.0 -> 3.0)",
+          "Change notes automatically set to 'Restored from version X.Y'",
+          "Maintains version history continuity"
+        ],
+        "response": {
+          "success": true,
+          "message": "Version X.Y restored as version Z.A",
+          "data": {
+            "_id": "ObjectId (new restored version ID)",
+            "version_number": "string (new version number)",
+            "version_sequence": "number",
+            "is_current_version": true,
+            "document_group_id": "string",
+            "version_metadata": {
+              "uploaded_by": "object (user who restored)",
+              "upload_timestamp": "Date",
+              "change_notes": "Restored from version X.Y",
+              "superseded_version": "string"
+            }
+          }
         }
       }
     },

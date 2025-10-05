@@ -92,8 +92,10 @@ function generateS3Key(customerId, originalname, customPath = null) {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const timestamp = now.getTime();
 
-  return `documents/${customerId}/${year}/${month}/${uuid}-${cleanFilename}${extension}`;
+  return `documents/${customerId}/${year}/${month}/${day}/${timestamp}-${uuid}-${cleanFilename}${extension}`;
 }
 
 /**
