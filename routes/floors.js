@@ -69,9 +69,21 @@ router.get('/', async (req, res) => {
 
     // Fetch floors with pagination
     const floors = await Floor.find(filterQuery)
-      .populate('site_id', 'site_name address')
-      .populate('building_id', 'building_name building_code')
-      .populate('customer_id', 'organisation.organisation_name')
+      .populate({
+        path: 'site_id',
+        select: 'site_name address',
+        options: { strictPopulate: false }
+      })
+      .populate({
+        path: 'building_id',
+        select: 'building_name building_code',
+        options: { strictPopulate: false }
+      })
+      .populate({
+        path: 'customer_id',
+        select: 'organisation.organisation_name',
+        options: { strictPopulate: false }
+      })
       .sort(sortConfig)
       .skip(skip)
       .limit(limit);

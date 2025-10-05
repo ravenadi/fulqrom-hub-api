@@ -1,8 +1,14 @@
 // Dropdown Constants for all modules
 // Fulqrom Hub - Australian Commercial Real Estate & HVAC Building Management
 
+// NOTE: These constants are now loaded from the database via GET /api/dropdowns
+// This file serves as the default/fallback values for the dropdown API
+// The actual dropdown values are stored in the Settings collection with setting_key='dropdown_values'
+// and can be managed dynamically through the API
+
 const DROPDOWN_CONSTANTS = {
   // Customer module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as customer_industry_types)
   customer: {
     industry_types: [
       'Commercial Real Estate',
@@ -17,6 +23,7 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Contact module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as contact_role_types, contact_contact_types, contact_platform_access)
   contact: {
     role_types: [
       'Primary',
@@ -43,6 +50,7 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Site module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as site_site_types, site_site_statuses, etc.)
   site: {
     site_types: [
       'Commercial Office',
@@ -78,6 +86,7 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Building module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as building_building_types, building_building_statuses)
   building: {
     building_types: [
       'Office',
@@ -99,6 +108,7 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Floor module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as floor_floor_types, floor_floor_statuses, floor_floor_area_units)
   floor: {
     floor_types: [
       'Office',
@@ -123,6 +133,7 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Tenant module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as tenant_tenant_industry_types, tenant_tenant_lease_statuses, etc.)
   tenant: {
     tenant_industry_types: [
       'Technology',
@@ -157,6 +168,7 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Document module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as document_document_types, document_document_categories, etc.)
   document: {
     document_types: [
       'PDF',
@@ -190,6 +202,12 @@ const DROPDOWN_CONSTANTS = {
       'Fire Protection',
       'HVAC',
       'Telecommunications'
+    ],
+    document_approval_statuses: [
+      'Pending',
+      'Approved',
+      'Rejected',
+      'Under Review'
     ]
   }
 };

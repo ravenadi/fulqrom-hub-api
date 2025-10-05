@@ -133,7 +133,7 @@ const CustomerSchema = new mongoose.Schema({
 const MetadataSchema = new mongoose.Schema({
   engineering_discipline: {
     type: String,
-    enum: ['Architectural', 'Structural', 'Electrical', 'Mechanical'],
+    enum: ['Mechanical', 'Electrical', 'Plumbing', 'Structural', 'Civil', 'Fire Protection', 'HVAC', 'Telecommunications'],
     trim: true
   },
   regulatory_framework: {
@@ -249,12 +249,12 @@ const DocumentSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['compliance', 'standards', 'management', 'general', 'service_report'],
+    enum: ['PDF', 'Word', 'Excel', 'Image', 'CAD', 'BIM', 'Other'],
     trim: true
   },
   engineering_discipline: {
     type: String,
-    enum: ['Architectural', 'Structural', 'Electrical', 'Mechanical'],
+    enum: ['Mechanical', 'Electrical', 'Plumbing', 'Structural', 'Civil', 'Fire Protection', 'HVAC', 'Telecommunications'],
     trim: true
   },
 

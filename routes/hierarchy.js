@@ -10,10 +10,33 @@ const router = express.Router();
 
 // Function to generate floor levels based on actual asset levels
 function generateFloors(building, assets) {
-  // Group assets by their actual level values
+  // Helper function to normalize level values
+  const normalizeLevel = (level) => {
+    if (!level) return 'Unassigned';
+
+    // Trim whitespace and convert to string
+    let normalized = String(level).trim();
+
+    // Handle common variations
+    // Convert "Level 13" or "level 13" to "Lvl 13"
+    normalized = normalized.replace(/^level\s+/i, 'Lvl ');
+
+    // Ensure consistent casing for "Lvl"
+    normalized = normalized.replace(/^lvl\s+/i, 'Lvl ');
+
+    // Handle "L13" to "Lvl 13"
+    normalized = normalized.replace(/^L(\d+)$/i, 'Lvl $1');
+
+    // Remove extra spaces
+    normalized = normalized.replace(/\s+/g, ' ');
+
+    return normalized;
+  };
+
+  // Group assets by their normalized level values
   const assetsByLevel = {};
   assets.forEach(asset => {
-    const level = asset.level || 'Unassigned';
+    const level = normalizeLevel(asset.level);
     if (!assetsByLevel[level]) {
       assetsByLevel[level] = [];
     }
@@ -57,8 +80,11 @@ function generateFloors(building, assets) {
       floorDisplayName = `Level ${levelNum}`;
     }
 
+    // Create a unique floor ID based on building and normalized level
+    const floorId = `${building._id}_${level.replace(/\s+/g, '_')}`;
+
     const floor = {
-      id: `${building._id}_floor_${index}`,
+      id: floorId,
       name: floorDisplayName,
       type: 'floor',
       details: {
@@ -82,7 +108,20 @@ function generateFloors(building, assets) {
     return aLevel.localeCompare(bLevel);
   });
 
-  return floors;
+  // Final deduplication check - ensure no duplicate floor IDs
+  const seenFloorIds = new Set();
+  const uniqueFloors = [];
+
+  for (const floor of floors) {
+    if (!seenFloorIds.has(floor.id)) {
+      seenFloorIds.add(floor.id);
+      uniqueFloors.push(floor);
+    } else {
+      console.warn(`Duplicate floor detected and removed: ${floor.name} (ID: ${floor.id})`);
+    }
+  }
+
+  return uniqueFloors;
 }
 
 // GET /api/hierarchy/:customer_id - Get hierarchical structure for customer

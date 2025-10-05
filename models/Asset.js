@@ -226,19 +226,25 @@ AssetSchema.index({ customer_id: 1, category: 1 });
 AssetSchema.index({ site_id: 1, status: 1 });
 AssetSchema.index({ category: 1, status: 1 });
 
+// Unique constraint: One asset_no per customer_id (sparse index - only applies when asset_no exists)
+AssetSchema.index({ customer_id: 1, asset_no: 1 }, { unique: true, sparse: true });
+
 // Ensure virtual fields are serialized and preserve unpopulated IDs
 AssetSchema.set('toJSON', {
   virtuals: true,
   transform: function(doc, ret) {
     // Preserve ObjectId if population returned null
-    if (ret.customer_id === null && doc._doc.customer_id) {
-      ret.customer_id = doc._doc.customer_id;
+    if (ret.customer_id === null) {
+      const originalId = doc.populated('customer_id') || doc._doc?.customer_id || doc.customer_id;
+      if (originalId) ret.customer_id = originalId;
     }
-    if (ret.site_id === null && doc._doc.site_id) {
-      ret.site_id = doc._doc.site_id;
+    if (ret.site_id === null) {
+      const originalId = doc.populated('site_id') || doc._doc?.site_id || doc.site_id;
+      if (originalId) ret.site_id = originalId;
     }
-    if (ret.building_id === null && doc._doc.building_id) {
-      ret.building_id = doc._doc.building_id;
+    if (ret.building_id === null) {
+      const originalId = doc.populated('building_id') || doc._doc?.building_id || doc.building_id;
+      if (originalId) ret.building_id = originalId;
     }
     return ret;
   }

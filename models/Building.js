@@ -198,11 +198,13 @@ BuildingSchema.set('toJSON', {
   virtuals: true,
   transform: function(doc, ret) {
     // Preserve ObjectId if population returned null
-    if (ret.site_id === null && doc._doc.site_id) {
-      ret.site_id = doc._doc.site_id;
+    if (ret.site_id === null) {
+      const originalId = doc.populated('site_id') || doc._doc?.site_id || doc.site_id;
+      if (originalId) ret.site_id = originalId;
     }
-    if (ret.customer_id === null && doc._doc.customer_id) {
-      ret.customer_id = doc._doc.customer_id;
+    if (ret.customer_id === null) {
+      const originalId = doc.populated('customer_id') || doc._doc?.customer_id || doc.customer_id;
+      if (originalId) ret.customer_id = originalId;
     }
     return ret;
   }

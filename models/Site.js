@@ -314,8 +314,9 @@ SiteSchema.set('toJSON', {
   virtuals: true,
   transform: function(doc, ret) {
     // Preserve ObjectId if population returned null
-    if (ret.customer_id === null && doc._doc.customer_id) {
-      ret.customer_id = doc._doc.customer_id;
+    if (ret.customer_id === null) {
+      const originalId = doc.populated('customer_id') || doc._doc?.customer_id || doc.customer_id;
+      if (originalId) ret.customer_id = originalId;
     }
     return ret;
   }

@@ -1,5 +1,6 @@
 const express = require('express');
 const DROPDOWN_CONSTANTS = require('../constants/dropdownConstants');
+const Settings = require('../models/Settings');
 const Customer = require('../models/Customer');
 const Site = require('../models/Site');
 const Building = require('../models/Building');
@@ -342,25 +343,55 @@ router.get('/document-tags', async (req, res) => {
 // GET /api/dropdowns - Get all dropdown values for all modules
 router.get('/', async (req, res) => {
   try {
+    // Try to get dropdown settings from database
+    let dropdownSetting = await Settings.findOne({
+      setting_key: 'dropdown_values',
+      is_active: true
+    });
+
+    // If no database setting exists, create one with default values
+    if (!dropdownSetting) {
+      console.log('No dropdown settings found in database, creating default...');
+      dropdownSetting = await Settings.create({
+        setting_key: 'dropdown_values',
+        category: 'system',
+        setting_type: 'dropdown',
+        description: 'Application-wide dropdown values for all modules',
+        value: DROPDOWN_CONSTANTS,
+        default_value: DROPDOWN_CONSTANTS,
+        is_active: true,
+        is_editable: true,
+        created_by: 'system',
+        updated_by: 'system'
+      });
+    }
+
     // Return flattened structure to match frontend
+    const flattened = flattenDropdowns(dropdownSetting.value);
+
+    res.status(200).json({
+      success: true,
+      data: flattened,
+      source: 'database',
+      last_updated: dropdownSetting.updated_at
+    });
+  } catch (error) {
+    console.error('Error fetching dropdown values:', error);
+
+    // Fallback to constants if database fails
     const flattened = flattenDropdowns(DROPDOWN_CONSTANTS);
 
     res.status(200).json({
       success: true,
-      data: flattened
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching dropdown values',
-      error: error.message
+      data: flattened,
+      source: 'fallback_constants',
+      warning: 'Using fallback constants due to database error'
     });
   }
 });
 
 // POST /api/dropdowns - Update all dropdown values
-// Note: This endpoint updates the in-memory constants
-// For persistent storage, you would need to implement database storage
+// This endpoint now persists changes to the database
 router.post('/', async (req, res) => {
   try {
     const flattenedUpdates = req.body;
@@ -368,25 +399,44 @@ router.post('/', async (req, res) => {
     // Convert flattened format back to nested structure
     const nestedUpdates = unflattenDropdowns(flattenedUpdates);
 
-    // Update the constants (in-memory only)
-    // For production, you would want to persist this to a database
-    Object.keys(nestedUpdates).forEach(module => {
-      if (DROPDOWN_CONSTANTS[module]) {
-        Object.keys(nestedUpdates[module]).forEach(field => {
-          DROPDOWN_CONSTANTS[module][field] = nestedUpdates[module][field];
-        });
-      }
+    // Get or create dropdown setting
+    let dropdownSetting = await Settings.findOne({
+      setting_key: 'dropdown_values'
     });
 
+    if (!dropdownSetting) {
+      // Create new setting with updates
+      dropdownSetting = await Settings.create({
+        setting_key: 'dropdown_values',
+        category: 'system',
+        setting_type: 'dropdown',
+        description: 'Application-wide dropdown values for all modules',
+        value: nestedUpdates,
+        default_value: DROPDOWN_CONSTANTS,
+        is_active: true,
+        is_editable: true,
+        created_by: req.body.updated_by || 'user',
+        updated_by: req.body.updated_by || 'user'
+      });
+    } else {
+      // Update existing setting
+      dropdownSetting.value = nestedUpdates;
+      dropdownSetting.updated_by = req.body.updated_by || 'user';
+      dropdownSetting.updated_at = new Date();
+      await dropdownSetting.save();
+    }
+
     // Return flattened structure to match frontend
-    const flattened = flattenDropdowns(DROPDOWN_CONSTANTS);
+    const flattened = flattenDropdowns(dropdownSetting.value);
 
     res.status(200).json({
       success: true,
-      message: 'Dropdown values updated successfully',
-      data: flattened
+      message: 'Dropdown values updated successfully and saved to database',
+      data: flattened,
+      last_updated: dropdownSetting.updated_at
     });
   } catch (error) {
+    console.error('Error updating dropdown values:', error);
     res.status(500).json({
       success: false,
       message: 'Error updating dropdown values',
@@ -400,21 +450,30 @@ router.get('/:module/:field', async (req, res) => {
   try {
     const { module, field } = req.params;
 
+    // Get dropdown settings from database
+    let dropdownSetting = await Settings.findOne({
+      setting_key: 'dropdown_values',
+      is_active: true
+    });
+
+    // Use constants as fallback
+    const dropdownSource = dropdownSetting ? dropdownSetting.value : DROPDOWN_CONSTANTS;
+
     // Check if module exists
-    if (!DROPDOWN_CONSTANTS[module]) {
+    if (!dropdownSource[module]) {
       return res.status(404).json({
         success: false,
         message: `Module '${module}' not found`,
-        availableModules: Object.keys(DROPDOWN_CONSTANTS)
+        availableModules: Object.keys(dropdownSource)
       });
     }
 
     // Check if field exists in module
-    if (!DROPDOWN_CONSTANTS[module][field]) {
+    if (!dropdownSource[module][field]) {
       return res.status(404).json({
         success: false,
         message: `Field '${field}' not found in module '${module}'`,
-        availableFields: Object.keys(DROPDOWN_CONSTANTS[module])
+        availableFields: Object.keys(dropdownSource[module])
       });
     }
 
@@ -422,7 +481,8 @@ router.get('/:module/:field', async (req, res) => {
       success: true,
       module: module,
       field: field,
-      data: DROPDOWN_CONSTANTS[module][field]
+      data: dropdownSource[module][field],
+      source: dropdownSetting ? 'database' : 'fallback_constants'
     });
   } catch (error) {
     res.status(500).json({
@@ -439,19 +499,29 @@ router.get('/:module', async (req, res) => {
   try {
     const { module } = req.params;
 
-    // Check if module exists in constants
-    if (!DROPDOWN_CONSTANTS[module]) {
+    // Get dropdown settings from database
+    let dropdownSetting = await Settings.findOne({
+      setting_key: 'dropdown_values',
+      is_active: true
+    });
+
+    // Use constants as fallback
+    const dropdownSource = dropdownSetting ? dropdownSetting.value : DROPDOWN_CONSTANTS;
+
+    // Check if module exists
+    if (!dropdownSource[module]) {
       return res.status(404).json({
         success: false,
         message: `Module '${module}' not found`,
-        availableModules: Object.keys(DROPDOWN_CONSTANTS)
+        availableModules: Object.keys(dropdownSource)
       });
     }
 
     res.status(200).json({
       success: true,
       module: module,
-      data: DROPDOWN_CONSTANTS[module]
+      data: dropdownSource[module],
+      source: dropdownSetting ? 'database' : 'fallback_constants'
     });
   } catch (error) {
     res.status(500).json({
