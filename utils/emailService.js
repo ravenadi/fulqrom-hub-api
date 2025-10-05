@@ -12,17 +12,26 @@ class EmailService {
     this.provider = process.env.EMAIL_PROVIDER || 'console';
     this.fromAddress = process.env.EMAIL_FROM_ADDRESS || 'noreply@fulqrom.com';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Fulqrom Hub';
-    this.appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+    this.appBaseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
     // Initialize email provider
     this.initializeProvider();
   }
 
   /**
-   * Initialize email provider (SendGrid, AWS SES, etc.)
+   * Initialize email provider (SMTP, SendGrid, AWS SES, etc.)
    */
   initializeProvider() {
-    if (this.provider === 'sendgrid') {
+    if (this.provider === 'smtp') {
+      try {
+        const { createTransporter } = require('./mailer');
+        this.client = createTransporter();
+        console.log('✓ SMTP email provider initialized');
+      } catch (error) {
+        console.warn('⚠ SMTP not available, falling back to console logging');
+        this.provider = 'console';
+      }
+    } else if (this.provider === 'sendgrid') {
       try {
         const sgMail = require('@sendgrid/mail');
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -117,7 +126,9 @@ class EmailService {
 
       // Send email based on provider
       let result;
-      if (this.provider === 'sendgrid') {
+      if (this.provider === 'smtp') {
+        result = await this.sendViaSMTP({ to, subject, html });
+      } else if (this.provider === 'sendgrid') {
         result = await this.sendViaSendGrid({ to, subject, html });
       } else if (this.provider === 'ses') {
         result = await this.sendViaSES({ to, subject, html });
@@ -150,6 +161,22 @@ class EmailService {
         notificationId: notification._id
       };
     }
+  }
+
+  /**
+   * Send email via SMTP (nodemailer)
+   */
+  async sendViaSMTP({ to, subject, html }) {
+    const info = await this.client.sendMail({
+      from: `${this.fromName} <${this.fromAddress}>`,
+      to,
+      subject,
+      html
+    });
+
+    return {
+      messageId: info.messageId || 'smtp-' + Date.now()
+    };
   }
 
   /**

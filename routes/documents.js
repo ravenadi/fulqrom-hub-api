@@ -1705,9 +1705,13 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     );
 
     // Create new version document
+    const currentDocData = currentDocument.toObject();
+
+    // Delete _id to let MongoDB generate a new one
+    delete currentDocData._id;
+
     const newVersionData = {
-      ...currentDocument.toObject(),
-      _id: undefined, // Let MongoDB generate new ID
+      ...currentDocData,
       document_group_id: documentGroupId,
       version_number: newVersionNumber,
       is_current_version: true,
@@ -1920,9 +1924,13 @@ router.post('/versions/:versionId/restore', validateObjectId, async (req, res) =
     }
 
     // Create new document as restored version
+    const restoreDocData = versionToRestore.toObject();
+
+    // Delete _id to let MongoDB generate a new one
+    delete restoreDocData._id;
+
     const restoredVersionData = {
-      ...versionToRestore.toObject(),
-      _id: undefined, // Let MongoDB generate new ID
+      ...restoreDocData,
       version_number: newVersionNumber,
       version: newVersionNumber,
       is_current_version: true,
