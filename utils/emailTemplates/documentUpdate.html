@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            background-color: #0ea5e9;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .greeting {
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        .info-box {
+            background-color: #f9fafb;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+            border-left: 4px solid #0ea5e9;
+        }
+        .info-box h3 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #1e293b;
+        }
+        .details {
+            margin: 15px 0;
+        }
+        .details-row {
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .details-row:last-child {
+            border-bottom: none;
+        }
+        .label {
+            font-weight: 600;
+            color: #64748b;
+            display: inline-block;
+            min-width: 140px;
+        }
+        .value {
+            color: #1e293b;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .status-approved {
+            background-color: #10b981;
+            color: white;
+        }
+        .status-rejected {
+            background-color: #ef4444;
+            color: white;
+        }
+        .status-pending {
+            background-color: #f59e0b;
+            color: white;
+        }
+        .status-changes {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #fff7ed;
+            border-radius: 6px;
+            border-left: 4px solid #f59e0b;
+        }
+        .comment-box {
+            background-color: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #0ea5e9;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .comment-box h4 {
+            margin: 0 0 12px 0;
+            color: #1e293b;
+        }
+        .comment-box p {
+            margin: 0;
+            color: #475569;
+        }
+        .mentioned-users {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e7eb;
+            color: #64748b;
+            font-size: 14px;
+        }
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #0ea5e9;
+            color: white;
+            padding: 14px 32px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .button:hover {
+            background-color: #0284c7;
+        }
+        .footer {
+            background-color: #f9fafb;
+            color: #64748b;
+            font-size: 13px;
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>📋 Document Review Update</h2>
+        </div>
+
+        <div class="content">
+            <p class="greeting">G'day {{creator_name}},</p>
+
+            <p>Your document has been reviewed and updated.</p>
+
+            <div class="info-box">
+                <h3>Document Details</h3>
+                <div class="details">
+                    <div class="details-row">
+                        <span class="label">Document Name:</span>
+                        <span class="value">{{document_name}}</span>
+                    </div>
+                    <div class="details-row">
+                        <span class="label">Category:</span>
+                        <span class="value">{{document_category}}</span>
+                    </div>
+                    <div class="details-row">
+                        <span class="label">Type:</span>
+                        <span class="value">{{document_type}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-changes">
+                <div style="margin-bottom: 10px;">
+                    <span class="label">Status Update:</span>
+                    <span class="status-badge status-{{status_class}}">{{new_status}}</span>
+                </div>
+
+                {{#if status_changed}}
+                <div style="margin-bottom: 10px;">
+                    <span class="label">Previous Status:</span>
+                    <span class="value">{{old_status}}</span>
+                </div>
+                {{/if}}
+
+                <div>
+                    <span class="label">Reviewed By:</span>
+                    <span class="value">{{reviewer_name}}</span>
+                    <span style="color: #64748b; font-size: 14px; margin-left: 10px;">{{review_date_formatted}}</span>
+                </div>
+            </div>
+
+            {{#if comment}}
+            <div class="comment-box">
+                <h4>💬 Review Comment</h4>
+                <p>{{comment}}</p>
+
+                {{#if mentioned_users_list}}
+                <div class="mentioned-users">
+                    <strong>Mentioned:</strong> {{mentioned_users_list}}
+                </div>
+                {{/if}}
+            </div>
+            {{/if}}
+
+            <div class="button-container">
+                <a href="{{document_url}}" class="button">View Document</a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>Fulqrom Hub</strong> - Australian Building Management System</p>
+            <p>This is an automated notification from Fulqrom Hub.</p>
+            <p>If you have any questions, please contact your system administrator.</p>
+        </div>
+    </div>
+</body>
+</html>
