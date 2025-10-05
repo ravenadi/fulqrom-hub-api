@@ -86,8 +86,12 @@ async function fetchEntityNames(documentData) {
     if (documentData.asset_id) {
       const asset = await Asset.findById(documentData.asset_id.toString());
       if (asset) {
-        entityNames.asset_name = asset.asset_name;
-        entityNames.asset_type = asset.asset_type;
+        // Build asset name from available fields
+        entityNames.asset_name = asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset';
+        entityNames.asset_type = asset.type || asset.category;
+      } else {
+        // Asset not found, use default name
+        entityNames.asset_name = `Asset ${documentData.asset_id}`;
       }
     }
 
@@ -438,6 +442,11 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
         access_users: documentData.access_users || []
       },
 
+      // Approval workflow
+      approval_required: documentData.approval_required || false,
+      approved_by: documentData.approved_by,
+      approval_status: documentData.approval_status || 'Pending',
+
       // Audit fields
       created_by: documentData.created_by,
       created_at: new Date().toISOString(),
@@ -445,39 +454,39 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
     };
 
     // Add location associations if IDs are provided
-    if (documentData.site_id && entityNames.site_name) {
+    if (documentData.site_id) {
       documentPayload.location.site = {
         site_id: documentData.site_id,
-        site_name: entityNames.site_name
+        ...(entityNames.site_name && { site_name: entityNames.site_name })
       };
     }
 
-    if (documentData.building_id && entityNames.building_name) {
+    if (documentData.building_id) {
       documentPayload.location.building = {
         building_id: documentData.building_id,
-        building_name: entityNames.building_name
+        ...(entityNames.building_name && { building_name: entityNames.building_name })
       };
     }
 
-    if (documentData.floor_id && entityNames.floor_name) {
+    if (documentData.floor_id) {
       documentPayload.location.floor = {
         floor_id: documentData.floor_id,
-        floor_name: entityNames.floor_name
+        ...(entityNames.floor_name && { floor_name: entityNames.floor_name })
       };
     }
 
-    if (documentData.asset_id && entityNames.asset_name) {
+    if (documentData.asset_id) {
       documentPayload.location.asset = {
         asset_id: documentData.asset_id,
-        asset_name: entityNames.asset_name,
-        asset_type: entityNames.asset_type
+        ...(entityNames.asset_name && { asset_name: entityNames.asset_name }),
+        ...(entityNames.asset_type && { asset_type: entityNames.asset_type })
       };
     }
 
-    if (documentData.tenant_id && entityNames.tenant_name) {
+    if (documentData.tenant_id) {
       documentPayload.location.tenant = {
         tenant_id: documentData.tenant_id,
-        tenant_name: entityNames.tenant_name
+        ...(entityNames.tenant_name && { tenant_name: entityNames.tenant_name })
       };
     }
 

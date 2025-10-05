@@ -287,6 +287,22 @@ const DocumentSchema = new mongoose.Schema({
   // Access Control
   access_control: AccessControlSchema,
 
+  // Approval workflow
+  approval_required: {
+    type: Boolean,
+    default: false
+  },
+  approved_by: {
+    type: String,
+    trim: true
+  },
+  approval_status: {
+    type: String,
+    enum: ['Pending', 'Approved', 'Rejected'],
+    default: 'Pending',
+    trim: true
+  },
+
   // Audit Fields
   created_by: {
     type: String,
@@ -361,6 +377,11 @@ DocumentSchema.index({ 'drawing_info.date_issued': -1 });
 // Access Control indexes
 DocumentSchema.index({ 'access_control.access_level': 1 });
 DocumentSchema.index({ 'access_control.access_users': 1 });
+
+// Approval workflow indexes
+DocumentSchema.index({ approval_status: 1 });
+DocumentSchema.index({ approval_required: 1 });
+DocumentSchema.index({ approved_by: 1 });
 
 // Compound indexes
 DocumentSchema.index({ 'customer.customer_id': 1, category: 1 });

@@ -309,8 +309,17 @@ SiteSchema.index({ 'address.postcode': 1 });
 SiteSchema.index({ type: 1 });
 SiteSchema.index({ 'manager.name': 1 });
 
-// Ensure virtual fields are serialized
-SiteSchema.set('toJSON', { virtuals: true });
+// Ensure virtual fields are serialized and preserve unpopulated IDs
+SiteSchema.set('toJSON', {
+  virtuals: true,
+  transform: function(doc, ret) {
+    // Preserve ObjectId if population returned null
+    if (ret.customer_id === null && doc._doc.customer_id) {
+      ret.customer_id = doc._doc.customer_id;
+    }
+    return ret;
+  }
+});
 SiteSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Site', SiteSchema);

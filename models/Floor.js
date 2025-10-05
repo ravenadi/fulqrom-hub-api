@@ -179,8 +179,23 @@ FloorSchema.index({ building_id: 1, floor_name: 1 });
 FloorSchema.index({ site_id: 1, building_id: 1 });
 FloorSchema.index({ customer_id: 1, building_id: 1 });
 
-// Ensure virtual fields are serialized
-FloorSchema.set('toJSON', { virtuals: true });
+// Ensure virtual fields are serialized and preserve unpopulated IDs
+FloorSchema.set('toJSON', {
+  virtuals: true,
+  transform: function(doc, ret) {
+    // Preserve ObjectId if population returned null
+    if (ret.site_id === null && doc._doc.site_id) {
+      ret.site_id = doc._doc.site_id;
+    }
+    if (ret.building_id === null && doc._doc.building_id) {
+      ret.building_id = doc._doc.building_id;
+    }
+    if (ret.customer_id === null && doc._doc.customer_id) {
+      ret.customer_id = doc._doc.customer_id;
+    }
+    return ret;
+  }
+});
 FloorSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Floor', FloorSchema);

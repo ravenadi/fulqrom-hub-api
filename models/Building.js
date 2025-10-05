@@ -193,8 +193,20 @@ BuildingSchema.index({ customer_id: 1, site_id: 1 });
 BuildingSchema.index({ site_id: 1, status: 1 });
 BuildingSchema.index({ building_type: 1, status: 1 });
 
-// Ensure virtual fields are serialized
-BuildingSchema.set('toJSON', { virtuals: true });
+// Ensure virtual fields are serialized and preserve unpopulated IDs
+BuildingSchema.set('toJSON', {
+  virtuals: true,
+  transform: function(doc, ret) {
+    // Preserve ObjectId if population returned null
+    if (ret.site_id === null && doc._doc.site_id) {
+      ret.site_id = doc._doc.site_id;
+    }
+    if (ret.customer_id === null && doc._doc.customer_id) {
+      ret.customer_id = doc._doc.customer_id;
+    }
+    return ret;
+  }
+});
 BuildingSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Building', BuildingSchema);
