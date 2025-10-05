@@ -28,6 +28,10 @@ const AssetSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Building'
   },
+  floor_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Floor'
+  },
 
   // Primary Information
   asset_id: {
@@ -62,7 +66,7 @@ const AssetSchema = new mongoose.Schema({
   condition: {
     type: String,
     trim: true
-    // Good, Average, Poor, etc.
+    // Excellent, Good, Average, Poor, Critical
   },
 
   // Details
@@ -132,15 +136,53 @@ const AssetSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Lifecycle & Maintenance
+  warranty_expiry: {
+    type: Date
+  },
+  service_contractor: {
+    type: String,
+    trim: true,
+    maxlength: 255
+  },
+  last_service_date: {
+    type: Date
+  },
+  next_service_due: {
+    type: Date
+  },
+
   // Financial Information
   purchase_cost_aud: {
-    type: Number
+    type: Number,
+    min: 0
   },
   current_book_value_aud: {
-    type: Number
+    type: Number,
+    min: 0
   },
   weight_kgs: {
     type: Number
+  },
+
+  // Additional Specifications
+  energy_rating: {
+    type: String,
+    trim: true,
+    maxlength: 50
+  },
+  capacity_specifications: {
+    type: String,
+    trim: true
+  },
+  qr_code: {
+    type: String,
+    trim: true,
+    maxlength: 255
+  },
+  notes: {
+    type: String,
+    trim: true
   },
 
   // System fields
@@ -214,11 +256,13 @@ AssetSchema.index({ asset_id: 1 });
 AssetSchema.index({ customer_id: 1 });
 AssetSchema.index({ site_id: 1 });
 AssetSchema.index({ building_id: 1 });
+AssetSchema.index({ floor_id: 1 });
 AssetSchema.index({ category: 1 });
 AssetSchema.index({ status: 1 });
 AssetSchema.index({ condition: 1 });
 AssetSchema.index({ make: 1 });
 AssetSchema.index({ warranty_expiry: 1 });
+AssetSchema.index({ next_service_due: 1 });
 AssetSchema.index({ is_active: 1 });
 
 // Compound indexes for common queries
@@ -246,6 +290,11 @@ AssetSchema.set('toJSON', {
       const originalId = doc.populated('building_id') || doc._doc?.building_id || doc.building_id;
       if (originalId) ret.building_id = originalId;
     }
+    if (ret.floor_id === null) {
+      const originalId = doc.populated('floor_id') || doc._doc?.floor_id || doc.floor_id;
+      if (originalId) ret.floor_id = originalId;
+    }
+
     return ret;
   }
 });

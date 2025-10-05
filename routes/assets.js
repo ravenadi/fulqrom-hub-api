@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Asset = require('../models/Asset');
+const { validateCreateAsset, validateUpdateAsset } = require('../middleware/assetValidation');
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ router.get('/', async (req, res) => {
       customer_id,
       site_id,
       building_id,
+      floor_id,
       category,
       status,
       condition,
@@ -24,6 +26,7 @@ router.get('/', async (req, res) => {
       refrigerant,
       owner,
       service_status,
+      service_contractor,
       age_min,
       age_max,
       purchase_cost_min,
@@ -31,6 +34,7 @@ router.get('/', async (req, res) => {
       current_value_min,
       current_value_max,
       test_result,
+      energy_rating,
       is_active,
       search,
       page = 1,
@@ -54,6 +58,10 @@ router.get('/', async (req, res) => {
       filterQuery.building_id = building_id;
     }
 
+    if (floor_id) {
+      filterQuery.floor_id = floor_id;
+    }
+
     if (category) {
       filterQuery.category = category;
     }
@@ -72,6 +80,14 @@ router.get('/', async (req, res) => {
 
     if (model) {
       filterQuery.model = new RegExp(model, 'i');
+    }
+
+    if (service_contractor) {
+      filterQuery.service_contractor = new RegExp(service_contractor, 'i');
+    }
+
+    if (energy_rating) {
+      filterQuery.energy_rating = new RegExp(energy_rating, 'i');
     }
 
     if (level) {
@@ -139,7 +155,10 @@ router.get('/', async (req, res) => {
         { serial: new RegExp(search, 'i') },
         { area: new RegExp(search, 'i') },
         { category: new RegExp(search, 'i') },
-        { type: new RegExp(search, 'i') }
+        { type: new RegExp(search, 'i') },
+        { service_contractor: new RegExp(search, 'i') },
+        { qr_code: new RegExp(search, 'i') },
+        { notes: new RegExp(search, 'i') }
       ];
     }
 
@@ -153,7 +172,15 @@ router.get('/', async (req, res) => {
     const skip = (pageNumber - 1) * limitNumber;
 
     // Sort configuration
-    const sortField = ['createdAt', 'updatedAt', 'asset_no', 'asset_id', 'device_id', 'category', 'status', 'condition', 'make', 'model', 'level', 'area', 'age', 'purchase_cost_aud', 'current_book_value_aud'].includes(sort_by) ? sort_by : 'createdAt';
+    const validSortFields = [
+      'createdAt', 'updatedAt', 'asset_no', 'asset_id', 'device_id',
+      'category', 'status', 'condition',
+      'make', 'model',
+      'level', 'area', 'age',
+      'purchase_cost_aud', 'current_book_value_aud',
+      'warranty_expiry', 'next_service_due', 'last_service_date'
+    ];
+    const sortField = validSortFields.includes(sort_by) ? sort_by : 'createdAt';
     const sortDirection = sort_order === 'asc' ? 1 : -1;
 
     // Get total count for pagination
@@ -164,6 +191,7 @@ router.get('/', async (req, res) => {
       .populate('customer_id', 'organisation.organisation_name')
       .populate('site_id', 'site_name address')
       .populate('building_id', 'building_name building_code')
+      .populate('floor_id', 'floor_name floor_level')
       .sort({ [sortField]: sortDirection })
       .skip(skip)
       .limit(limitNumber);
@@ -277,7 +305,8 @@ router.get('/:id', async (req, res) => {
     const asset = await Asset.findById(req.params.id)
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address')
-      .populate('building_id', 'building_name building_code');
+      .populate('building_id', 'building_name building_code')
+      .populate('floor_id', 'floor_name floor_level');
 
     if (!asset) {
       return res.status(404).json({
@@ -300,7 +329,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/assets - Create new asset
-router.post('/', async (req, res) => {
+router.post('/', validateCreateAsset, async (req, res) => {
   try {
     // Ensure required fields are present
     const { customer_id, site_id, building_id, ...otherFields } = req.body;
@@ -327,6 +356,7 @@ router.post('/', async (req, res) => {
     await asset.populate('customer_id', 'organisation.organisation_name');
     await asset.populate('site_id', 'site_name address');
     await asset.populate('building_id', 'building_name building_code');
+    await asset.populate('floor_id', 'floor_name floor_level');
 
     res.status(201).json({
       success: true,
@@ -343,7 +373,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/assets/:id - Update asset
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateUpdateAsset, async (req, res) => {
   try {
     // Extract fields to ensure proper handling
     const { customer_id, site_id, building_id, ...otherFields } = req.body;
@@ -365,7 +395,8 @@ router.put('/:id', async (req, res) => {
     )
     .populate('customer_id', 'organisation.organisation_name')
     .populate('site_id', 'site_name address')
-    .populate('building_id', 'building_name building_code');
+    .populate('building_id', 'building_name building_code')
+    .populate('floor_id', 'floor_name floor_level');
 
     if (!asset) {
       return res.status(404).json({

@@ -243,15 +243,15 @@ router.get('/entities/tenants', async (req, res) => {
     if (tenant_status) filter.tenant_status = tenant_status;
 
     const tenants = await Tenant.find(filter)
-      .select('_id tenant_name building_id site_id customer_id')
-      .sort({ tenant_name: 1 })
+      .select('_id  tenant_trading_name tenant_legal_name building_id site_id customer_id')
+      .sort({ tenant_trading_name: 1, tenant_legal_name: 1, tenant_name: 1 })
       .lean();
 
     const formattedTenants = tenants.map(tenant => ({
       id: tenant._id,
-      label: tenant.tenant_name || 'Unnamed Tenant',
+      label: tenant.tenant_trading_name || tenant.tenant_legal_name || 'Unnamed Tenant',
       value: tenant._id,
-      tenant_name: tenant.tenant_name,
+      tenant_name: tenant.tenant_trading_name || tenant.tenant_legal_name ,
       building_id: tenant.building_id,
       site_id: tenant.site_id,
       customer_id: tenant.customer_id
@@ -282,16 +282,16 @@ router.get('/entities/vendors', async (req, res) => {
     }
 
     const vendors = await Vendor.find(filter)
-      .select('_id name category')
-      .sort({ name: 1 })
+      .select('_id contractor_name trading_name contractor_type')
+      .sort({ trading_name: 1, contractor_name: 1 })
       .lean();
 
     const formattedVendors = vendors.map(vendor => ({
       id: vendor._id,
-      label: vendor.name || 'Unnamed Vendor',
+      label: vendor.trading_name || vendor.contractor_name || 'Unnamed Vendor',
       value: vendor._id,
-      vendor_name: vendor.name,
-      category: vendor.category
+      vendor_name: vendor.trading_name || vendor.contractor_name,
+      category: vendor.contractor_type
     }));
 
     res.status(200).json({
