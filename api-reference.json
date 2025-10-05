@@ -2274,8 +2274,8 @@
     }
   },
   "databaseInfo": {
-    "connectionString": "mongodb+srv://shriramsoft_db_user:nbNKl1V3TpBAQhfo@cluster0.mulczg0.mongodb.net/fulqrom-hub",
-    "database": "fulqrom-hub",
+    "connectionString": "mongodb+srv://shriramsoft_db_user:nbNKl1V3TpBAQhfo@cluster0.mulczg0.mongodb.net/hub_fulqrom",
+    "database": "hub_fulqrom",
     "collections": [
       "customers",
       "sites",
@@ -2284,7 +2284,9 @@
       "tenants",
       "assets",
       "building_tenants",
-      "documents"
+      "documents",
+      "vendors",
+      "settings"
     ]
   },
   "australianStandards": {
@@ -2298,7 +2300,7 @@
     "distanceUnit": "metres (m)"
   },
   "notes": {
-    "apiVersion": "This API reference reflects the current implementation as of 2025-09-27",
+    "apiVersion": "This API reference reflects the current implementation as of 2025-10-05 (v1.2.0)",
     "routePrefix": "All API routes are prefixed with '/api/'",
     "tenantRouteDiscrepancy": "Tenant routes use '/api/building-tenants' in server.js but model collection is 'building_tenants'",
     "populatedFields": "Most GET requests populate referenced fields for better data context",
@@ -2327,6 +2329,8 @@
     "sitesSchemaEnhancement": "Sites schema updated (2025-10-05) with comprehensive property management fields: land_area (required, square metres), land_area_unit (default: m²), local_council (local government area), security_level (enum: Public Access, Controlled, High Security), shared_facilities (array: Car parks, Loading docks), note (additional information). Structured address support with street, suburb, state, postcode, coordinates, and full_address fields. All new fields optional for backward compatibility with existing records, defaults applied via aggregation pipeline.",
     "buildingsSchemaEnhancement": "Buildings schema updated (2025-10-05) with Australian compliance and accessibility features: primary_use (required enum: Office, Retail, Industrial, Warehouse, Mixed Use, Healthcare, Educational, Government, Hospitality, Other), last_inspection_date (Date, for AS1851 and AS3666 compliance tracking), accessibility_features (multi-select array: lifts, ramps, disabled_parking, accessible_toilets, hearing_loops, braille_signage, automatic_doors, wheelchair_access), parking_spaces (number, min: 0). Comprehensive validation on POST/PUT endpoints with field-specific error messages. NABERS rating (0-6 stars) for Australian energy compliance.",
     "floorsSchemaEnhancement": "Floors schema updated (2025-10-05) with enhanced operational fields and backward compatibility: occupancy field renamed to maximum_occupancy with virtual getter/setter maintaining full backward compatibility (both fields available in responses). New fields: occupancy_type (enum: Single Tenant, Multi Tenant, Common Area), access_control (enum: Public, Keycard Required, Restricted), fire_compartment (emergency planning/safety designation), hvac_zones (number, climate control zones), special_features (multi-select array: Equipment Room, Common Area, Server Room, Meeting Room, Kitchen, Storage). API layer automatically maps legacy 'occupancy' field to 'maximum_occupancy' in POST/PUT requests. Aggregation pipelines updated to use maximum_occupancy. All new fields optional with comprehensive validation.",
-    "schemaUpdateValidation": "All schema updates include comprehensive API-level validation with clear, actionable error messages. Validation rules enforce data integrity (min/max values, enum restrictions, array validation) while maintaining backward compatibility. Australian standards compliance for all new fields (BCA accessibility, AS1851/AS3666 inspection tracking, NABERS energy ratings, local council requirements)."
+    "schemaUpdateValidation": "All schema updates include comprehensive API-level validation with clear, actionable error messages. Validation rules enforce data integrity (min/max values, enum restrictions, array validation) while maintaining backward compatibility. Australian standards compliance for all new fields (BCA accessibility, AS1851/AS3666 inspection tracking, NABERS energy ratings, local council requirements).",
+    "assetsSchemaEnhancement": "Assets schema enhanced (2025-10-05 v1.2.0) with lifecycle management and technical specifications while maintaining full schema document compatibility. New lifecycle fields: warranty_expiry (Date), service_contractor (String, max 255), last_service_date (Date), next_service_due (Date). New technical fields: energy_rating (String, max 50), capacity_specifications (String), qr_code (String, max 255), notes (String). Added floor_id reference for precise floor-level asset tracking. All existing field names preserved per schema document (make, model, serial, condition, purchase_cost_aud, current_book_value_aud, asset_no, asset_id). Enhanced search across service_contractor, qr_code, notes fields. New sortable fields: warranty_expiry, next_service_due, last_service_date. Validation middleware added with ISO 8601 date validation, financial field constraints (min 0, 2 decimals), string length limits. No breaking changes - all updates additive.",
+    "dropdownDatabaseMigration": "Dropdown system migrated from hardcoded constants to database-driven values (2025-10-05 v1.1.0). All enum validations removed from models and middleware. Dropdown values now stored in Settings collection with setting_key='dropdown_values'. Added vendor module dropdowns (contractor_types, consultant_specialisations, certification_authorities, services_provided, license_types, insurance_types, status_types, business_types, vendor_statuses), customer_organisation_sizes, and contact_method_types. POST /api/dropdowns now persists changes to database. All dropdown endpoints return source field (database|fallback_constants) and last_updated timestamp. Frontend validation done via dropdown API, backend accepts any string values for flexibility."
   }
 }
