@@ -2,10 +2,24 @@
   "apiInfo": {
     "title": "Fulqrom Hub REST API",
     "description": "Australian Commercial Real Estate & HVAC Building Management System API",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "baseUrl": "http://localhost:30001",
-    "database": "MongoDB Atlas - fulqrom-hub collection",
-    "lastUpdated": "2025-10-05T00:00:00.000Z"
+    "database": "MongoDB Atlas - hub_fulqrom database",
+    "lastUpdated": "2025-10-05T12:00:00.000Z",
+    "changeLog": {
+      "v1.1.0": {
+        "date": "2025-10-05",
+        "changes": [
+          "Removed all hardcoded enum validations from models and middleware",
+          "Migrated dropdown values to database (Settings collection)",
+          "Added vendor module dropdown values (contractor_types, consultant_specialisations, etc.)",
+          "Added customer_organisation_sizes and contact_method_types dropdowns",
+          "POST /api/dropdowns now persists changes to database instead of in-memory only",
+          "All dropdown endpoints now return source field (database|fallback_constants)",
+          "Updated all models to accept any string values (validation done on frontend)"
+        ]
+      }
+    }
   },
   "endpoints": {
     "health": {
@@ -1528,53 +1542,104 @@
       "getAllDropdowns": {
         "method": "GET",
         "path": "/api/dropdowns",
-        "description": "Get all dropdown values for all modules (flattened format)",
+        "description": "Get all dropdown values for all modules from database (Settings collection)",
         "status": "IMPLEMENTED",
+        "notes": "Returns dropdown values stored in Settings collection with setting_key='dropdown_values'. Falls back to constants if database unavailable.",
         "response": {
           "success": true,
-          "data": "Flattened object with module_field keys (e.g., customer_industry_types, site_status_types)"
+          "data": {
+            "customer_industry_types": "Array of strings",
+            "customer_organisation_sizes": "Array of strings (1-10, 11-50, 51-200, 201-500, 501-1000, 1001+)",
+            "contact_role_types": "Array of strings",
+            "contact_contact_types": "Array of strings",
+            "contact_platform_access": "Array of strings",
+            "contact_method_types": "Array of strings (Email, Phone, SMS, WhatsApp)",
+            "site_site_types": "Array of strings",
+            "site_site_statuses": "Array of strings",
+            "site_site_security_levels": "Array of strings",
+            "site_site_states": "Array of strings (NSW, VIC, QLD, etc.)",
+            "building_building_types": "Array of strings",
+            "building_building_statuses": "Array of strings",
+            "floor_floor_types": "Array of strings",
+            "floor_floor_statuses": "Array of strings",
+            "floor_floor_area_units": "Array of strings",
+            "tenant_tenant_industry_types": "Array of strings",
+            "tenant_tenant_lease_statuses": "Array of strings",
+            "tenant_tenant_area_units": "Array of strings",
+            "tenant_tenant_rent_frequencies": "Array of strings",
+            "document_document_types": "Array of strings",
+            "document_document_categories": "Array of strings",
+            "document_document_statuses": "Array of strings",
+            "document_document_engineering_disciplines": "Array of strings",
+            "document_document_approval_statuses": "Array of strings",
+            "asset_categories": "Array of strings",
+            "asset_statuses": "Array of strings",
+            "asset_conditions": "Array of strings",
+            "vendor_contractor_types": "Array of strings",
+            "vendor_consultant_specialisations": "Array of strings",
+            "vendor_certification_authorities": "Array of strings",
+            "vendor_services_provided": "Array of strings",
+            "vendor_license_types": "Array of strings",
+            "vendor_insurance_types": "Array of strings",
+            "vendor_status_types": "Array of strings",
+            "vendor_business_types": "Array of strings",
+            "vendor_vendor_statuses": "Array of strings"
+          },
+          "source": "database | fallback_constants",
+          "last_updated": "ISO DateTime"
         }
       },
       "getModuleDropdowns": {
         "method": "GET",
         "path": "/api/dropdowns/:module",
-        "description": "Get dropdown values for a specific module",
+        "description": "Get dropdown values for a specific module from database",
         "status": "IMPLEMENTED",
         "params": {
-          "module": "Module name (customer, site, building, floor, asset, etc.)"
+          "module": "Module name (customer, contact, site, building, floor, tenant, document, asset, vendor)"
         },
         "response": {
           "success": true,
           "module": "string",
-          "data": "Object with dropdown fields for the module"
+          "data": "Object with dropdown fields for the module",
+          "source": "database | fallback_constants"
         }
       },
       "getFieldDropdown": {
         "method": "GET",
         "path": "/api/dropdowns/:module/:field",
-        "description": "Get specific field dropdown values",
+        "description": "Get specific field dropdown values from database",
         "status": "IMPLEMENTED",
         "params": {
-          "module": "Module name",
-          "field": "Field name"
+          "module": "Module name (customer, contact, site, building, floor, tenant, document, asset, vendor)",
+          "field": "Field name (e.g., industry_types, statuses, types)"
         },
         "response": {
           "success": true,
           "module": "string",
           "field": "string",
-          "data": "Array of dropdown values"
+          "data": "Array of dropdown values",
+          "source": "database | fallback_constants"
         }
       },
       "updateDropdowns": {
         "method": "POST",
         "path": "/api/dropdowns",
-        "description": "Update all dropdown values (in-memory only)",
+        "description": "Update all dropdown values and persist to database (Settings collection)",
         "status": "IMPLEMENTED",
-        "requestBody": "Flattened object with module_field keys",
+        "notes": "Updates dropdown values in Settings collection with setting_key='dropdown_values'. Changes are persisted and will be used for all future requests.",
+        "requestBody": {
+          "description": "Flattened object with module_field keys",
+          "example": {
+            "customer_industry_types": ["Type 1", "Type 2"],
+            "site_site_statuses": ["Active", "Inactive"],
+            "updated_by": "string (optional, defaults to 'user')"
+          }
+        },
         "response": {
           "success": true,
-          "message": "Dropdown values updated successfully",
-          "data": "Updated flattened dropdown object"
+          "message": "Dropdown values updated successfully and saved to database",
+          "data": "Updated flattened dropdown object",
+          "last_updated": "ISO DateTime"
         }
       },
       "getCustomersDropdown": {
