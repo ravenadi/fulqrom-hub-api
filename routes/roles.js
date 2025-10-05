@@ -1,0 +1,333 @@
+const express = require('express');
+const Role = require('../models/Role');
+const User = require('../models/User');
+
+const router = express.Router();
+
+// GET /api/roles - Get all roles with user counts
+router.get('/', async (req, res) => {
+  try {
+
+    const { page = 1, limit = 50, is_active } = req.query;
+
+    // Build filter query
+    let filterQuery = {};
+    if (is_active !== undefined) {
+      filterQuery.is_active = is_active === 'true';
+    }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Fetch roles
+    const [roles, totalRoles] = await Promise.all([
+      Role.find(filterQuery)
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Role.countDocuments(filterQuery)
+    ]);
+
+    // Get user counts for each role
+    const rolesWithCounts = await Promise.all(
+      roles.map(async (role) => {
+        const userCount = await User.countDocuments({ role_ids: role._id });
+        return {
+          ...role,
+          user_count: userCount
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      count: rolesWithCounts.length,
+      total: totalRoles,
+      page: pageNum,
+      pages: Math.ceil(totalRoles / limitNum),
+      data: rolesWithCounts
+    });
+
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching roles',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/roles/:id - Get role by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role ID format'
+      });
+    }
+
+    const role = await Role.findById(id);
+
+    if (!role) {
+      return res.status(404).json({
+        success: false,
+        message: 'Role not found'
+      });
+    }
+
+    // Get user count
+    const userCount = await User.countDocuments({ role_ids: role._id });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...role.toObject(),
+        user_count: userCount
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching role:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching role',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/roles - Create role
+router.post('/', async (req, res) => {
+  try {
+    const { name, description, is_active, permissions } = req.body;
+
+    // Validate required fields
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Role name is required'
+      });
+    }
+
+    // Check if role name already exists
+    const existingRole = await Role.findOne({ name: name.trim() });
+    if (existingRole) {
+      return res.status(400).json({
+        success: false,
+        message: 'Role with this name already exists'
+      });
+    }
+
+    // Create role
+    const role = new Role({
+      name: name.trim(),
+      description: description?.trim(),
+      is_active: is_active !== undefined ? is_active : true,
+      permissions: permissions || []
+    });
+
+    await role.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Role created successfully',
+      data: role
+    });
+
+  } catch (error) {
+    console.error('Error creating role:', error);
+    res.status(400).json({
+      success: false,
+      message: 'Error creating role',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/roles/:id - Update role
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, is_active, permissions } = req.body;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role ID format'
+      });
+    }
+
+    // Check if role exists
+    const role = await Role.findById(id);
+    if (!role) {
+      return res.status(404).json({
+        success: false,
+        message: 'Role not found'
+      });
+    }
+
+    // Check if new name conflicts with existing role
+    if (name && name.trim() !== role.name) {
+      const existingRole = await Role.findOne({ name: name.trim() });
+      if (existingRole) {
+        return res.status(400).json({
+          success: false,
+          message: 'Role with this name already exists'
+        });
+      }
+    }
+
+    // Update fields
+    if (name) role.name = name.trim();
+    if (description !== undefined) role.description = description?.trim();
+    if (is_active !== undefined) role.is_active = is_active;
+    if (permissions) role.permissions = permissions;
+
+    role.updated_at = new Date();
+    await role.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Role updated successfully',
+      data: role
+    });
+
+  } catch (error) {
+    console.error('Error updating role:', error);
+    res.status(400).json({
+      success: false,
+      message: 'Error updating role',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/roles/:id - Delete role
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role ID format'
+      });
+    }
+
+    // Check if role exists
+    const role = await Role.findById(id);
+    if (!role) {
+      return res.status(404).json({
+        success: false,
+        message: 'Role not found'
+      });
+    }
+
+    // Prevent deletion of Site Manager role
+    if (role.name === 'Site Manager') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete Site Manager role'
+      });
+    }
+
+    // Check if role is assigned to any users
+    const userCount = await User.countDocuments({ role_ids: role._id });
+    if (userCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete role. It is assigned to ${userCount} user(s). Please reassign users first.`
+      });
+    }
+
+    await Role.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Role deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting role:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting role',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/roles/:id/users - Get users by role
+router.get('/:id/users', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 50 } = req.query;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role ID format'
+      });
+    }
+
+    // Check if role exists
+    const role = await Role.findById(id);
+    if (!role) {
+      return res.status(404).json({
+        success: false,
+        message: 'Role not found'
+      });
+    }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Find users with this role
+    const [users, totalUsers] = await Promise.all([
+      User.find({ role_ids: id })
+        .populate('role_ids', 'name description')
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      User.countDocuments({ role_ids: id })
+    ]);
+
+    res.status(200).json({
+      success: true,
+      role: {
+        _id: role._id,
+        name: role.name,
+        description: role.description
+      },
+      count: users.length,
+      total: totalUsers,
+      page: pageNum,
+      pages: Math.ceil(totalUsers / limitNum),
+      data: users
+    });
+
+  } catch (error) {
+    console.error('Error fetching users by role:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching users by role',
+      error: error.message
+    });
+  }
+});
+
+module.exports = router;

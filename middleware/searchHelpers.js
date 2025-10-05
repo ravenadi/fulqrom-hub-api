@@ -1,6 +1,15 @@
 // Search and performance optimization helpers
 
 /**
+ * Escape special regex characters in search term
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string
+ */
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Build comprehensive search query for documents
  * @param {string} search - Search term
  * @param {Array} additionalFields - Additional fields to search
@@ -11,20 +20,64 @@ function buildSearchQuery(search, additionalFields = []) {
     return {};
   }
 
-  const searchTerm = search.trim();
+  // Trim and escape regex special characters
+  const searchTerm = escapeRegex(search.trim());
   const baseFields = [
+    // Basic document fields
     { name: { $regex: searchTerm, $options: 'i' } },
     { description: { $regex: searchTerm, $options: 'i' } },
+    { category: { $regex: searchTerm, $options: 'i' } },
+    { type: { $regex: searchTerm, $options: 'i' } },
+    { status: { $regex: searchTerm, $options: 'i' } },
+    { engineering_discipline: { $regex: searchTerm, $options: 'i' } },
+    { version: { $regex: searchTerm, $options: 'i' } },
+    { version_number: { $regex: searchTerm, $options: 'i' } },
+
+    // Tags
     { 'tags.tags': { $regex: searchTerm, $options: 'i' } },
+
+    // Customer and location hierarchy
     { 'customer.customer_name': { $regex: searchTerm, $options: 'i' } },
     { 'location.site.site_name': { $regex: searchTerm, $options: 'i' } },
     { 'location.building.building_name': { $regex: searchTerm, $options: 'i' } },
     { 'location.floor.floor_name': { $regex: searchTerm, $options: 'i' } },
     { 'location.tenant.tenant_name': { $regex: searchTerm, $options: 'i' } },
+    { 'location.vendor.vendor_name': { $regex: searchTerm, $options: 'i' } },
+    { 'location.asset.asset_name': { $regex: searchTerm, $options: 'i' } },
+    { 'location.asset.asset_type': { $regex: searchTerm, $options: 'i' } },
+
+    // File information
     { 'file.file_meta.file_name': { $regex: searchTerm, $options: 'i' } },
+    { 'file.file_meta.file_type': { $regex: searchTerm, $options: 'i' } },
+    { 'file.file_meta.file_extension': { $regex: searchTerm, $options: 'i' } },
+
+    // Compliance and regulatory metadata
     { 'metadata.certification_number': { $regex: searchTerm, $options: 'i' } },
     { 'metadata.compliance_framework': { $regex: searchTerm, $options: 'i' } },
-    { created_by: { $regex: searchTerm, $options: 'i' } }
+    { 'metadata.regulatory_framework': { $regex: searchTerm, $options: 'i' } },
+    { 'metadata.compliance_status': { $regex: searchTerm, $options: 'i' } },
+
+    // Drawing information
+    { 'drawing_info.drawing_status': { $regex: searchTerm, $options: 'i' } },
+    { 'drawing_info.prepared_by': { $regex: searchTerm, $options: 'i' } },
+    { 'drawing_info.approved_by_user': { $regex: searchTerm, $options: 'i' } },
+    { 'drawing_info.drawing_scale': { $regex: searchTerm, $options: 'i' } },
+
+    // Approval workflow
+    { approval_status: { $regex: searchTerm, $options: 'i' } },
+    { approved_by: { $regex: searchTerm, $options: 'i' } },
+
+    // Access control
+    { 'access_control.access_level': { $regex: searchTerm, $options: 'i' } },
+    { 'access_control.access_users': { $regex: searchTerm, $options: 'i' } },
+
+    // Audit fields
+    { created_by: { $regex: searchTerm, $options: 'i' } },
+
+    // Version metadata
+    { 'version_metadata.uploaded_by.user_name': { $regex: searchTerm, $options: 'i' } },
+    { 'version_metadata.uploaded_by.email': { $regex: searchTerm, $options: 'i' } },
+    { 'version_metadata.change_notes': { $regex: searchTerm, $options: 'i' } }
   ];
 
   // Add additional fields if provided
@@ -54,7 +107,29 @@ function buildPagination(page = 1, limit = 50) {
  * @returns {Object} MongoDB sort object
  */
 function buildSort(sort = 'created_at', order = 'desc') {
-  const allowedSortFields = ['name', 'category', 'type', 'created_at', 'updated_at'];
+  const allowedSortFields = [
+    'name',
+    'category',
+    'type',
+    'status',
+    'approval_status',
+    'engineering_discipline',
+    'version',
+    'version_number',
+    'version_sequence',
+    'created_at',
+    'updated_at',
+    'customer.customer_name',
+    'location.building.building_name',
+    'file.file_meta.file_name',
+    'file.file_meta.file_size',
+    'metadata.issue_date',
+    'metadata.expiry_date',
+    'metadata.review_date',
+    'drawing_info.date_issued',
+    'drawing_info.drawing_status',
+    'is_current_version'
+  ];
   const sortField = allowedSortFields.includes(sort) ? sort : 'created_at';
   const sortOrder = order === 'asc' ? 1 : -1;
 
@@ -152,6 +227,7 @@ function sanitizeQuery(query) {
 }
 
 module.exports = {
+  escapeRegex,
   buildSearchQuery,
   buildPagination,
   buildSort,

@@ -10,7 +10,8 @@
       "Read(//Users/devensitapara/Documents/development/GKBLabs/falcrom/fulqrom-hub/**)",
       "Bash(pkill:*)",
       "Bash(git add:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []

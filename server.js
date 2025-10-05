@@ -17,6 +17,8 @@ const documentsRouter = require('./routes/documents');
 const hierarchyRouter = require('./routes/hierarchy');
 const dropdownsRouter = require('./routes/dropdowns');
 const vendorsRouter = require('./routes/vendors');
+const usersRouter = require('./routes/users');
+const rolesRouter = require('./routes/roles');
 
 const app = express();
 const PORT = process.env.PORT || 30001;
@@ -66,6 +68,8 @@ app.use('/api/documents', documentsRouter);
 app.use('/api/hierarchy', hierarchyRouter);
 app.use('/api/dropdowns', dropdownsRouter);
 app.use('/api/vendors', vendorsRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/roles', rolesRouter);
 
 // Handle 404 for API routes
 app.use('/api/*', (req, res) => {
@@ -96,7 +100,9 @@ app.get('/', (req, res) => {
       dropdowns: '/api/dropdowns',
       dropdown_entities: '/api/dropdowns/entities/:entity',
       document_tags: '/api/dropdowns/document-tags',
-      vendors: '/api/vendors'
+      vendors: '/api/vendors',
+      users: '/api/users',
+      roles: '/api/roles'
     }
   });
 });
@@ -104,11 +110,17 @@ app.get('/', (req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
+// Database initialization
+const initializeDatabase = require('./utils/initializeDatabase');
+
 // Database connection
 mongoose.connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('✅ Connected to MongoDB');
     console.log(`📍 Database: ${MONGODB_URI}`);
+
+    // Initialize database with default data
+    await initializeDatabase();
   })
   .catch((error) => {
     console.error('❌ MongoDB connection error:', error);

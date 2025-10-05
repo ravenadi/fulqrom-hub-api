@@ -1,0 +1,108 @@
+const mongoose = require('mongoose');
+
+// Resource Access schema (embedded in User)
+const ResourceAccessSchema = new mongoose.Schema({
+  resource_type: {
+    type: String,
+    required: true,
+    enum: ['customer', 'site', 'building', 'floor', 'asset', 'tenant', 'vendor'],
+    trim: true
+  },
+  resource_id: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  resource_name: {
+    type: String,
+    trim: true
+  },
+  granted_at: {
+    type: Date,
+    default: Date.now
+  },
+  granted_by: {
+    type: String,
+    trim: true
+  }
+}, { _id: true });
+
+// Main User schema
+const UserSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address']
+  },
+  full_name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
+  is_active: {
+    type: Boolean,
+    default: true
+  },
+
+  // Roles (many-to-many using array of role IDs)
+  role_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Role'
+  }],
+
+  // Resource access assignments
+  resource_access: [ResourceAccessSchema],
+
+  // Audit fields
+  created_at: {
+    type: Date,
+    default: Date.now
+  },
+  updated_at: {
+    type: Date,
+    default: Date.now
+  },
+  deactivated_at: {
+    type: Date
+  },
+  deactivated_by: {
+    type: String,
+    trim: true
+  }
+}, {
+  timestamps: false
+});
+
+// Pre-save middleware to update timestamps
+UserSchema.pre('save', function(next) {
+  if (this.isModified() && !this.isNew) {
+    this.updated_at = new Date();
+  }
+  next();
+});
+
+// Indexes
+UserSchema.index({ email: 1 });
+UserSchema.index({ is_active: 1 });
+UserSchema.index({ role_ids: 1 });
+UserSchema.index({ created_at: -1 });
+UserSchema.index({ 'resource_access.resource_type': 1 });
+UserSchema.index({ 'resource_access.resource_id': 1 });
+
+// Virtual for display name
+UserSchema.virtual('display_name').get(function() {
+  return this.full_name;
+});
+
+// Ensure virtual fields are serialized
+UserSchema.set('toJSON', { virtuals: true });
+UserSchema.set('toObject', { virtuals: true });
+
+module.exports = mongoose.model('User', UserSchema);

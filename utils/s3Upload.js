@@ -76,15 +76,22 @@ function validateFile(file) {
  * Generate S3 key for file
  * @param {string} customerId - Customer ID
  * @param {string} originalname - Original filename
+ * @param {string} customPath - Optional custom path prefix (default: uses year/month structure)
  * @returns {string} - S3 key
  */
-function generateS3Key(customerId, originalname) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
+function generateS3Key(customerId, originalname, customPath = null) {
   const uuid = uuidv4();
   const extension = path.extname(originalname);
   const cleanFilename = path.basename(originalname, extension).replace(/[^a-zA-Z0-9-_]/g, '_');
+
+  // If custom path is provided, use it; otherwise use date-based structure
+  if (customPath) {
+    return `${customPath}/${uuid}-${cleanFilename}${extension}`;
+  }
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
 
   return `documents/${customerId}/${year}/${month}/${uuid}-${cleanFilename}${extension}`;
 }
@@ -93,9 +100,10 @@ function generateS3Key(customerId, originalname) {
  * Upload file to S3
  * @param {Object} file - Multer file object
  * @param {string} customerId - Customer ID
+ * @param {string} customPath - Optional custom path prefix for versioning
  * @returns {Promise<Object>} - Upload result
  */
-async function uploadFileToS3(file, customerId) {
+async function uploadFileToS3(file, customerId, customPath = null) {
   try {
     // Validate file
     const validation = validateFile(file);
@@ -104,7 +112,7 @@ async function uploadFileToS3(file, customerId) {
     }
 
     // Generate S3 key
-    const s3Key = generateS3Key(customerId, file.originalname);
+    const s3Key = generateS3Key(customerId, file.originalname, customPath);
 
     // S3 upload command
     const uploadCommand = new PutObjectCommand({

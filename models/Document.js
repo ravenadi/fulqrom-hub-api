@@ -112,6 +112,16 @@ const LocationSchema = new mongoose.Schema({
       type: String,
       trim: true
     }
+  },
+  vendor: {
+    vendor_id: {
+      type: String,
+      trim: true
+    },
+    vendor_name: {
+      type: String,
+      trim: true
+    }
   }
 }, { _id: false });
 
@@ -175,6 +185,50 @@ const RelatedDrawingSchema = new mongoose.Schema({
   document_name: {
     type: String,
     trim: true
+  }
+}, { _id: false });
+
+// Version metadata schema for document versioning
+const VersionMetadataSchema = new mongoose.Schema({
+  uploaded_by: {
+    user_id: {
+      type: String,
+      trim: true
+    },
+    user_name: {
+      type: String,
+      trim: true
+    },
+    email: {
+      type: String,
+      trim: true
+    }
+  },
+  upload_timestamp: {
+    type: Date,
+    default: Date.now
+  },
+  change_notes: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+  superseded_version: {
+    type: String,
+    trim: true
+  },
+  file_changes: {
+    original_filename: {
+      type: String,
+      trim: true
+    },
+    file_size_bytes: {
+      type: Number
+    },
+    file_hash: {
+      type: String,
+      trim: true
+    }
   }
 }, { _id: false });
 
@@ -298,6 +352,28 @@ const DocumentSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Version Management Fields
+  document_group_id: {
+    type: String,
+    trim: true,
+    index: true
+  },
+  version_number: {
+    type: String,
+    trim: true,
+    default: '1.0'
+  },
+  is_current_version: {
+    type: Boolean,
+    default: true,
+    index: true
+  },
+  version_sequence: {
+    type: Number,
+    default: 1
+  },
+  version_metadata: VersionMetadataSchema,
+
   // Audit Fields
   created_by: {
     type: String,
@@ -359,6 +435,7 @@ DocumentSchema.index({ 'location.building.building_id': 1 });
 DocumentSchema.index({ 'location.floor.floor_id': 1 });
 DocumentSchema.index({ 'location.asset.asset_id': 1 });
 DocumentSchema.index({ 'location.tenant.tenant_id': 1 });
+DocumentSchema.index({ 'location.vendor.vendor_id': 1 });
 DocumentSchema.index({ created_at: -1 });
 DocumentSchema.index({ 'metadata.regulatory_framework': 1 });
 DocumentSchema.index({ 'metadata.compliance_status': 1 });
@@ -383,6 +460,10 @@ DocumentSchema.index({ 'customer.customer_id': 1, category: 1 });
 DocumentSchema.index({ 'location.building.building_id': 1, category: 1 });
 DocumentSchema.index({ category: 1, type: 1 });
 DocumentSchema.index({ category: 1, 'drawing_info.drawing_status': 1 });
+
+// Version Management indexes
+DocumentSchema.index({ document_group_id: 1, version_sequence: -1 });
+DocumentSchema.index({ document_group_id: 1, is_current_version: 1 });
 
 // Text index for search
 DocumentSchema.index({

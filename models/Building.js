@@ -117,6 +117,30 @@ const BuildingSchema = new mongoose.Schema({
     default: 0
   },
 
+  // Geolocation - for Portfolio Map
+  latitude: {
+    type: Number,
+    min: -90,
+    max: 90,
+    validate: {
+      validator: function(v) {
+        return v === null || v === undefined || (v >= -90 && v <= 90);
+      },
+      message: 'Latitude must be between -90 and 90'
+    }
+  },
+  longitude: {
+    type: Number,
+    min: -180,
+    max: 180,
+    validate: {
+      validator: function(v) {
+        return v === null || v === undefined || (v >= -180 && v <= 180);
+      },
+      message: 'Longitude must be between -180 and 180'
+    }
+  },
+
   // NABERS Rating (0-6 star rating as per requirements)
   nabers_rating: {
     type: Number,

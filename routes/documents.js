@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const Document = require('../models/Document');
 const Customer = require('../models/Customer');
 const Site = require('../models/Site');
@@ -7,6 +8,7 @@ const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
 const Tenant = require('../models/Tenant');
+const Vendor = require('../models/Vendor');
 const { uploadFileToS3, generatePresignedUrl, generatePreviewUrl, deleteFileFromS3 } = require('../utils/s3Upload');
 const {
   validateCreateDocument,
@@ -102,6 +104,14 @@ async function fetchEntityNames(documentData) {
         entityNames.tenant_name = tenant.tenant_name;
       }
     }
+
+    // Fetch vendor name
+    if (documentData.vendor_id) {
+      const vendor = await Vendor.findById(documentData.vendor_id.toString());
+      if (vendor) {
+        entityNames.vendor_name = vendor.contractor_name;
+      }
+    }
   } catch (error) {
     console.warn('Error fetching entity names:', error.message);
   }
@@ -120,6 +130,7 @@ router.get('/', validateQueryParams, async (req, res) => {
       floor_id,
       asset_id,
       tenant_id,
+      vendor_id,
       category,
       type,
       status,
@@ -148,6 +159,7 @@ router.get('/', validateQueryParams, async (req, res) => {
     if (floor_id) filterQuery['location.floor.floor_id'] = floor_id;
     if (asset_id) filterQuery['location.asset.asset_id'] = asset_id;
     if (tenant_id) filterQuery['location.tenant.tenant_id'] = tenant_id;
+    if (vendor_id) filterQuery['location.vendor.vendor_id'] = vendor_id;
 
     // Document filters
     if (category) filterQuery.category = category;
@@ -402,6 +414,11 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
       // File information
       file: uploadResult.data,
 
+      // Version Management (initialize for new documents)
+      version_number: documentData.version || '1.0',
+      is_current_version: true,
+      version_sequence: 1,
+
       // Tags
       tags: documentData.tags ? { tags: Array.isArray(documentData.tags) ? documentData.tags : [documentData.tags] } : { tags: [] },
 
@@ -490,8 +507,19 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
       };
     }
 
+    if (documentData.vendor_id) {
+      documentPayload.location.vendor = {
+        vendor_id: documentData.vendor_id,
+        ...(entityNames.vendor_name && { vendor_name: entityNames.vendor_name })
+      };
+    }
+
     // Create document
     const document = new Document(documentPayload);
+    await document.save();
+
+    // Set document_group_id to the document's own ID after creation
+    document.document_group_id = document._id.toString();
     await document.save();
 
     res.status(201).json({
@@ -505,6 +533,112 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
     res.status(400).json({
       success: false,
       message: 'Error creating document',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/documents/bulk-update - Bulk update multiple documents
+router.put('/bulk-update', async (req, res) => {
+  try {
+    const { document_ids, updates } = req.body;
+
+    // Validate request body
+    if (!document_ids || !Array.isArray(document_ids) || document_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'document_ids array is required and must not be empty'
+      });
+    }
+
+    if (!updates || typeof updates !== 'object' || Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'updates object is required and must not be empty'
+      });
+    }
+
+    // Validate all document IDs are valid ObjectIds
+    const invalidIds = document_ids.filter(id => !id || !id.match(/^[0-9a-fA-F]{24}$/));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid document ID format',
+        invalid_ids: invalidIds
+      });
+    }
+
+    // Fetch entity names for the updates
+    const entityNames = await fetchEntityNames(updates);
+
+    // Build location update object
+    const locationUpdate = {};
+
+    if (updates.site_id) {
+      locationUpdate['location.site'] = {
+        site_id: updates.site_id,
+        ...(entityNames.site_name && { site_name: entityNames.site_name })
+      };
+    }
+
+    if (updates.building_id) {
+      locationUpdate['location.building'] = {
+        building_id: updates.building_id,
+        ...(entityNames.building_name && { building_name: entityNames.building_name })
+      };
+    }
+
+    if (updates.floor_id) {
+      locationUpdate['location.floor'] = {
+        floor_id: updates.floor_id,
+        ...(entityNames.floor_name && { floor_name: entityNames.floor_name })
+      };
+    }
+
+    if (updates.asset_id) {
+      locationUpdate['location.asset'] = {
+        asset_id: updates.asset_id,
+        ...(entityNames.asset_name && { asset_name: entityNames.asset_name }),
+        ...(entityNames.asset_type && { asset_type: entityNames.asset_type })
+      };
+    }
+
+    if (updates.tenant_id) {
+      locationUpdate['location.tenant'] = {
+        tenant_id: updates.tenant_id,
+        ...(entityNames.tenant_name && { tenant_name: entityNames.tenant_name })
+      };
+    }
+
+    if (updates.vendor_id) {
+      locationUpdate['location.vendor'] = {
+        vendor_id: updates.vendor_id,
+        ...(entityNames.vendor_name && { vendor_name: entityNames.vendor_name })
+      };
+    }
+
+    // Add updated_at timestamp
+    locationUpdate.updated_at = new Date().toISOString();
+
+    // Perform bulk update
+    const result = await Document.updateMany(
+      { _id: { $in: document_ids } },
+      { $set: locationUpdate }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Documents updated successfully',
+      matched_count: result.matchedCount,
+      modified_count: result.modifiedCount,
+      document_ids: document_ids
+    });
+
+  } catch (error) {
+    console.error('Bulk update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating documents',
       error: error.message
     });
   }
@@ -814,6 +948,77 @@ router.get('/summary/stats', async (req, res) => {
   }
 });
 
+// GET /api/storage/stats - Get S3 storage statistics
+router.get('/storage/stats', async (req, res) => {
+  try {
+    // Configure S3 Client (reuse configuration from s3Upload.js)
+    const s3Client = new S3Client({
+      region: process.env.AWS_DEFAULT_REGION || 'ap-southeast-2',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+      },
+      forcePathStyle: process.env.AWS_USE_PATH_STYLE_ENDPOINT === 'true'
+    });
+
+    const bucketName = process.env.AWS_BUCKET;
+
+    if (!bucketName) {
+      return res.status(500).json({
+        success: false,
+        message: 'S3 bucket not configured'
+      });
+    }
+
+    let totalSize = 0;
+    let objectCount = 0;
+    let continuationToken = null;
+
+    // List all objects in the bucket and sum their sizes
+    do {
+      const listCommand = new ListObjectsV2Command({
+        Bucket: bucketName,
+        ContinuationToken: continuationToken
+      });
+
+      const response = await s3Client.send(listCommand);
+
+      if (response.Contents) {
+        for (const object of response.Contents) {
+          totalSize += object.Size || 0;
+          objectCount++;
+        }
+      }
+
+      continuationToken = response.NextContinuationToken;
+    } while (continuationToken);
+
+    // Convert bytes to MB and GB
+    const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+    const totalSizeGB = (totalSize / (1024 * 1024 * 1024)).toFixed(2);
+    const displaySize = parseFloat(totalSizeGB) >= 1 ? `${totalSizeGB} GB` : `${totalSizeMB} MB`;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalSizeBytes: totalSize,
+        totalSizeMB: parseFloat(totalSizeMB),
+        totalSizeGB: parseFloat(totalSizeGB),
+        displaySize: displaySize,
+        objectCount: objectCount
+      }
+    });
+
+  } catch (error) {
+    console.error('S3 Storage Stats Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching S3 storage statistics',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/documents/by-category - Group documents by category
 router.get('/by-category', async (req, res) => {
   try {
@@ -931,6 +1136,829 @@ router.get('/options/entities', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching entity options',
+      error: error.message
+    });
+  }
+});
+
+// ==================== APPROVAL WORKFLOW ENDPOINTS ====================
+
+const ApprovalHistory = require('../models/ApprovalHistory');
+const {
+  validateRequestApproval,
+  validateApprove,
+  validateReject,
+  validateRevokeApproval
+} = require('../middleware/approvalValidation');
+
+// POST /api/documents/:id/request-approval - Request approval for a document
+router.post('/:id/request-approval', validateObjectId, validateRequestApproval, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assigned_to, assigned_to_name, requested_by, requested_by_name, comments } = req.body;
+
+    // Validate required fields
+    if (!assigned_to) {
+      return res.status(400).json({
+        success: false,
+        message: 'assigned_to is required'
+      });
+    }
+
+    if (!requested_by) {
+      return res.status(400).json({
+        success: false,
+        message: 'requested_by is required'
+      });
+    }
+
+    // Find the document
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Update document approval fields
+    const previousStatus = document.approval_status;
+    document.approval_required = true;
+    document.approval_status = 'Pending';
+    document.approved_by = assigned_to;
+    document.updated_at = new Date().toISOString();
+
+    await document.save();
+
+    // Create approval history record
+    const approvalHistory = new ApprovalHistory({
+      document_id: document._id,
+      document_name: document.name,
+      action: 'requested',
+      previous_status: previousStatus,
+      new_status: 'Pending',
+      performed_by: requested_by,
+      performed_by_name: requested_by_name,
+      assigned_to: assigned_to,
+      assigned_to_name: assigned_to_name,
+      comments: comments || 'Approval requested',
+      metadata: {
+        ip_address: req.ip,
+        user_agent: req.get('user-agent')
+      }
+    });
+
+    await approvalHistory.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Approval request submitted successfully',
+      data: {
+        document_id: document._id,
+        approval_status: document.approval_status,
+        approved_by: document.approved_by,
+        history_id: approvalHistory._id
+      }
+    });
+
+  } catch (error) {
+    console.error('Error requesting approval:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error requesting approval',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/documents/:id/approve - Approve a document
+router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approved_by, approved_by_name, comments } = req.body;
+
+    // Validate required fields
+    if (!approved_by) {
+      return res.status(400).json({
+        success: false,
+        message: 'approved_by is required'
+      });
+    }
+
+    // Find the document
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Check if approval is required
+    if (!document.approval_required) {
+      return res.status(400).json({
+        success: false,
+        message: 'Document does not require approval'
+      });
+    }
+
+    // Update document approval fields
+    const previousStatus = document.approval_status;
+    document.approval_status = 'Approved';
+    document.approved_by = approved_by;
+    document.status = 'Approved'; // Also update main status
+    document.updated_at = new Date().toISOString();
+
+    await document.save();
+
+    // Create approval history record
+    const approvalHistory = new ApprovalHistory({
+      document_id: document._id,
+      document_name: document.name,
+      action: 'approved',
+      previous_status: previousStatus,
+      new_status: 'Approved',
+      performed_by: approved_by,
+      performed_by_name: approved_by_name,
+      comments: comments || 'Document approved',
+      metadata: {
+        ip_address: req.ip,
+        user_agent: req.get('user-agent')
+      }
+    });
+
+    await approvalHistory.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Document approved successfully',
+      data: {
+        document_id: document._id,
+        approval_status: document.approval_status,
+        status: document.status,
+        approved_by: document.approved_by,
+        history_id: approvalHistory._id
+      }
+    });
+
+  } catch (error) {
+    console.error('Error approving document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error approving document',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/documents/:id/reject - Reject a document
+router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejected_by, rejected_by_name, comments } = req.body;
+
+    // Validate required fields
+    if (!rejected_by) {
+      return res.status(400).json({
+        success: false,
+        message: 'rejected_by is required'
+      });
+    }
+
+    if (!comments) {
+      return res.status(400).json({
+        success: false,
+        message: 'comments are required when rejecting a document'
+      });
+    }
+
+    // Find the document
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Check if approval is required
+    if (!document.approval_required) {
+      return res.status(400).json({
+        success: false,
+        message: 'Document does not require approval'
+      });
+    }
+
+    // Update document approval fields
+    const previousStatus = document.approval_status;
+    document.approval_status = 'Rejected';
+    document.approved_by = rejected_by;
+    document.status = 'Rejected'; // Also update main status
+    document.updated_at = new Date().toISOString();
+
+    await document.save();
+
+    // Create approval history record
+    const approvalHistory = new ApprovalHistory({
+      document_id: document._id,
+      document_name: document.name,
+      action: 'rejected',
+      previous_status: previousStatus,
+      new_status: 'Rejected',
+      performed_by: rejected_by,
+      performed_by_name: rejected_by_name,
+      comments: comments,
+      metadata: {
+        ip_address: req.ip,
+        user_agent: req.get('user-agent')
+      }
+    });
+
+    await approvalHistory.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Document rejected',
+      data: {
+        document_id: document._id,
+        approval_status: document.approval_status,
+        status: document.status,
+        approved_by: document.approved_by,
+        history_id: approvalHistory._id
+      }
+    });
+
+  } catch (error) {
+    console.error('Error rejecting document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error rejecting document',
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/documents/:id/revoke-approval - Revoke/cancel approval request
+router.put('/:id/revoke-approval', validateObjectId, validateRevokeApproval, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { revoked_by, revoked_by_name, comments } = req.body;
+
+    // Validate required fields
+    if (!revoked_by) {
+      return res.status(400).json({
+        success: false,
+        message: 'revoked_by is required'
+      });
+    }
+
+    // Find the document
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Check if approval is required
+    if (!document.approval_required) {
+      return res.status(400).json({
+        success: false,
+        message: 'Document does not have an active approval request'
+      });
+    }
+
+    // Update document approval fields
+    const previousStatus = document.approval_status;
+    document.approval_required = false;
+    document.approval_status = 'Revoked';
+    document.approved_by = null;
+    document.status = 'Draft'; // Reset to draft
+    document.updated_at = new Date().toISOString();
+
+    await document.save();
+
+    // Create approval history record
+    const approvalHistory = new ApprovalHistory({
+      document_id: document._id,
+      document_name: document.name,
+      action: 'revoked',
+      previous_status: previousStatus,
+      new_status: 'Revoked',
+      performed_by: revoked_by,
+      performed_by_name: revoked_by_name,
+      comments: comments || 'Approval request revoked',
+      metadata: {
+        ip_address: req.ip,
+        user_agent: req.get('user-agent')
+      }
+    });
+
+    await approvalHistory.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Approval request revoked',
+      data: {
+        document_id: document._id,
+        approval_status: document.approval_status,
+        status: document.status,
+        history_id: approvalHistory._id
+      }
+    });
+
+  } catch (error) {
+    console.error('Error revoking approval:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error revoking approval',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/pending-approval - Get all documents pending approval
+router.get('/pending-approval', async (req, res) => {
+  try {
+    const { assigned_to, page = 1, limit = 20 } = req.query;
+
+    // Build query
+    const query = {
+      approval_required: true,
+      approval_status: 'Pending'
+    };
+
+    // Filter by assigned user if provided
+    if (assigned_to) {
+      query.approved_by = assigned_to;
+    }
+
+    // Pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const total = await Document.countDocuments(query);
+
+    // Fetch documents
+    const documents = await Document.find(query)
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      count: documents.length,
+      total: total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      data: documents
+    });
+
+  } catch (error) {
+    console.error('Error fetching pending approvals:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching pending approvals',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/:id/approval-history - Get approval history for a document
+router.get('/:id/approval-history', validateObjectId, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if document exists
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Fetch approval history
+    const history = await ApprovalHistory.find({ document_id: id })
+      .sort({ created_at: -1 })
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      count: history.length,
+      document_id: id,
+      document_name: document.name,
+      current_approval_status: document.approval_status,
+      data: history
+    });
+
+  } catch (error) {
+    console.error('Error fetching approval history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching approval history',
+      error: error.message
+    });
+  }
+});
+
+// ==================== DOCUMENT VERSIONING ENDPOINTS ====================
+
+// Helper function to calculate next version number
+function calculateNextVersion(currentVersion) {
+  const parts = currentVersion.split('.');
+  let major = parseInt(parts[0]) || 1;
+  let minor = parseInt(parts[1]) || 0;
+
+  // Increment minor version
+  minor++;
+
+  // If minor reaches 10, increment major and reset minor
+  if (minor >= 10) {
+    major++;
+    minor = 0;
+  }
+
+  return `${major}.${minor}`;
+}
+
+// POST /api/documents/:id/versions - Upload new version of document
+router.post('/:id/versions', upload.single('file'), validateObjectId, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'File upload is required',
+        code: 'FILE_REQUIRED'
+      });
+    }
+
+    // Find the current document
+    const currentDocument = await Document.findById(id);
+    if (!currentDocument) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found',
+        code: 'DOCUMENT_NOT_FOUND'
+      });
+    }
+
+    // Parse uploaded_by from request body
+    let uploadedBy;
+    try {
+      uploadedBy = typeof req.body.uploaded_by === 'string'
+        ? JSON.parse(req.body.uploaded_by)
+        : req.body.uploaded_by;
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid uploaded_by format',
+        code: 'INVALID_UPLOADED_BY'
+      });
+    }
+
+    // Validate uploaded_by
+    if (!uploadedBy || !uploadedBy.user_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'uploaded_by with user_id is required',
+        code: 'UPLOADED_BY_REQUIRED'
+      });
+    }
+
+    // Get document_group_id (initialize if this is first version)
+    const documentGroupId = currentDocument.document_group_id || currentDocument._id.toString();
+
+    // Calculate new version number
+    const currentVersionNumber = currentDocument.version_number || currentDocument.version || '1.0';
+    const newVersionNumber = req.body.version_number || calculateNextVersion(currentVersionNumber);
+
+    // Validate version number format
+    if (!/^\d+\.\d+$/.test(newVersionNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid version number format. Use X.Y format',
+        code: 'INVALID_VERSION'
+      });
+    }
+
+    // Check for version conflict
+    const existingVersion = await Document.findOne({
+      document_group_id: documentGroupId,
+      version_number: newVersionNumber
+    });
+
+    if (existingVersion) {
+      return res.status(400).json({
+        success: false,
+        message: `Version ${newVersionNumber} already exists`,
+        code: 'VERSION_CONFLICT'
+      });
+    }
+
+    // Get max version_sequence
+    const maxSequenceDoc = await Document.findOne({ document_group_id: documentGroupId })
+      .sort({ version_sequence: -1 })
+      .limit(1);
+
+    const newVersionSequence = (maxSequenceDoc?.version_sequence || 0) + 1;
+
+    // Upload new file to S3 with versioned key
+    const versionedFileName = `v${newVersionNumber}_${req.file.originalname}`;
+    const uploadResult = await uploadFileToS3(
+      { ...req.file, originalname: versionedFileName },
+      currentDocument.customer.customer_id,
+      `documents/${documentGroupId}`
+    );
+
+    if (!uploadResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to upload file to S3',
+        code: 'S3_UPLOAD_ERROR',
+        error: uploadResult.error
+      });
+    }
+
+    // Mark current version as not current
+    await Document.updateOne(
+      { _id: currentDocument._id },
+      {
+        $set: {
+          is_current_version: false,
+          document_group_id: documentGroupId,
+          updated_at: new Date().toISOString()
+        }
+      }
+    );
+
+    // Update all other versions in the group to ensure document_group_id is set
+    await Document.updateMany(
+      {
+        document_group_id: { $exists: false },
+        _id: { $in: [currentDocument._id] }
+      },
+      { $set: { document_group_id: documentGroupId } }
+    );
+
+    // Create new version document
+    const newVersionData = {
+      ...currentDocument.toObject(),
+      _id: undefined, // Let MongoDB generate new ID
+      document_group_id: documentGroupId,
+      version_number: newVersionNumber,
+      is_current_version: true,
+      version_sequence: newVersionSequence,
+      version: newVersionNumber, // Also update legacy version field
+      file: uploadResult.data,
+      version_metadata: {
+        uploaded_by: {
+          user_id: uploadedBy.user_id,
+          user_name: uploadedBy.user_name || '',
+          email: uploadedBy.email || ''
+        },
+        upload_timestamp: new Date(),
+        change_notes: req.body.change_notes || '',
+        superseded_version: currentVersionNumber,
+        file_changes: {
+          original_filename: req.file.originalname,
+          file_size_bytes: req.file.size,
+          file_hash: req.body.file_hash || ''
+        }
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const newVersionDocument = new Document(newVersionData);
+    await newVersionDocument.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'New version uploaded successfully',
+      data: newVersionDocument
+    });
+
+  } catch (error) {
+    console.error('Error uploading new version:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading new version',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/versions/:documentGroupId - Get all versions of a document
+router.get('/versions/:documentGroupId', async (req, res) => {
+  try {
+    const { documentGroupId } = req.params;
+
+    // Find all versions with this document_group_id
+    const versions = await Document.find({ document_group_id: documentGroupId })
+      .sort({ version_sequence: -1 })
+      .lean();
+
+    if (!versions || versions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No versions found for this document group',
+        code: 'NO_VERSIONS_FOUND'
+      });
+    }
+
+    // Format version data for response
+    const formattedVersions = versions.map(doc => ({
+      _id: doc._id,
+      version_number: doc.version_number,
+      version_sequence: doc.version_sequence,
+      is_current_version: doc.is_current_version,
+      created_at: doc.version_metadata?.upload_timestamp || doc.created_at,
+      created_by: doc.version_metadata?.uploaded_by?.user_name || doc.created_by || 'Unknown',
+      file_name: doc.file?.file_meta?.file_name || doc.name,
+      file_size: doc.file?.file_meta?.file_size || 0,
+      file_url: doc.file?.file_meta?.file_url || '',
+      change_notes: doc.version_metadata?.change_notes || null
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formattedVersions
+    });
+
+  } catch (error) {
+    console.error('Error fetching document versions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching document versions',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/versions/:versionId/download - Download specific version
+router.get('/versions/:versionId/download', validateObjectId, async (req, res) => {
+  try {
+    const { versionId } = req.params;
+
+    const document = await Document.findById(versionId);
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Version not found',
+        code: 'VERSION_NOT_FOUND'
+      });
+    }
+
+    if (!document.file || !document.file.file_meta || !document.file.file_meta.file_key) {
+      return res.status(404).json({
+        success: false,
+        message: 'Version file not found',
+        code: 'FILE_NOT_FOUND'
+      });
+    }
+
+    // Generate presigned URL
+    const urlResult = await generatePresignedUrl(document.file.file_meta.file_key, 3600);
+
+    if (!urlResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate download URL',
+        code: 'DOWNLOAD_URL_ERROR',
+        error: urlResult.error
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      download_url: urlResult.url,
+      expires_in: 3600,
+      file_name: document.file.file_meta.file_name,
+      version_number: document.version_number
+    });
+
+  } catch (error) {
+    console.error('Error downloading version:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error downloading version',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/documents/versions/:versionId/restore - Restore old version as current
+router.post('/versions/:versionId/restore', validateObjectId, async (req, res) => {
+  try {
+    const { versionId } = req.params;
+    const { restored_by } = req.body;
+
+    // Validate restored_by
+    if (!restored_by || !restored_by.user_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'restored_by with user_id is required',
+        code: 'RESTORED_BY_REQUIRED'
+      });
+    }
+
+    // Find the version to restore
+    const versionToRestore = await Document.findById(versionId);
+
+    if (!versionToRestore) {
+      return res.status(404).json({
+        success: false,
+        message: 'Version not found',
+        code: 'VERSION_NOT_FOUND'
+      });
+    }
+
+    // Check if it's already the current version
+    if (versionToRestore.is_current_version) {
+      return res.status(400).json({
+        success: false,
+        message: 'This version is already the current version',
+        code: 'ALREADY_CURRENT'
+      });
+    }
+
+    const documentGroupId = versionToRestore.document_group_id;
+
+    // Find current version
+    const currentVersion = await Document.findOne({
+      document_group_id: documentGroupId,
+      is_current_version: true
+    });
+
+    // Get max version_sequence
+    const maxSequenceDoc = await Document.findOne({ document_group_id: documentGroupId })
+      .sort({ version_sequence: -1 })
+      .limit(1);
+
+    const newVersionSequence = (maxSequenceDoc?.version_sequence || 0) + 1;
+
+    // Calculate new version number (increment from current)
+    const currentVersionNumber = currentVersion?.version_number || versionToRestore.version_number || '1.0';
+    const newVersionNumber = calculateNextVersion(currentVersionNumber);
+
+    // Mark current version as not current
+    if (currentVersion) {
+      await Document.updateOne(
+        { _id: currentVersion._id },
+        {
+          $set: {
+            is_current_version: false,
+            updated_at: new Date().toISOString()
+          }
+        }
+      );
+    }
+
+    // Create new document as restored version
+    const restoredVersionData = {
+      ...versionToRestore.toObject(),
+      _id: undefined, // Let MongoDB generate new ID
+      version_number: newVersionNumber,
+      version: newVersionNumber,
+      is_current_version: true,
+      version_sequence: newVersionSequence,
+      version_metadata: {
+        uploaded_by: {
+          user_id: restored_by.user_id,
+          user_name: restored_by.user_name || '',
+          email: restored_by.email || ''
+        },
+        upload_timestamp: new Date(),
+        change_notes: `Restored from version ${versionToRestore.version_number}`,
+        superseded_version: currentVersionNumber,
+        file_changes: versionToRestore.version_metadata?.file_changes || {
+          original_filename: versionToRestore.file?.file_meta?.file_name || '',
+          file_size_bytes: versionToRestore.file?.file_meta?.file_size || 0
+        }
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const restoredDocument = new Document(restoredVersionData);
+    await restoredDocument.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Version ${versionToRestore.version_number} restored as version ${newVersionNumber}`,
+      data: restoredDocument
+    });
+
+  } catch (error) {
+    console.error('Error restoring version:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error restoring version',
       error: error.message
     });
   }

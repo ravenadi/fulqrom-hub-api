@@ -2,11 +2,63 @@
   "apiInfo": {
     "title": "Fulqrom Hub REST API",
     "description": "Australian Commercial Real Estate & HVAC Building Management System API",
-    "version": "1.2.0",
+    "version": "1.6.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - hub_fulqrom database",
-    "lastUpdated": "2025-10-05T14:00:00.000Z",
+    "lastUpdated": "2025-10-06T00:00:00.000Z",
     "changeLog": {
+      "v1.6.0": {
+        "date": "2025-10-06",
+        "changes": [
+          "Added User Management API with 9 endpoints for CRUD operations, deactivation, and resource access",
+          "Added Role Management API with 6 endpoints for role CRUD and user assignment",
+          "Added AuditLog model for comprehensive action tracking with IP and user agent",
+          "Auto-creation of Site Manager role with full permissions on server startup",
+          "Auto-creation of demo user (demo@fulqrom.com.au) assigned to Site Manager role",
+          "User API accepts both full_name and first_name/last_name formats for flexibility",
+          "Resource-level access control for users (site, building, floor, asset, tenant, vendor)",
+          "Role-based permissions system with module-level CRUD flags (view, create, edit, delete)",
+          "Database initialization script runs on server startup to ensure default data",
+          "Protected deletion for Site Manager role and demo user"
+        ]
+      },
+      "v1.5.0": {
+        "date": "2025-10-05",
+        "changes": [
+          "Enhanced Document Search functionality to cover 40+ searchable fields",
+          "Search now includes: basic fields, hierarchical data (customer/site/building/floor/tenant/vendor/asset names)",
+          "Search includes: file metadata, compliance data, drawing info, approval workflow fields",
+          "Search includes: version metadata (user names, emails, change notes)",
+          "Expanded sortable fields to 20+ including version, approval status, dates, file size",
+          "Comprehensive case-insensitive regex search across all relevant document fields",
+          "Search can now find documents by any keyword in the table for better discoverability"
+        ]
+      },
+      "v1.4.0": {
+        "date": "2025-10-05",
+        "changes": [
+          "Added Document Approval Workflow API with 6 new endpoints",
+          "POST /api/documents/:id/request-approval - Request approval for a document",
+          "PUT /api/documents/:id/approve - Approve a document",
+          "PUT /api/documents/:id/reject - Reject a document with required comments",
+          "PUT /api/documents/:id/revoke-approval - Revoke/cancel approval request",
+          "GET /api/documents/pending-approval - Get all documents pending approval with pagination",
+          "GET /api/documents/:id/approval-history - Get complete approval history for a document",
+          "Added ApprovalHistory model to track all approval workflow actions",
+          "Added approval validation middleware for all approval endpoints",
+          "Approval workflow includes action tracking, user attribution, and audit trail"
+        ]
+      },
+      "v1.3.0": {
+        "date": "2025-10-05",
+        "changes": [
+          "Added vendor support to Document model location schema",
+          "Added PUT /api/documents/bulk-update endpoint for bulk document updates",
+          "Added vendor_id filtering support to GET /api/documents",
+          "Added vendor_id support to POST /api/documents",
+          "Enhanced fetchEntityNames helper to resolve vendor names from Vendor model"
+        ]
+      },
       "v1.2.0": {
         "date": "2025-10-05",
         "changes": [
@@ -1331,6 +1383,9 @@
           "site_id": "Filter by site ID",
           "building_id": "Filter by building ID",
           "floor_id": "Filter by floor ID",
+          "asset_id": "Filter by asset ID",
+          "tenant_id": "Filter by tenant ID",
+          "vendor_id": "Filter by vendor ID",
           "document_type": "Filter by document type",
           "category": "Filter by document category",
           "status": "Filter by document status",
@@ -1339,7 +1394,7 @@
           "uploaded_by": "Filter by uploader name (case insensitive)",
           "is_active": "boolean - Filter by active status",
           "is_archived": "boolean - Filter by archived status",
-          "search": "Text search in document title, description, tags"
+          "search": "Text search across all document fields including name, description, category, type, status, approval_status, tags, customer/location names, file name, version, compliance data, drawing info, approval users, version metadata, and all nested fields"
         },
         "response": {
           "success": true,
@@ -1386,6 +1441,8 @@
           "building_id": "ObjectId (reference to Building)",
           "floor_id": "ObjectId (reference to Floor)",
           "asset_id": "ObjectId (reference to Asset)",
+          "tenant_id": "ObjectId (reference to Tenant)",
+          "vendor_id": "ObjectId (reference to Vendor)",
           "location": "string",
           "building_location": "string",
           "floor_location": "string",
@@ -1425,6 +1482,42 @@
           "success": true,
           "message": "Document updated successfully",
           "data": "Updated document object"
+        }
+      },
+      "bulkUpdate": {
+        "method": "PUT",
+        "path": "/api/documents/bulk-update",
+        "description": "Bulk update multiple documents with location associations (site, building, floor, asset, tenant, vendor)",
+        "status": "IMPLEMENTED",
+        "requestBody": {
+          "document_ids": "array of MongoDB ObjectIDs (required, non-empty)",
+          "updates": {
+            "site_id": "ObjectId (optional - reference to Site)",
+            "building_id": "ObjectId (optional - reference to Building)",
+            "floor_id": "ObjectId (optional - reference to Floor)",
+            "asset_id": "ObjectId (optional - reference to Asset)",
+            "tenant_id": "ObjectId (optional - reference to Tenant)",
+            "vendor_id": "ObjectId (optional - reference to Vendor)"
+          }
+        },
+        "notes": [
+          "All document IDs must be valid 24-character hex ObjectIDs",
+          "Entity names are automatically fetched and stored with IDs",
+          "Updates are applied using MongoDB updateMany for efficiency",
+          "updated_at timestamp is automatically set"
+        ],
+        "response": {
+          "success": true,
+          "message": "Documents updated successfully",
+          "matched_count": "number (documents matched by IDs)",
+          "modified_count": "number (documents actually modified)",
+          "document_ids": "array (IDs that were updated)"
+        },
+        "errors": {
+          "400": {
+            "message": "Invalid document ID format",
+            "invalid_ids": "array (IDs that failed validation)"
+          }
         }
       },
       "byType": {
@@ -1502,6 +1595,142 @@
         "response": {
           "success": true,
           "data": "Array of category statistics"
+        }
+      },
+      "requestApproval": {
+        "method": "POST",
+        "path": "/api/documents/:id/request-approval",
+        "description": "Request approval for a document",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": {
+          "assigned_to": "string (required) - User ID who will approve",
+          "assigned_to_name": "string (optional) - Name of approver",
+          "requested_by": "string (required) - User ID requesting approval",
+          "requested_by_name": "string (optional) - Name of requester",
+          "comments": "string (optional) - Additional comments"
+        },
+        "response": {
+          "success": true,
+          "message": "Approval request submitted successfully",
+          "data": {
+            "document_id": "ObjectId",
+            "approval_status": "Pending",
+            "approved_by": "string",
+            "history_id": "ObjectId"
+          }
+        }
+      },
+      "approve": {
+        "method": "PUT",
+        "path": "/api/documents/:id/approve",
+        "description": "Approve a document",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": {
+          "approved_by": "string (required) - User ID approving the document",
+          "approved_by_name": "string (optional) - Name of approver",
+          "comments": "string (optional) - Approval comments"
+        },
+        "response": {
+          "success": true,
+          "message": "Document approved successfully",
+          "data": {
+            "document_id": "ObjectId",
+            "approval_status": "Approved",
+            "status": "Approved",
+            "approved_by": "string",
+            "history_id": "ObjectId"
+          }
+        }
+      },
+      "reject": {
+        "method": "PUT",
+        "path": "/api/documents/:id/reject",
+        "description": "Reject a document",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": {
+          "rejected_by": "string (required) - User ID rejecting the document",
+          "rejected_by_name": "string (optional) - Name of rejector",
+          "comments": "string (required) - Rejection reason/comments"
+        },
+        "response": {
+          "success": true,
+          "message": "Document rejected",
+          "data": {
+            "document_id": "ObjectId",
+            "approval_status": "Rejected",
+            "status": "Rejected",
+            "approved_by": "string",
+            "history_id": "ObjectId"
+          }
+        }
+      },
+      "revokeApproval": {
+        "method": "PUT",
+        "path": "/api/documents/:id/revoke-approval",
+        "description": "Revoke/cancel approval request",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "requestBody": {
+          "revoked_by": "string (required) - User ID revoking approval",
+          "revoked_by_name": "string (optional) - Name of user revoking",
+          "comments": "string (optional) - Revocation comments"
+        },
+        "response": {
+          "success": true,
+          "message": "Approval request revoked",
+          "data": {
+            "document_id": "ObjectId",
+            "approval_status": "Revoked",
+            "status": "Draft",
+            "history_id": "ObjectId"
+          }
+        }
+      },
+      "pendingApprovals": {
+        "method": "GET",
+        "path": "/api/documents/pending-approval",
+        "description": "Get all documents pending approval",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "assigned_to": "Filter by assigned user ID",
+          "page": "Page number (default: 1)",
+          "limit": "Items per page (default: 20)"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "total": "number",
+          "page": "number",
+          "pages": "number",
+          "data": "Array of document objects pending approval"
+        }
+      },
+      "approvalHistory": {
+        "method": "GET",
+        "path": "/api/documents/:id/approval-history",
+        "description": "Get approval history for a document",
+        "status": "IMPLEMENTED",
+        "params": {
+          "id": "MongoDB ObjectID"
+        },
+        "response": {
+          "success": true,
+          "count": "number",
+          "document_id": "ObjectId",
+          "document_name": "string",
+          "current_approval_status": "string",
+          "data": "Array of approval history records (action, performed_by, comments, created_at, etc.)"
         }
       }
     },
@@ -2306,7 +2535,7 @@
     "populatedFields": "Most GET requests populate referenced fields for better data context",
     "summaryStats": "List endpoints include calculated summary statistics where applicable",
     "virtualFields": "Models include virtual fields for computed values (formatted dates, display names, etc.)",
-    "textSearch": "Documents collection supports full-text search on title, description, and tags",
+    "textSearch": "Documents collection supports comprehensive text search across 40+ fields including: basic fields (name, description, category, type, status, version), hierarchical data (customer, site, building, floor, tenant, vendor, asset names), file metadata (filename, type, extension), compliance data (certification number, frameworks, status), drawing info (status, prepared by, approved by, scale), approval workflow (status, approved by, access users), audit fields (created by), and version metadata (user names, emails, change notes). Case-insensitive regex matching.",
     "aggregationSupport": "Statistics endpoints use MongoDB aggregation for efficient data processing",
     "validationStrategy": "Comprehensive validation on API level with minimal frontend validation",
     "errorHandling": "Consistent error response format across all endpoints",
