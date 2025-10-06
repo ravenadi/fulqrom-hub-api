@@ -26,8 +26,16 @@ function flattenDropdowns(nested) {
   Object.keys(nested).forEach(module => {
     Object.keys(nested[module]).forEach(field => {
       const flatKey = `${module}_${field}`;
-      // Clean the array values to remove empty strings
-      flattened[flatKey] = cleanArrayValues(nested[module][field]);
+      // Clean the array values to remove empty strings and sort alphabetically
+      const cleanedArray = cleanArrayValues(nested[module][field]);
+      flattened[flatKey] = Array.isArray(cleanedArray)
+        ? cleanedArray.sort((a, b) => {
+            if (typeof a === 'string' && typeof b === 'string') {
+              return a.localeCompare(b, 'en-AU', { sensitivity: 'base' });
+            }
+            return 0;
+          })
+        : cleanedArray;
     });
   });
 
@@ -119,18 +127,21 @@ router.get('/entities/sites', async (req, res) => {
   }
 });
 
-// GET /api/dropdowns/entities/buildings - Get all buildings for dropdown (with optional site filter)
+// GET /api/dropdowns/entities/buildings - Get all buildings for dropdown (with optional site and customer filter)
 router.get('/entities/buildings', async (req, res) => {
   try {
-    const { site_id } = req.query;
+    const { site_id, customer_id } = req.query;
     const filter = { is_active: true };
 
+    if (customer_id) {
+      filter.customer_id = customer_id;
+    }
     if (site_id) {
       filter.site_id = site_id;
     }
 
     const buildings = await Building.find(filter)
-      .select('_id building_name site_id')
+      .select('_id building_name site_id customer_id')
       .sort({ building_name: 1 })
       .lean();
 
@@ -138,7 +149,8 @@ router.get('/entities/buildings', async (req, res) => {
       id: building._id,
       label: building.building_name || 'Unnamed Building',
       value: building._id,
-      site_id: building.site_id
+      site_id: building.site_id,
+      customer_id: building.customer_id
     }));
 
     res.status(200).json({
@@ -155,18 +167,24 @@ router.get('/entities/buildings', async (req, res) => {
   }
 });
 
-// GET /api/dropdowns/entities/floors - Get all floors for dropdown (with optional building filter)
+// GET /api/dropdowns/entities/floors - Get all floors for dropdown (with optional building, site and customer filter)
 router.get('/entities/floors', async (req, res) => {
   try {
-    const { building_id } = req.query;
+    const { building_id, site_id, customer_id } = req.query;
     const filter = { is_active: true };
 
+    if (customer_id) {
+      filter.customer_id = customer_id;
+    }
+    if (site_id) {
+      filter.site_id = site_id;
+    }
     if (building_id) {
       filter.building_id = building_id;
     }
 
     const floors = await Floor.find(filter)
-      .select('_id floor_name building_id')
+      .select('_id floor_name building_id site_id customer_id')
       .sort({ floor_name: 1 })
       .lean();
 
@@ -174,7 +192,9 @@ router.get('/entities/floors', async (req, res) => {
       id: floor._id,
       label: floor.floor_name || 'Unnamed Floor',
       value: floor._id,
-      building_id: floor.building_id
+      building_id: floor.building_id,
+      site_id: floor.site_id,
+      customer_id: floor.customer_id
     }));
 
     res.status(200).json({
