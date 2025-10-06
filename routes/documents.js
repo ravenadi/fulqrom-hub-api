@@ -1797,6 +1797,67 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     const newVersionDocument = new Document(newVersionData);
     await newVersionDocument.save();
 
+    // Update the original/current document with new version info
+    await Document.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          version_number: newVersionNumber,
+          version: newVersionNumber,
+          is_current_version: true,
+          updated_at: new Date().toISOString()
+        }
+      }
+    );
+
+    // Mark all other versions as not current
+    await Document.updateMany(
+      {
+        document_group_id: documentGroupId,
+        _id: { $nin: [id, newVersionDocument._id] }
+      },
+      {
+        $set: { is_current_version: false }
+      }
+    );
+
+    // Send notification emails to all approvers (async, don't block response)
+    if (currentDocument.approval_config?.enabled && currentDocument.approval_config.approvers?.length > 0) {
+      setImmediate(async () => {
+        const documentDetails = {
+          name: newVersionDocument.name || newVersionDocument.file?.file_meta?.file_name || 'Unnamed Document',
+          category: newVersionDocument.category,
+          type: newVersionDocument.type
+        };
+
+        const statusUpdate = {
+          newStatus: currentDocument.approval_config.status,
+          oldStatus: currentVersionNumber,
+          reviewerName: uploadedBy.user_name || uploadedBy.email || 'Unknown',
+          reviewDate: new Date(),
+          comment: `New version ${newVersionNumber} uploaded. ${req.body.change_notes || ''}`
+        };
+
+        // Send to all approvers
+        for (const approver of currentDocument.approval_config.approvers) {
+          if (approver.user_email) {
+            try {
+              await emailService.sendDocumentUpdate({
+                to: approver.user_email,
+                documentId: newVersionDocument._id.toString(),
+                creatorName: approver.user_name || approver.user_email,
+                documentDetails,
+                statusUpdate
+              });
+              console.log(`✓ Version update notification sent to ${approver.user_email}`);
+            } catch (emailError) {
+              console.error(`✗ Failed to send version update notification to ${approver.user_email}:`, emailError);
+            }
+          }
+        }
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: 'New version uploaded successfully',

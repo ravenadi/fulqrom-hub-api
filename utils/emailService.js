@@ -88,19 +88,28 @@ class EmailService {
       const subject = subjects[templateName] || 'Fulqrom Hub Notification';
 
       // Handle conditional blocks FIRST (before variable replacement)
-      // {{#if variable}}...{{/if}} - only show if variable is truthy and not empty string
-      html = html.replace(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/g, (match, varName, content) => {
-        const value = variables[varName];
-        // Check if value exists and is not empty/falsy
-        // For strings, check if not empty after trimming
-        if (value !== null && value !== undefined && value !== false) {
-          if (typeof value === 'string') {
-            return value.trim() !== '' ? content : '';
+      // Process nested {{#if}} blocks from innermost to outermost
+      // Keep processing until no more conditionals are found
+      let previousHtml;
+      let iterations = 0;
+      const maxIterations = 10; // Prevent infinite loops
+
+      do {
+        previousHtml = html;
+        html = html.replace(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/g, (match, varName, content) => {
+          const value = variables[varName];
+          // Check if value exists and is not empty/falsy
+          // For strings, check if not empty after trimming
+          if (value !== null && value !== undefined && value !== false) {
+            if (typeof value === 'string') {
+              return value.trim() !== '' ? content : '';
+            }
+            return value ? content : '';
           }
-          return value ? content : '';
-        }
-        return '';
-      });
+          return '';
+        });
+        iterations++;
+      } while (previousHtml !== html && iterations < maxIterations);
 
       // Replace variables in template
       // Simple template engine - replace {{variable}} with value
