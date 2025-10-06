@@ -251,7 +251,7 @@ router.get('/entities/tenants', async (req, res) => {
 
     const tenants = await Tenant.find(filter)
       .select('_id  tenant_trading_name tenant_legal_name building_id site_id customer_id')
-      .sort({ tenant_trading_name: 1, tenant_legal_name: 1, tenant_name: 1 })
+      .sort({ tenant_trading_name: 1 })
       .lean();
 
     const formattedTenants = tenants.map(tenant => ({
@@ -290,7 +290,7 @@ router.get('/entities/vendors', async (req, res) => {
 
     const vendors = await Vendor.find(filter)
       .select('_id contractor_name trading_name contractor_type')
-      .sort({ trading_name: 1, contractor_name: 1 })
+      .sort({ trading_name: 1 })
       .lean();
 
     const formattedVendors = vendors.map(vendor => ({
