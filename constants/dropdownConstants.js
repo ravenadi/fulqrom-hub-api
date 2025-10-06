@@ -23,7 +23,7 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Contact module dropdowns
-  // Loaded from: GET /api/dropdowns (flattened as contact_role_types, contact_contact_types, contact_platform_access)
+  // Loaded from: GET /api/dropdowns (flattened as contact_role_types, contact_types, contact_platform_access)
   contact: {
     role_types: [
       'Primary',
@@ -33,7 +33,7 @@ const DROPDOWN_CONSTANTS = {
       'Financial',
       'Other'
     ],
-    contact_types: [
+    types: [
       'Internal',
       'External',
       'Contractor',
@@ -50,9 +50,9 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Site module dropdowns
-  // Loaded from: GET /api/dropdowns (flattened as site_site_types, site_site_statuses, etc.)
+  // Loaded from: GET /api/dropdowns (flattened as site_types, site_statuses, etc.)
   site: {
-    site_types: [
+    types: [
       'Commercial Office',
       'Retail',
       'Industrial',
@@ -60,20 +60,20 @@ const DROPDOWN_CONSTANTS = {
       'Warehouse',
       'Data Centre'
     ],
-    site_statuses: [
+    statuses: [
       'Active',
       'Under Construction',
       'Planning',
       'Inactive',
       'Maintenance'
     ],
-    site_security_levels: [
+    security_levels: [
       'Public',
       'Restricted',
       'Confidential',
       'High Security'
     ],
-    site_states: [
+    states: [
       'NSW',
       'VIC',
       'QLD',
@@ -86,9 +86,9 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Building module dropdowns
-  // Loaded from: GET /api/dropdowns (flattened as building_building_types, building_building_statuses)
+  // Loaded from: GET /api/dropdowns (flattened as building_types, building_statuses)
   building: {
-    building_types: [
+    types: [
       'Office',
       'Retail',
       'Industrial',
@@ -98,7 +98,7 @@ const DROPDOWN_CONSTANTS = {
       'Healthcare',
       'Educational'
     ],
-    building_statuses: [
+    statuses: [
       'Active',
       'Under Construction',
       'Renovation',
@@ -108,9 +108,9 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Floor module dropdowns
-  // Loaded from: GET /api/dropdowns (flattened as floor_floor_types, floor_floor_statuses, floor_floor_area_units)
+  // Loaded from: GET /api/dropdowns (flattened as floor_types, floor_statuses, floor_area_units)
   floor: {
-    floor_types: [
+    types: [
       'Office',
       'Retail',
       'Plant Room',
@@ -119,23 +119,69 @@ const DROPDOWN_CONSTANTS = {
       'Residential',
       'Storage'
     ],
-    floor_statuses: [
+    statuses: [
       'Active',
       'Under Construction',
       'Renovation',
       'Vacant',
       'Maintenance'
     ],
-    floor_area_units: [
+    area_units: [
       'm²',
       'sq ft'
     ]
   },
 
+  // Asset module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as asset_categories, asset_statuses, asset_criticality_levels, asset_conditions)
+  asset: {
+    categories: [
+      'AHU',
+      'Air Con',
+      'Boiler System',
+      'Chemical Treatment',
+      'Chiller System',
+      'Controls',
+      'Damper',
+      'Electrical',
+      'Fire Safety',
+      'HVAC',
+      'Lift/Elevator',
+      'Other Mech. Equip',
+      'Plumbing',
+      'Refrigeration',
+      'Security',
+      'TBC',
+      'Ventilation'
+    ],
+    statuses: [
+      'Operational',
+      'Under Testing',
+      'Maintenance Required',
+      'Out of Service',
+      'Decommissioned'
+    ],
+    criticality_levels: [
+      'Critical',
+      'High',
+      'Medium',
+      'Low'
+    ],
+    conditions: [
+      'Excellent',
+      'Good',
+      'Fair',
+      'Poor',
+      'New',
+      'Average',
+      'Other'
+    ]
+  },
+
   // Tenant module dropdowns
-  // Loaded from: GET /api/dropdowns (flattened as tenant_tenant_industry_types, tenant_tenant_lease_statuses, etc.)
+  // Loaded from: GET /api/dropdowns (flattened as tenant_industry_types, tenant_lease_statuses, etc.)
   tenant: {
-    tenant_industry_types: [
+    industry_types: [
       'Technology',
       'Finance',
       'Healthcare',
@@ -146,7 +192,7 @@ const DROPDOWN_CONSTANTS = {
       'Education',
       'Other'
     ],
-    tenant_lease_statuses: [
+    lease_statuses: [
       'Active',
       'Pending',
       'Expired',
@@ -154,11 +200,11 @@ const DROPDOWN_CONSTANTS = {
       'Under Negotiation',
       'Renewed'
     ],
-    tenant_area_units: [
+    area_units: [
       'm²',
       'sq ft'
     ],
-    tenant_rent_frequencies: [
+    rent_frequencies: [
       'Weekly',
       'Fortnightly',
       'Monthly',
@@ -168,9 +214,9 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Document module dropdowns
-  // Loaded from: GET /api/dropdowns (flattened as document_document_types, document_document_categories, etc.)
+  // Loaded from: GET /api/dropdowns (flattened as document_types, document_categories, etc.)
   document: {
-    document_types: [
+    types: [
       'PDF',
       'Word',
       'Excel',
@@ -179,21 +225,38 @@ const DROPDOWN_CONSTANTS = {
       'BIM',
       'Other'
     ],
-    document_categories: [
-      'Drawing Register',
-      'Compliance & Regulatory',
-      'Standards & Procedures',
-      'Building Management',
-      'General Repository'
+    categories: [
+      'Operations & Maintenance (O&M) Manuals',
+      'Commissioning Data (Air & Water Balance Reports)',
+      'Egress Report',
+      'Fire Safety Reports',
+      'HVAC Drawings',
+      'Electrical Schematics',
+      'Plumbing & Hydraulics Drawings',
+      'Mechanical Services Drawings',
+      'Waste Services',
+      'Building Management & Control Diagrams',
+      'Construction Drawings',
+      'Tender Drawings & Specifications',
+      'Shop Drawings',
+      'Certification Reports',
+      'Warranty Certificates',
+      'Service Reports',
+      'Asset Registers',
+      'Drawing Schedules',
+      'Compliance Documents',
+      'Project Management Documentation',
+      'NABERS & Energy Reporting',
+      'Device Register'
     ],
-    document_statuses: [
+    statuses: [
       'Draft',
       'Under Review',
       'Approved',
       'Archived',
       'Rejected'
     ],
-    document_engineering_disciplines: [
+    engineering_disciplines: [
       'Mechanical',
       'Electrical',
       'Plumbing',
@@ -203,11 +266,57 @@ const DROPDOWN_CONSTANTS = {
       'HVAC',
       'Telecommunications'
     ],
-    document_approval_statuses: [
+    approval_statuses: [
       'Pending',
       'Approved',
       'Rejected',
       'Under Review'
+    ]
+  },
+
+  // Vendor module dropdowns
+  // Loaded from: GET /api/dropdowns (flattened as vendor_contractor_types, vendor_consultant_specialisations, etc.)
+  vendor: {
+    contractor_types: [
+      'HVAC Contractor',
+      'Electrical Contractor',
+      'Plumbing Contractor',
+      'Fire Safety Contractor',
+      'Building Consultant',
+      'General Contractor',
+      'Maintenance Contractor',
+      'Cleaning Contractor',
+      'Security Contractor',
+      'Construction Contractor',
+      'Landscaping Contractor',
+      'Pest Control Contractor'
+    ],
+    consultant_specialisations: [
+      'Building Consultant',
+      'Engineering Consultant',
+      'Fire Safety Consultant',
+      'Mechanical Consultant',
+      'Electrical Consultant',
+      'Structural Consultant',
+      'Environmental Consultant',
+      'Energy Consultant'
+    ],
+    certification_authorities: [
+      'Council-appointed',
+      'Private',
+      'Accredited'
+    ],
+    services_provided: [
+      'Maintenance & Repairs',
+      'Installation',
+      'Emergency Callout',
+      'Inspections',
+      'Testing & Commissioning',
+      'Consultation',
+      'Design',
+      'Project Management',
+      'Compliance & Certification',
+      'Energy Audits'
     ]
   }
 };
