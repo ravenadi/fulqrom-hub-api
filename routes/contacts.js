@@ -150,7 +150,7 @@ router.post('/', async (req, res) => {
     // Create contact with both new and legacy structure for compatibility
     const newContactData = {
       ...req.body,
-      contact_methods: [] // Initialize empty contact_methods array
+      contact_methods: req.body.contact_methods || []  // Initialize empty contact_methods array
     };
 
     // If legacy method fields are provided, also add them to the new structure
