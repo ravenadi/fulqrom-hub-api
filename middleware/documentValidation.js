@@ -147,7 +147,7 @@ const queryParamsSchema = Joi.object({
   search: Joi.string().optional().trim().min(1),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(50),
-  sort: Joi.string().optional().valid('name', 'category', 'type', 'created_at').default('created_at'),
+  sort: Joi.string().optional().valid('name', 'category', 'type', 'created_at', 'metadata.compliance_status', 'status', 'expiry_date').default('created_at'),
   order: Joi.string().optional().valid('asc', 'desc').default('desc')
 });
 
