@@ -336,7 +336,7 @@ const DocumentSchema = new mongoose.Schema({
   // Access Control
   access_control: AccessControlSchema,
 
-  // Approval workflow
+  // Approval workflow (legacy fields - kept for backward compatibility)
   // NOTE: Enum validation removed - values loaded from GET /api/dropdowns (document_document_approval_statuses)
   approval_required: {
     type: Boolean,
@@ -350,6 +350,48 @@ const DocumentSchema = new mongoose.Schema({
     type: String,
     default: 'Pending',
     trim: true
+  },
+
+  // New Approval Configuration (preferred)
+  approval_config: {
+    enabled: {
+      type: Boolean,
+      default: false
+    },
+    status: {
+      type: String,
+      trim: true,
+      default: 'Draft'
+    },
+    approvers: [{
+      user_id: {
+        type: String,
+        trim: true
+      },
+      user_name: {
+        type: String,
+        trim: true
+      },
+      user_email: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        required: function() {
+          return this.approval_config && this.approval_config.enabled;
+        }
+      }
+    }],
+    approval_history: [{
+      user_id: String,
+      user_name: String,
+      user_email: String,
+      status: String,
+      comment: String,
+      timestamp: {
+        type: Date,
+        default: Date.now
+      }
+    }]
   },
 
   // Version Management Fields
@@ -450,10 +492,15 @@ DocumentSchema.index({ 'drawing_info.date_issued': -1 });
 DocumentSchema.index({ 'access_control.access_level': 1 });
 DocumentSchema.index({ 'access_control.access_users': 1 });
 
-// Approval workflow indexes
+// Approval workflow indexes (legacy)
 DocumentSchema.index({ approval_status: 1 });
 DocumentSchema.index({ approval_required: 1 });
 DocumentSchema.index({ approved_by: 1 });
+
+// New approval config indexes
+DocumentSchema.index({ 'approval_config.enabled': 1 });
+DocumentSchema.index({ 'approval_config.status': 1 });
+DocumentSchema.index({ 'approval_config.approvers.user_email': 1 });
 
 // Compound indexes
 DocumentSchema.index({ 'customer.customer_id': 1, category: 1 });

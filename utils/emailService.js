@@ -65,17 +65,42 @@ class EmailService {
    */
   async renderTemplate(templateName, variables) {
     try {
+      // Map snake_case template names to camelCase file names
+      const templateFileMap = {
+        'document_assignment': 'documentAssignment',
+        'document_update': 'documentUpdate'
+      };
+
+      const fileName = templateFileMap[templateName] || templateName;
+
       // Load template file
-      const templatePath = path.join(__dirname, 'emailTemplates', `${templateName}.html`);
+      const templatePath = path.join(__dirname, 'emailTemplates', `${fileName}.html`);
       let html = await fs.readFile(templatePath, 'utf8');
 
       // Generate subject based on template
       const subjects = {
-        documentAssignment: `A Document has been assigned to you - ${variables.document_name}`,
-        documentUpdate: `Document Update - ${variables.document_name}`
+        document_assignment: `Document Approval Request - ${variables.document_name}`,
+        documentAssignment: `Document Approval Request - ${variables.document_name}`,
+        document_update: `New comment on the document - ${variables.document_name}`,
+        documentUpdate: `New comment on the document - ${variables.document_name}`
       };
 
       const subject = subjects[templateName] || 'Fulqrom Hub Notification';
+
+      // Handle conditional blocks FIRST (before variable replacement)
+      // {{#if variable}}...{{/if}} - only show if variable is truthy and not empty string
+      html = html.replace(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/g, (match, varName, content) => {
+        const value = variables[varName];
+        // Check if value exists and is not empty/falsy
+        // For strings, check if not empty after trimming
+        if (value !== null && value !== undefined && value !== false) {
+          if (typeof value === 'string') {
+            return value.trim() !== '' ? content : '';
+          }
+          return value ? content : '';
+        }
+        return '';
+      });
 
       // Replace variables in template
       // Simple template engine - replace {{variable}} with value
@@ -83,11 +108,6 @@ class EmailService {
         const regex = new RegExp(`{{${key}}}`, 'g');
         html = html.replace(regex, value || '');
       }
-
-      // Handle conditional blocks {{#if variable}}...{{/if}}
-      html = html.replace(/{{#if\s+(\w+)}}([\s\S]*?){{\/if}}/g, (match, varName, content) => {
-        return variables[varName] ? content : '';
-      });
 
       return { subject, html };
     } catch (error) {
@@ -277,7 +297,7 @@ class EmailService {
     };
 
     return this.sendEmail({
-      template: 'documentAssignment',
+      template: 'document_assignment',
       to,
       variables,
       documentId
@@ -324,7 +344,7 @@ class EmailService {
     };
 
     return this.sendEmail({
-      template: 'documentUpdate',
+      template: 'document_update',
       to,
       variables,
       documentId

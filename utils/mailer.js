@@ -8,11 +8,16 @@ const createTransporter = () => {
     host: process.env.MAIL_HOST,
     port: parseInt(process.env.MAIL_PORT || '465'),
     secure: process.env.MAIL_ENCRYPTION === 'ssl', // true for 465, false for other ports
-    auth: {
+  };
+
+  // Only add auth if credentials are provided (not null/empty)
+  if (process.env.MAIL_USERNAME && process.env.MAIL_USERNAME !== 'null' &&
+      process.env.MAIL_PASSWORD && process.env.MAIL_PASSWORD !== 'null') {
+    config.auth = {
       user: process.env.MAIL_USERNAME,
       pass: process.env.MAIL_PASSWORD,
-    },
-  };
+    };
+  }
 
   return nodemailer.createTransport(config);
 };

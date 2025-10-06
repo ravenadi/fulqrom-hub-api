@@ -56,6 +56,36 @@ const createDocumentSchema = Joi.object({
   approved_by: Joi.string().optional().trim(),
   approval_status: Joi.string().optional().trim(),
 
+  // Approval configuration
+  approval_config: Joi.object({
+    enabled: Joi.boolean().optional(),
+    status: Joi.string().optional().trim(),
+    approvers: Joi.array().items(
+      Joi.object({
+        user_id: Joi.string().optional(),
+        user_name: Joi.string().optional().trim().allow(''),
+        user_email: Joi.string().email().required()
+      })
+    ).optional(),
+    approval_history: Joi.array().optional()
+  }).optional(),
+
+  // Access control
+  access_level: Joi.string().optional().trim(),
+  access_users: Joi.array().items(Joi.string()).optional(),
+
+  // Drawing info
+  date_issued: Joi.string().optional().isoDate(),
+  drawing_status: Joi.string().optional().trim(),
+  prepared_by: Joi.string().optional().trim(),
+  drawing_scale: Joi.string().optional().trim(),
+  approved_by_user: Joi.string().optional().trim(),
+  related_drawings: Joi.array().items(Joi.string()).optional(),
+
+  // Vendor association
+  vendor_id: Joi.string().optional(),
+  vendor_name: Joi.string().optional(),
+
   // Audit fields
   created_by: Joi.string().optional().trim()
 });

@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const Document = require('../models/Document');
+const DocumentComment = require('../models/DocumentComment');
 const Customer = require('../models/Customer');
 const Site = require('../models/Site');
 const Building = require('../models/Building');
@@ -25,6 +26,7 @@ const {
   handleError,
   sanitizeQuery
 } = require('../middleware/searchHelpers');
+const emailService = require('../utils/emailService');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -459,11 +461,6 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
         access_users: documentData.access_users || []
       },
 
-      // Approval workflow
-      approval_required: documentData.approval_required || false,
-      approved_by: documentData.approved_by,
-      approval_status: documentData.approval_status || 'Pending',
-
       // Audit fields
       created_by: documentData.created_by,
       created_at: new Date().toISOString(),
@@ -514,6 +511,16 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
       };
     }
 
+    // Add approval configuration if provided
+    if (documentData.approval_config) {
+      documentPayload.approval_config = {
+        enabled: documentData.approval_config.enabled || false,
+        status: documentData.approval_config.status || 'Draft',
+        approvers: documentData.approval_config.approvers || [],
+        approval_history: []
+      };
+    }
+
     // Create document
     const document = new Document(documentPayload);
     await document.save();
@@ -521,6 +528,37 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
     // Set document_group_id to the document's own ID after creation
     document.document_group_id = document._id.toString();
     await document.save();
+
+    // Send approval emails if approval is enabled and approvers are assigned
+    if (documentData.approval_config?.enabled && documentData.approval_config.approvers?.length > 0) {
+      const documentDetails = {
+        name: document.name || document.file?.file_meta?.file_name || 'Unnamed Document',
+        category: document.category,
+        type: document.type,
+        status: documentData.approval_config.status || 'Pending Approval',
+        uploadedBy: documentData.created_by || 'Unknown',
+        uploadedDate: new Date(),
+        description: document.description
+      };
+
+      // Send emails to all approvers
+      for (const approver of documentData.approval_config.approvers) {
+        if (approver.user_email) {
+          try {
+            await emailService.sendDocumentAssignment({
+              to: approver.user_email,
+              documentId: document._id.toString(),
+              approverName: approver.user_name || approver.user_email,
+              documentDetails
+            });
+            console.log(`✓ Approval email sent to ${approver.user_email}`);
+          } catch (emailError) {
+            console.error(`✗ Failed to send approval email to ${approver.user_email}:`, emailError);
+            // Continue with other approvers even if one fails
+          }
+        }
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -1994,6 +2032,221 @@ router.post('/versions/:versionId/restore', validateObjectId, async (req, res) =
     res.status(500).json({
       success: false,
       message: 'Error restoring version',
+      error: error.message
+    });
+  }
+});
+
+// ===== DOCUMENT REVIEW ENDPOINTS =====
+
+// GET /api/documents/:id/comments - Get all comments for a document
+router.get('/:id/comments', validateObjectId, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 100, skip = 0 } = req.query;
+
+    // Verify document exists
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Get comments
+    const comments = await DocumentComment.getDocumentComments(id, {
+      limit: parseInt(limit),
+      skip: parseInt(skip)
+    });
+
+    const total = await DocumentComment.getCommentCount(id);
+
+    res.status(200).json({
+      success: true,
+      count: comments.length,
+      total,
+      data: comments
+    });
+
+  } catch (error) {
+    console.error('Error fetching document comments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching comments',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/documents/:id/review - Submit a review for a document
+router.post('/:id/review', validateObjectId, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      status,
+      comment,
+      user_id,
+      user_name,
+      user_email,
+      send_notification,
+      notify_recipients
+    } = req.body;
+
+    // Validation
+    if (!status || !comment) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status and comment are required'
+      });
+    }
+
+    if (!user_email) {
+      return res.status(400).json({
+        success: false,
+        message: 'User email is required'
+      });
+    }
+
+    // Verify document exists
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Create comment
+    const documentComment = new DocumentComment({
+      document_id: id,
+      user_id: user_id || 'unknown',
+      user_name: user_name || user_email,
+      user_email: user_email.toLowerCase().trim(),
+      comment: comment.trim(),
+      status: status.trim()
+    });
+
+    await documentComment.save();
+
+    // Update document approval status
+    if (document.approval_config) {
+      document.approval_config.status = status;
+
+      // Add to approval history if not exists
+      if (!document.approval_config.approval_history) {
+        document.approval_config.approval_history = [];
+      }
+
+      document.approval_config.approval_history.push({
+        user_id: user_id || 'unknown',
+        user_name: user_name || user_email,
+        user_email: user_email.toLowerCase().trim(),
+        status: status,
+        comment: comment.trim(),
+        timestamp: new Date()
+      });
+
+      document.updated_at = new Date().toISOString();
+      await document.save();
+    }
+
+    // Send notification emails (async, don't block response)
+    if (send_notification && notify_recipients && Array.isArray(notify_recipients) && notify_recipients.length > 0) {
+      setImmediate(async () => {
+        const documentDetails = {
+          name: document.name || document.file?.file_meta?.file_name || 'Unnamed Document',
+          category: document.category,
+          type: document.type
+        };
+
+        const statusUpdate = {
+          newStatus: status,
+          oldStatus: null,
+          reviewerName: user_name || user_email,
+          reviewDate: new Date(),
+          comment: comment
+        };
+
+        // Send to all specified recipients
+        for (const recipient of notify_recipients) {
+          try {
+            await emailService.sendDocumentUpdate({
+              to: recipient,
+              documentId: id,
+              creatorName: recipient,
+              documentDetails,
+              statusUpdate
+            });
+            console.log(`✓ Review notification sent to ${recipient}`);
+          } catch (emailError) {
+            console.error(`✗ Failed to send review notification to ${recipient}:`, emailError);
+          }
+        }
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Review submitted successfully',
+      data: documentComment
+    });
+
+  } catch (error) {
+    console.error('Error submitting review:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error submitting review',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/:id/download - Get download URL for document
+router.get('/:id/download', validateObjectId, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verify document exists
+    const document = await Document.findById(id);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    if (!document.file?.file_meta?.file_key) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found for this document'
+      });
+    }
+
+    // Generate presigned URL (expires in 1 hour)
+    const result = await generatePresignedUrl(document.file.file_meta.file_key, 3600);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error generating download URL',
+        error: result.error
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      download_url: result.url,
+      file_name: document.file.file_meta.file_name,
+      file_size: document.file.file_meta.file_size,
+      expires_in: 3600 // seconds
+    });
+
+  } catch (error) {
+    console.error('Error generating download URL:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error generating download URL',
       error: error.message
     });
   }

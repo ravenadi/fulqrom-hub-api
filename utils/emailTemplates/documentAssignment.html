@@ -1,174 +1,310 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Approval Request</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
+        * {
             margin: 0;
             padding: 0;
-            background-color: #f5f5f5;
+            box-sizing: border-box;
         }
-        .container {
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            background-color: #f8fafc;
+            padding: 20px;
+        }
+        .email-wrapper {
             max-width: 600px;
-            margin: 20px auto;
+            margin: 0 auto;
             background-color: #ffffff;
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
         }
         .header {
-            background-color: #0ea5e9;
-            color: white;
-            padding: 30px 20px;
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            padding: 40px 30px;
             text-align: center;
         }
-        .header h2 {
-            margin: 0;
-            font-size: 24px;
+        .header-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            color: #ffffff;
+            font-size: 26px;
             font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+        .header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 15px;
+            margin-top: 8px;
         }
         .content {
-            padding: 30px 20px;
+            padding: 40px 30px;
         }
         .greeting {
-            font-size: 16px;
-            margin-bottom: 20px;
-        }
-        .info-box {
-            background-color: #f9fafb;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 6px;
-            border-left: 4px solid #0ea5e9;
-        }
-        .info-box h3 {
-            margin: 0 0 15px 0;
-            font-size: 18px;
+            font-size: 17px;
             color: #1e293b;
+            margin-bottom: 20px;
+            font-weight: 500;
         }
-        .details {
-            margin: 15px 0;
+        .intro-text {
+            font-size: 15px;
+            color: #475569;
+            margin-bottom: 30px;
+            line-height: 1.7;
         }
-        .details-row {
-            padding: 8px 0;
-            border-bottom: 1px solid #e5e7eb;
+        .document-card {
+            background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 25px 0;
         }
-        .details-row:last-child {
+        .document-card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .document-icon {
+            font-size: 32px;
+            margin-right: 12px;
+        }
+        .document-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #0f172a;
+            flex: 1;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        .details-grid {
+            display: grid;
+            gap: 15px;
+        }
+        .detail-row {
+            display: flex;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .detail-row:last-child {
             border-bottom: none;
         }
-        .label {
+        .detail-label {
             font-weight: 600;
             color: #64748b;
-            display: inline-block;
+            font-size: 14px;
             min-width: 140px;
+            flex-shrink: 0;
         }
-        .value {
-            color: #1e293b;
+        .detail-value {
+            color: #0f172a;
+            font-size: 14px;
+            flex: 1;
         }
-        .description-box {
-            margin-top: 15px;
-            padding: 15px;
+        .description-section {
+            margin-top: 20px;
+            padding: 18px;
             background-color: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
         }
-        .description-box .label {
+        .description-section .detail-label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
-        .button-container {
+        .description-text {
+            color: #475569;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .action-section {
             text-align: center;
-            margin: 30px 0;
+            margin: 35px 0;
+            padding: 30px 0;
+            border-top: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
         }
-        .button {
+        .action-text {
+            font-size: 15px;
+            color: #475569;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .btn-primary {
             display: inline-block;
-            background-color: #0ea5e9;
-            color: white;
-            padding: 14px 32px;
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            color: #ffffff;
+            padding: 16px 40px;
             text-decoration: none;
-            border-radius: 6px;
+            border-radius: 8px;
             font-weight: 600;
             font-size: 16px;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
         }
-        .button:hover {
-            background-color: #0284c7;
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4);
+        }
+        .help-text {
+            font-size: 14px;
+            color: #64748b;
+            margin-top: 25px;
+            padding: 18px;
+            background-color: #f8fafc;
+            border-radius: 8px;
+            border-left: 4px solid #0ea5e9;
+        }
+        .help-text strong {
+            color: #334155;
         }
         .footer {
-            background-color: #f9fafb;
-            color: #64748b;
-            font-size: 13px;
-            padding: 20px;
+            background-color: #f8fafc;
+            padding: 30px;
             text-align: center;
-            border-top: 1px solid #e5e7eb;
+            border-top: 1px solid #e2e8f0;
         }
-        .footer p {
-            margin: 5px 0;
+        .footer-logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0ea5e9;
+            margin-bottom: 10px;
+        }
+        .footer-text {
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.6;
+            margin: 8px 0;
+        }
+        .footer-divider {
+            width: 50px;
+            height: 2px;
+            background-color: #cbd5e1;
+            margin: 15px auto;
+        }
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .email-wrapper {
+                border-radius: 8px;
+            }
+            .header {
+                padding: 30px 20px;
+            }
+            .header h1 {
+                font-size: 22px;
+            }
+            .content {
+                padding: 30px 20px;
+            }
+            .document-card {
+                padding: 20px;
+            }
+            .detail-row {
+                flex-direction: column;
+            }
+            .detail-label {
+                margin-bottom: 4px;
+            }
+            .btn-primary {
+                padding: 14px 30px;
+                font-size: 15px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="email-wrapper">
         <div class="header">
-            <h2>📄 Document Review Required</h2>
+            <div class="header-icon">📋</div>
+            <h1>Document Approval Request</h1>
+            <p>Your review is required</p>
         </div>
 
         <div class="content">
-            <p class="greeting">G'day {{approver_name}},</p>
+            <p class="greeting">Hello {{approver_name}},</p>
 
-            <p>A document has been assigned to you for approval in the Fulqrom Hub system.</p>
+            <p class="intro-text">
+                A new document has been assigned to you for review and approval in the Fulqrom Hub platform.
+                Please review the details below and take the necessary action.
+            </p>
 
-            <div class="info-box">
-                <h3>Document Details</h3>
-                <div class="details">
-                    <div class="details-row">
-                        <span class="label">Document Name:</span>
-                        <span class="value">{{document_name}}</span>
+            <div class="document-card">
+                <div class="document-card-header">
+                    <span class="document-icon">📄</span>
+                    <span class="document-title">{{document_name}}</span>
+                </div>
+
+                <div class="details-grid">
+                    <div class="detail-row">
+                        <span class="detail-label">Category</span>
+                        <span class="detail-value">{{document_category}}</span>
                     </div>
-                    <div class="details-row">
-                        <span class="label">Category:</span>
-                        <span class="value">{{document_category}}</span>
+                    <div class="detail-row">
+                        <span class="detail-label">Document Type</span>
+                        <span class="detail-value">{{document_type}}</span>
                     </div>
-                    <div class="details-row">
-                        <span class="label">Type:</span>
-                        <span class="value">{{document_type}}</span>
+                    <div class="detail-row">
+                        <span class="detail-label">Status</span>
+                        <span class="detail-value">
+                            <span class="status-badge">{{approval_status}}</span>
+                        </span>
                     </div>
-                    <div class="details-row">
-                        <span class="label">Current Status:</span>
-                        <span class="value">{{approval_status}}</span>
+                    <div class="detail-row">
+                        <span class="detail-label">Uploaded By</span>
+                        <span class="detail-value">{{uploaded_by_name}}</span>
                     </div>
-                    <div class="details-row">
-                        <span class="label">Uploaded By:</span>
-                        <span class="value">{{uploaded_by_name}}</span>
-                    </div>
-                    <div class="details-row">
-                        <span class="label">Uploaded Date:</span>
-                        <span class="value">{{uploaded_date_formatted}}</span>
+                    <div class="detail-row">
+                        <span class="detail-label">Upload Date</span>
+                        <span class="detail-value">{{uploaded_date_formatted}}</span>
                     </div>
                 </div>
 
                 {{#if document_description}}
-                <div class="description-box">
-                    <span class="label">Description:</span>
-                    <p style="margin: 0;">{{document_description}}</p>
+                <div class="description-section">
+                    <span class="detail-label">Description</span>
+                    <p class="description-text">{{document_description}}</p>
                 </div>
                 {{/if}}
             </div>
 
-            <p>Please review this document and provide your approval or feedback.</p>
+            <div class="action-section">
+                <p class="action-text">Click the button below to review and approve the document</p>
+                <a href="{{document_review_url}}" class="btn-primary">Review Document Now</a>
+            </div>
 
-            <div class="button-container">
-                <a href="{{document_review_url}}" class="button">Review Document</a>
+            <div class="help-text">
+                <strong>Need assistance?</strong><br>
+                If you have any questions about this document or the approval process, please contact your system administrator or the document uploader directly.
             </div>
         </div>
 
         <div class="footer">
-            <p><strong>Fulqrom Hub</strong> - Australian Building Management System</p>
-            <p>This is an automated notification from Fulqrom Hub.</p>
-            <p>If you have any questions, please contact your system administrator.</p>
+            <div class="footer-logo">FULQROM HUB</div>
+            <p class="footer-text">Australian Commercial Real Estate & Building Management Platform</p>
+            <div class="footer-divider"></div>
+            <p class="footer-text">This is an automated notification. Please do not reply to this email.</p>
+            <p class="footer-text">© 2025 Fulqrom Hub. All rights reserved.</p>
         </div>
     </div>
 </body>
