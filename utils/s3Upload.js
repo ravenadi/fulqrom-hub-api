@@ -17,7 +17,9 @@ const s3Client = new S3Client({
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024; // 10GB in bytes
 const ALLOWED_FILE_TYPES = [
+  // PDF
   'application/pdf',
+  // CAD/DWG files
   'image/dwg',
   'image/vnd.dwg',
   'application/acad',
@@ -29,17 +31,55 @@ const ALLOWED_FILE_TYPES = [
   'image/vnd.dxf',
   'application/dxf',
   'application/x-dxf',
+  // Images
   'image/jpeg',
   'image/jpg',
   'image/png',
+  'image/gif',
+  'image/bmp',
+  'image/svg+xml',
+  'image/webp',
+  'image/x-icon',
+  'image/tiff',
+  // Word documents
+  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text',
+  'application/rtf',
+  'text/rtf',
+  // Excel spreadsheets
+  'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  // Text/CSV
   'text/plain',
-  'text/csv'
+  'text/csv',
+  // BIM files
+  'application/x-step',
+  'application/step',
+  'model/iges',
+  'application/iges',
+  'application/sat',
+  'application/x-sat'
 ];
 
 const ALLOWED_EXTENSIONS = [
-  '.pdf', '.dwg', '.dxf', '.jpg', '.jpeg', '.png', '.docx', '.xlsx', '.txt', '.csv'
+  // PDF
+  '.pdf',
+  // CAD files
+  '.dwg', '.dws', '.dwt', '.dxf', '.stl', '.step', '.stp', '.iges', '.igs', '.sat',
+  // BIM files
+  '.rvt', '.rfa', '.rte', '.rft', '.ifc', '.nwd', '.nwc', '.nwf',
+  // Images
+  '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp', '.ico', '.tiff', '.tif',
+  // Word documents
+  '.docx', '.doc', '.docm', '.odt', '.rtf',
+  // Excel spreadsheets
+  '.xlsx', '.xls', '.xlsm', '.xlsb', '.csv', '.ods',
+  // Text files
+  '.txt',
+  // Backup files
+  '.bak', '.backup'
 ];
 
 /**
@@ -55,15 +95,18 @@ function validateFile(file) {
     errors.push(`File size exceeds maximum limit of ${MAX_FILE_SIZE / (1024 * 1024 * 1024)}GB`);
   }
 
-  // Check file type
-  if (!ALLOWED_FILE_TYPES.includes(file.mimetype)) {
-    errors.push(`File type '${file.mimetype}' is not allowed`);
-  }
-
-  // Check file extension
+  // Check file extension (primary validation)
   const fileExtension = path.extname(file.originalname).toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(fileExtension)) {
     errors.push(`File extension '${fileExtension}' is not allowed`);
+  }
+
+  // Check MIME type only if extension is valid and MIME is not octet-stream
+  // octet-stream is a generic binary type that browsers use when they can't determine the actual type
+  if (fileExtension && ALLOWED_EXTENSIONS.includes(fileExtension)) {
+    if (file.mimetype !== 'application/octet-stream' && !ALLOWED_FILE_TYPES.includes(file.mimetype)) {
+      errors.push(`File type '${file.mimetype}' is not allowed`);
+    }
   }
 
   return {
