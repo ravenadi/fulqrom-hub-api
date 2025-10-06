@@ -12,6 +12,12 @@ const Document = require('../models/Document');
 
 const router = express.Router();
 
+// Helper function to clean array values (remove empty strings, null, undefined)
+function cleanArrayValues(arr) {
+  if (!Array.isArray(arr)) return arr;
+  return arr.filter(item => item !== null && item !== undefined && item !== '' && (typeof item !== 'string' || item.trim() !== ''));
+}
+
 // Helper function to flatten nested structure to match frontend format
 // Converts { customer: { industry_types: [...] } } to { customer_industry_types: [...] }
 function flattenDropdowns(nested) {
@@ -20,7 +26,8 @@ function flattenDropdowns(nested) {
   Object.keys(nested).forEach(module => {
     Object.keys(nested[module]).forEach(field => {
       const flatKey = `${module}_${field}`;
-      flattened[flatKey] = nested[module][field];
+      // Clean the array values to remove empty strings
+      flattened[flatKey] = cleanArrayValues(nested[module][field]);
     });
   });
 
