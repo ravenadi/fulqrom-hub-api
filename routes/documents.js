@@ -18,6 +18,7 @@ const {
   validateObjectId
 } = require('../middleware/documentValidation');
 const {
+  escapeRegex,
   buildSearchQuery,
   buildPagination,
   buildSort,
@@ -273,10 +274,16 @@ router.get('/', validateQueryParams, async (req, res) => {
       filterQuery['access_control.access_level'] = Array.isArray(levels) ? { $in: levels } : levels;
     }
 
-    // Tags filter
+    // Tags filter (multi-select support with case-insensitive matching)
     if (tags) {
-      const tagArray = Array.isArray(tags) ? tags : [tags];
-      filterQuery['tags.tags'] = { $in: tagArray };
+      const tagsList = tags.includes(',')
+        ? tags.split(',').map(t => t.trim())
+        : tags;
+      const tagArray = Array.isArray(tagsList) ? tagsList : [tagsList];
+      // Case-insensitive matching for tags
+      filterQuery['tags.tags'] = {
+        $in: tagArray.map(tag => new RegExp(`^${escapeRegex(tag)}$`, 'i'))
+      };
     }
 
     // Advanced search
@@ -1285,6 +1292,59 @@ router.get('/by-category', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching category statistics',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/tags - Get all unique tags from documents
+router.get('/tags', async (req, res) => {
+  try {
+    const { customer_id, site_id, building_id } = req.query;
+
+    // Build match query for optional filtering
+    let matchQuery = {};
+    if (customer_id) matchQuery['customer.customer_id'] = customer_id;
+    if (site_id) matchQuery['location.site.site_id'] = site_id;
+    if (building_id) matchQuery['location.building.building_id'] = building_id;
+
+    // Aggregate unique tags
+    const pipeline = [
+      { $unwind: '$tags.tags' },
+      {
+        $group: {
+          _id: '$tags.tags'
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          tag: '$_id'
+        }
+      }
+    ];
+
+    // Add match stage if filters are provided
+    if (Object.keys(matchQuery).length > 0) {
+      pipeline.unshift({ $match: matchQuery });
+    }
+
+    const tagResults = await Document.aggregate(pipeline);
+
+    // Extract tags as flat array of strings
+    const tags = tagResults
+      .map(item => item.tag)
+      .filter(tag => tag && tag.trim().length > 0); // Filter out empty/null tags
+
+    res.status(200).json({
+      success: true,
+      data: tags
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching document tags',
       error: error.message
     });
   }
