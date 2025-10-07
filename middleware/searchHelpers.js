@@ -123,6 +123,7 @@ function buildSort(sort = 'created_at', order = 'desc') {
     'location.site.site_name',
     'location.building.building_name',
     'location.floor.floor_name',
+    'location.floor.floor_number',
     'location.asset.asset_name',
     'file.file_meta.file_name',
     'file.file_meta.file_size',
