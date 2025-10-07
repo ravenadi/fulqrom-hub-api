@@ -47,9 +47,12 @@ router.get('/', async (req, res) => {
       filterQuery.building_id = { $in: buildingIds };
     }
 
-    // Filter by floor type
+    // Filter by floor type (multi-select support)
     if (floor_type) {
-      filterQuery.floor_type = floor_type;
+      const types = floor_type.includes(',')
+        ? floor_type.split(',').map(t => t.trim())
+        : floor_type;
+      filterQuery.floor_type = Array.isArray(types) ? { $in: types } : types;
     }
 
     if (is_active !== undefined) {

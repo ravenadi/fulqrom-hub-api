@@ -27,24 +27,46 @@ router.get('/', async (req, res) => {
     let filterQuery = {};
 
     if (customer_id) {
-      // Convert to ObjectId if valid
-      if (mongoose.Types.ObjectId.isValid(customer_id)) {
-        filterQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+      // Support multi-select with comma-separated values
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+
+      if (Array.isArray(customerIds)) {
+        filterQuery.customer_id = {
+          $in: customerIds.map(id =>
+            mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+          )
+        };
+      } else if (mongoose.Types.ObjectId.isValid(customerIds)) {
+        filterQuery.customer_id = new mongoose.Types.ObjectId(customerIds);
       } else {
-        filterQuery.customer_id = customer_id;
+        filterQuery.customer_id = customerIds;
       }
     }
 
     if (status) {
-      filterQuery.status = status;
+      // Support multi-select with comma-separated values
+      const statuses = status.includes(',')
+        ? status.split(',').map(s => s.trim())
+        : status;
+      filterQuery.status = Array.isArray(statuses) ? { $in: statuses } : statuses;
     }
 
     if (site_type) {
-      filterQuery.type = site_type;
+      // Support multi-select with comma-separated values
+      const types = site_type.includes(',')
+        ? site_type.split(',').map(t => t.trim())
+        : site_type;
+      filterQuery.type = Array.isArray(types) ? { $in: types } : types;
     }
 
     if (state) {
-      filterQuery['address.state'] = state;
+      // Support multi-select with comma-separated values
+      const states = state.includes(',')
+        ? state.split(',').map(s => s.trim())
+        : state;
+      filterQuery['address.state'] = Array.isArray(states) ? { $in: states } : states;
     }
 
     if (is_active !== undefined) {

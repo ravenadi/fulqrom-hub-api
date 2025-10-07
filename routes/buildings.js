@@ -36,31 +36,59 @@ router.get('/', async (req, res) => {
       ];
     }
 
-    // Filter by customer
+    // Filter by customer (multi-select support)
     if (customer_id) {
-      if (mongoose.Types.ObjectId.isValid(customer_id)) {
-        filterQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+
+      if (Array.isArray(customerIds)) {
+        filterQuery.customer_id = {
+          $in: customerIds.map(id =>
+            mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+          )
+        };
+      } else if (mongoose.Types.ObjectId.isValid(customerIds)) {
+        filterQuery.customer_id = new mongoose.Types.ObjectId(customerIds);
       } else {
-        filterQuery.customer_id = customer_id;
+        filterQuery.customer_id = customerIds;
       }
     }
 
-    // Filter by site
+    // Filter by site (multi-select support)
     if (site_id) {
-      const siteIds = site_id.split(',').map(id => id.trim());
-      filterQuery.site_id = { $in: siteIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id) };
+      const siteIds = site_id.includes(',')
+        ? site_id.split(',').map(id => id.trim())
+        : site_id;
+
+      if (Array.isArray(siteIds)) {
+        filterQuery.site_id = {
+          $in: siteIds.map(id =>
+            mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id
+          )
+        };
+      } else if (mongoose.Types.ObjectId.isValid(siteIds)) {
+        filterQuery.site_id = new mongoose.Types.ObjectId(siteIds);
+      } else {
+        filterQuery.site_id = siteIds;
+      }
     }
 
-    // Filter by building type
+    // Filter by building type (multi-select support)
     if (building_type) {
-      filterQuery.building_type = building_type;
+      const types = building_type.includes(',')
+        ? building_type.split(',').map(t => t.trim())
+        : building_type;
+      filterQuery.building_type = Array.isArray(types) ? { $in: types } : types;
     }
 
-    // Filter by status (support both operational_status and status)
+    // Filter by status (support both operational_status and status) (multi-select support)
     const statusFilter = operational_status || status;
     if (statusFilter) {
-      const statuses = statusFilter.split(',').map(s => s.trim());
-      filterQuery.status = { $in: statuses };
+      const statuses = statusFilter.includes(',')
+        ? statusFilter.split(',').map(s => s.trim())
+        : statusFilter;
+      filterQuery.status = Array.isArray(statuses) ? { $in: statuses } : statuses;
     }
 
     if (is_active !== undefined) {

@@ -154,32 +154,117 @@ router.get('/', validateQueryParams, async (req, res) => {
     // Build filter query
     let filterQuery = {};
 
-    // Entity filters
-    if (customer_id) filterQuery['customer.customer_id'] = customer_id;
-    if (site_id) filterQuery['location.site.site_id'] = site_id;
-    if (building_id) filterQuery['location.building.building_id'] = building_id;
-    if (floor_id) filterQuery['location.floor.floor_id'] = floor_id;
-    if (asset_id) filterQuery['location.asset.asset_id'] = asset_id;
-    if (tenant_id) filterQuery['location.tenant.tenant_id'] = tenant_id;
-    if (vendor_id) filterQuery['location.vendor.vendor_id'] = vendor_id;
+    // Entity filters (multi-select support)
+    if (customer_id) {
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+      filterQuery['customer.customer_id'] = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
+    }
+    if (site_id) {
+      const siteIds = site_id.includes(',')
+        ? site_id.split(',').map(id => id.trim())
+        : site_id;
+      filterQuery['location.site.site_id'] = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
+    }
+    if (building_id) {
+      const buildingIds = building_id.includes(',')
+        ? building_id.split(',').map(id => id.trim())
+        : building_id;
+      filterQuery['location.building.building_id'] = Array.isArray(buildingIds) ? { $in: buildingIds } : buildingIds;
+    }
+    if (floor_id) {
+      const floorIds = floor_id.includes(',')
+        ? floor_id.split(',').map(id => id.trim())
+        : floor_id;
+      filterQuery['location.floor.floor_id'] = Array.isArray(floorIds) ? { $in: floorIds } : floorIds;
+    }
+    if (asset_id) {
+      const assetIds = asset_id.includes(',')
+        ? asset_id.split(',').map(id => id.trim())
+        : asset_id;
+      filterQuery['location.asset.asset_id'] = Array.isArray(assetIds) ? { $in: assetIds } : assetIds;
+    }
+    if (tenant_id) {
+      const tenantIds = tenant_id.includes(',')
+        ? tenant_id.split(',').map(id => id.trim())
+        : tenant_id;
+      filterQuery['location.tenant.tenant_id'] = Array.isArray(tenantIds) ? { $in: tenantIds } : tenantIds;
+    }
+    if (vendor_id) {
+      const vendorIds = vendor_id.includes(',')
+        ? vendor_id.split(',').map(id => id.trim())
+        : vendor_id;
+      filterQuery['location.vendor.vendor_id'] = Array.isArray(vendorIds) ? { $in: vendorIds } : vendorIds;
+    }
 
-    // Document filters
-    if (category) filterQuery.category = category;
-    if (type) filterQuery.type = type;
-    if (status) filterQuery.status = status;
-    if (engineering_discipline) filterQuery.engineering_discipline = engineering_discipline;
+    // Document filters (multi-select support)
+    if (category) {
+      const categories = category.includes(',')
+        ? category.split(',').map(c => c.trim())
+        : category;
+      filterQuery.category = Array.isArray(categories) ? { $in: categories } : categories;
+    }
+    if (type) {
+      const types = type.includes(',')
+        ? type.split(',').map(t => t.trim())
+        : type;
+      filterQuery.type = Array.isArray(types) ? { $in: types } : types;
+    }
+    if (status) {
+      const statuses = status.includes(',')
+        ? status.split(',').map(s => s.trim())
+        : status;
+      filterQuery.status = Array.isArray(statuses) ? { $in: statuses } : statuses;
+    }
+    if (engineering_discipline) {
+      const disciplines = engineering_discipline.includes(',')
+        ? engineering_discipline.split(',').map(d => d.trim())
+        : engineering_discipline;
+      filterQuery.engineering_discipline = Array.isArray(disciplines) ? { $in: disciplines } : disciplines;
+    }
 
-    // Compliance filters
-    if (regulatory_framework) filterQuery['metadata.regulatory_framework'] = regulatory_framework;
-    if (compliance_status) filterQuery['metadata.compliance_status'] = compliance_status;
+    // Compliance filters (multi-select support)
+    if (regulatory_framework) {
+      const frameworks = regulatory_framework.includes(',')
+        ? regulatory_framework.split(',').map(f => f.trim())
+        : regulatory_framework;
+      filterQuery['metadata.regulatory_framework'] = Array.isArray(frameworks) ? { $in: frameworks } : frameworks;
+    }
+    if (compliance_status) {
+      const statuses = compliance_status.includes(',')
+        ? compliance_status.split(',').map(s => s.trim())
+        : compliance_status;
+      filterQuery['metadata.compliance_status'] = Array.isArray(statuses) ? { $in: statuses } : statuses;
+    }
 
-    // Drawing Register filters
-    if (drawing_status) filterQuery['drawing_info.drawing_status'] = drawing_status;
-    if (prepared_by) filterQuery['drawing_info.prepared_by'] = prepared_by;
-    if (approved_by_user) filterQuery['drawing_info.approved_by_user'] = approved_by_user;
+    // Drawing Register filters (multi-select support)
+    if (drawing_status) {
+      const statuses = drawing_status.includes(',')
+        ? drawing_status.split(',').map(s => s.trim())
+        : drawing_status;
+      filterQuery['drawing_info.drawing_status'] = Array.isArray(statuses) ? { $in: statuses } : statuses;
+    }
+    if (prepared_by) {
+      const preparers = prepared_by.includes(',')
+        ? prepared_by.split(',').map(p => p.trim())
+        : prepared_by;
+      filterQuery['drawing_info.prepared_by'] = Array.isArray(preparers) ? { $in: preparers } : preparers;
+    }
+    if (approved_by_user) {
+      const approvers = approved_by_user.includes(',')
+        ? approved_by_user.split(',').map(a => a.trim())
+        : approved_by_user;
+      filterQuery['drawing_info.approved_by_user'] = Array.isArray(approvers) ? { $in: approvers } : approvers;
+    }
 
-    // Access Control filters
-    if (access_level) filterQuery['access_control.access_level'] = access_level;
+    // Access Control filters (multi-select support)
+    if (access_level) {
+      const levels = access_level.includes(',')
+        ? access_level.split(',').map(l => l.trim())
+        : access_level;
+      filterQuery['access_control.access_level'] = Array.isArray(levels) ? { $in: levels } : levels;
+    }
 
     // Tags filter
     if (tags) {
