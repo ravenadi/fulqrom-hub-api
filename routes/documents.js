@@ -49,11 +49,18 @@ async function fetchEntityNames(documentData) {
   };
 
   try {
+    // Extract IDs from different possible locations (direct or nested in location/customer objects)
+    const customerId = documentData.customer?.customer_id || documentData.customer_id;
+    const siteId = documentData.location?.site?.site_id || documentData.site_id;
+    const buildingId = documentData.location?.building?.building_id || documentData.building_id;
+    const floorId = documentData.location?.floor?.floor_id || documentData.floor_id;
+    const assetId = documentData.location?.asset?.asset_id || documentData.asset_id;
+    const tenantId = documentData.location?.tenant?.tenant_id || documentData.tenant_id;
+    const vendorId = documentData.location?.vendor?.vendor_id || documentData.vendor_id;
+
     // Fetch customer name
-    if (documentData.customer_id) {
-      // Ensure we're using string ID, not ObjectId
-      const customerId = documentData.customer_id.toString();
-      const customer = await Customer.findById(customerId);
+    if (customerId) {
+      const customer = await Customer.findById(customerId.toString());
       if (customer) {
         entityNames.customer_name = customer.organisation?.organisation_name ||
                                    customer.company_profile?.trading_name ||
@@ -63,53 +70,53 @@ async function fetchEntityNames(documentData) {
     }
 
     // Fetch site name
-    if (documentData.site_id) {
-      const site = await Site.findById(documentData.site_id.toString());
+    if (siteId) {
+      const site = await Site.findById(siteId.toString());
       if (site) {
         entityNames.site_name = site.site_name;
       }
     }
 
     // Fetch building name
-    if (documentData.building_id) {
-      const building = await Building.findById(documentData.building_id.toString());
+    if (buildingId) {
+      const building = await Building.findById(buildingId.toString());
       if (building) {
         entityNames.building_name = building.building_name;
       }
     }
 
     // Fetch floor name
-    if (documentData.floor_id) {
-      const floor = await Floor.findById(documentData.floor_id.toString());
+    if (floorId) {
+      const floor = await Floor.findById(floorId.toString());
       if (floor) {
         entityNames.floor_name = floor.floor_name;
       }
     }
 
     // Fetch asset name
-    if (documentData.asset_id) {
-      const asset = await Asset.findById(documentData.asset_id.toString());
+    if (assetId) {
+      const asset = await Asset.findById(assetId.toString());
       if (asset) {
         // Build asset name from available fields
         entityNames.asset_name = asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset';
         entityNames.asset_type = asset.type || asset.category;
       } else {
         // Asset not found, use default name
-        entityNames.asset_name = `Asset ${documentData.asset_id}`;
+        entityNames.asset_name = `Asset ${assetId}`;
       }
     }
 
     // Fetch tenant name
-    if (documentData.tenant_id) {
-      const tenant = await Tenant.findById(documentData.tenant_id.toString());
+    if (tenantId) {
+      const tenant = await Tenant.findById(tenantId.toString());
       if (tenant) {
         entityNames.tenant_name = tenant.tenant_name;
       }
     }
 
     // Fetch vendor name
-    if (documentData.vendor_id) {
-      const vendor = await Vendor.findById(documentData.vendor_id.toString());
+    if (vendorId) {
+      const vendor = await Vendor.findById(vendorId.toString());
       if (vendor) {
         entityNames.vendor_name = vendor.contractor_name;
       }
@@ -304,6 +311,47 @@ router.get('/', validateQueryParams, async (req, res) => {
       ]).exec()
     ]);
 
+    // Populate entity names dynamically for each document
+    const documentsWithNames = await Promise.all(
+      documents.map(async (doc) => {
+        const names = await fetchEntityNames(doc);
+        return {
+          ...doc,
+          customer: {
+            customer_id: doc.customer?.customer_id,
+            customer_name: names.customer_name
+          },
+          location: {
+            site: doc.location?.site?.site_id ? {
+              site_id: doc.location.site.site_id,
+              site_name: names.site_name
+            } : undefined,
+            building: doc.location?.building?.building_id ? {
+              building_id: doc.location.building.building_id,
+              building_name: names.building_name
+            } : undefined,
+            floor: doc.location?.floor?.floor_id ? {
+              floor_id: doc.location.floor.floor_id,
+              floor_name: names.floor_name
+            } : undefined,
+            asset: doc.location?.asset?.asset_id ? {
+              asset_id: doc.location.asset.asset_id,
+              asset_name: names.asset_name,
+              asset_type: names.asset_type
+            } : undefined,
+            tenant: doc.location?.tenant?.tenant_id ? {
+              tenant_id: doc.location.tenant.tenant_id,
+              tenant_name: names.tenant_name
+            } : undefined,
+            vendor: doc.location?.vendor?.vendor_id ? {
+              vendor_id: doc.location.vendor.vendor_id,
+              vendor_name: names.vendor_name
+            } : undefined
+          }
+        };
+      })
+    );
+
     // Build category summary
     const documentsByCategory = {};
     categoryStats.forEach(stat => {
@@ -313,7 +361,7 @@ router.get('/', validateQueryParams, async (req, res) => {
     // Build response
     const response = buildApiResponse(
       true,
-      documents,
+      documentsWithNames,
       null,
       {
         total: totalDocuments,
@@ -338,7 +386,7 @@ router.get('/', validateQueryParams, async (req, res) => {
 // GET /api/documents/:id - Get single document
 router.get('/:id', validateObjectId, async (req, res) => {
   try {
-    const document = await Document.findById(req.params.id);
+    const document = await Document.findById(req.params.id).lean();
 
     if (!document) {
       return res.status(404).json({
@@ -347,9 +395,46 @@ router.get('/:id', validateObjectId, async (req, res) => {
       });
     }
 
+    // Populate entity names dynamically
+    const names = await fetchEntityNames(document);
+    const documentWithNames = {
+      ...document,
+      customer: {
+        customer_id: document.customer?.customer_id,
+        customer_name: names.customer_name
+      },
+      location: {
+        site: document.location?.site?.site_id ? {
+          site_id: document.location.site.site_id,
+          site_name: names.site_name
+        } : undefined,
+        building: document.location?.building?.building_id ? {
+          building_id: document.location.building.building_id,
+          building_name: names.building_name
+        } : undefined,
+        floor: document.location?.floor?.floor_id ? {
+          floor_id: document.location.floor.floor_id,
+          floor_name: names.floor_name
+        } : undefined,
+        asset: document.location?.asset?.asset_id ? {
+          asset_id: document.location.asset.asset_id,
+          asset_name: names.asset_name,
+          asset_type: names.asset_type
+        } : undefined,
+        tenant: document.location?.tenant?.tenant_id ? {
+          tenant_id: document.location.tenant.tenant_id,
+          tenant_name: names.tenant_name
+        } : undefined,
+        vendor: document.location?.vendor?.vendor_id ? {
+          vendor_id: document.location.vendor.vendor_id,
+          vendor_name: names.vendor_name
+        } : undefined
+      }
+    };
+
     res.status(200).json({
       success: true,
-      data: document
+      data: documentWithNames
     });
   } catch (error) {
     res.status(500).json({
@@ -475,9 +560,6 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
     // Use validated data from middleware
     const documentData = req.validatedData;
 
-    // Fetch entity names using IDs
-    const entityNames = await fetchEntityNames(documentData);
-
     // Upload file to S3
     const uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
 
@@ -509,13 +591,12 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
       // Tags
       tags: documentData.tags ? { tags: Array.isArray(documentData.tags) ? documentData.tags : [documentData.tags] } : { tags: [] },
 
-      // Customer information
+      // Customer information (ID only - name populated dynamically)
       customer: {
-        customer_id: documentData.customer_id,
-        customer_name: entityNames.customer_name
+        customer_id: documentData.customer_id
       },
 
-      // Location associations
+      // Location associations (IDs only - names populated dynamically)
       location: {},
 
       // Compliance metadata - category restriction removed, allow for all documents
@@ -552,47 +633,40 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
       updated_at: new Date().toISOString()
     };
 
-    // Add location associations if IDs are provided
+    // Add location associations if IDs are provided (IDs only - names populated dynamically)
     if (documentData.site_id) {
       documentPayload.location.site = {
-        site_id: documentData.site_id,
-        ...(entityNames.site_name && { site_name: entityNames.site_name })
+        site_id: documentData.site_id
       };
     }
 
     if (documentData.building_id) {
       documentPayload.location.building = {
-        building_id: documentData.building_id,
-        ...(entityNames.building_name && { building_name: entityNames.building_name })
+        building_id: documentData.building_id
       };
     }
 
     if (documentData.floor_id) {
       documentPayload.location.floor = {
-        floor_id: documentData.floor_id,
-        ...(entityNames.floor_name && { floor_name: entityNames.floor_name })
+        floor_id: documentData.floor_id
       };
     }
 
     if (documentData.asset_id) {
       documentPayload.location.asset = {
-        asset_id: documentData.asset_id,
-        ...(entityNames.asset_name && { asset_name: entityNames.asset_name }),
-        ...(entityNames.asset_type && { asset_type: entityNames.asset_type })
+        asset_id: documentData.asset_id
       };
     }
 
     if (documentData.tenant_id) {
       documentPayload.location.tenant = {
-        tenant_id: documentData.tenant_id,
-        ...(entityNames.tenant_name && { tenant_name: entityNames.tenant_name })
+        tenant_id: documentData.tenant_id
       };
     }
 
     if (documentData.vendor_id) {
       documentPayload.location.vendor = {
-        vendor_id: documentData.vendor_id,
-        ...(entityNames.vendor_name && { vendor_name: entityNames.vendor_name })
+        vendor_id: documentData.vendor_id
       };
     }
 
@@ -613,6 +687,44 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
     // Set document_group_id to the document's own ID after creation
     document.document_group_id = document._id.toString();
     await document.save();
+
+    // Populate entity names for response
+    const documentLean = document.toObject();
+    const names = await fetchEntityNames(documentLean);
+    const documentWithNames = {
+      ...documentLean,
+      customer: {
+        customer_id: documentLean.customer?.customer_id,
+        customer_name: names.customer_name
+      },
+      location: {
+        site: documentLean.location?.site?.site_id ? {
+          site_id: documentLean.location.site.site_id,
+          site_name: names.site_name
+        } : undefined,
+        building: documentLean.location?.building?.building_id ? {
+          building_id: documentLean.location.building.building_id,
+          building_name: names.building_name
+        } : undefined,
+        floor: documentLean.location?.floor?.floor_id ? {
+          floor_id: documentLean.location.floor.floor_id,
+          floor_name: names.floor_name
+        } : undefined,
+        asset: documentLean.location?.asset?.asset_id ? {
+          asset_id: documentLean.location.asset.asset_id,
+          asset_name: names.asset_name,
+          asset_type: names.asset_type
+        } : undefined,
+        tenant: documentLean.location?.tenant?.tenant_id ? {
+          tenant_id: documentLean.location.tenant.tenant_id,
+          tenant_name: names.tenant_name
+        } : undefined,
+        vendor: documentLean.location?.vendor?.vendor_id ? {
+          vendor_id: documentLean.location.vendor.vendor_id,
+          vendor_name: names.vendor_name
+        } : undefined
+      }
+    };
 
     // Send approval emails if approval is enabled and approvers are assigned
     if (documentData.approval_config?.enabled && documentData.approval_config.approvers?.length > 0) {
@@ -648,7 +760,7 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
     res.status(201).json({
       success: true,
       message: 'Document created successfully',
-      data: document
+      data: documentWithNames
     });
 
   } catch (error) {

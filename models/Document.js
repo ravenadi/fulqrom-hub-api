@@ -57,14 +57,10 @@ const TagsSchema = new mongoose.Schema({
   }]
 }, { _id: false });
 
-// Location schema for hierarchical associations
+// Location schema for hierarchical associations (IDs only - names populated dynamically)
 const LocationSchema = new mongoose.Schema({
   site: {
     site_id: {
-      type: String,
-      trim: true
-    },
-    site_name: {
       type: String,
       trim: true
     }
@@ -73,18 +69,10 @@ const LocationSchema = new mongoose.Schema({
     building_id: {
       type: String,
       trim: true
-    },
-    building_name: {
-      type: String,
-      trim: true
     }
   },
   floor: {
     floor_id: {
-      type: String,
-      trim: true
-    },
-    floor_name: {
       type: String,
       trim: true
     }
@@ -93,22 +81,10 @@ const LocationSchema = new mongoose.Schema({
     asset_id: {
       type: String,
       trim: true
-    },
-    asset_name: {
-      type: String,
-      trim: true
-    },
-    asset_type: {
-      type: String,
-      trim: true
     }
   },
   tenant: {
     tenant_id: {
-      type: String,
-      trim: true
-    },
-    tenant_name: {
       type: String,
       trim: true
     }
@@ -117,22 +93,13 @@ const LocationSchema = new mongoose.Schema({
     vendor_id: {
       type: String,
       trim: true
-    },
-    vendor_name: {
-      type: String,
-      trim: true
     }
   }
 }, { _id: false });
 
-// Customer schema
+// Customer schema (ID only - name populated dynamically)
 const CustomerSchema = new mongoose.Schema({
   customer_id: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  customer_name: {
     type: String,
     required: true,
     trim: true
