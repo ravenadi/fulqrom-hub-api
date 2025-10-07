@@ -2,11 +2,24 @@
   "apiInfo": {
     "title": "Fulqrom Hub REST API",
     "description": "Australian Commercial Real Estate & HVAC Building Management System API",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - hub_fulqrom database",
-    "lastUpdated": "2025-10-08T12:00:00.000Z",
+    "lastUpdated": "2025-10-08T14:00:00.000Z",
     "changeLog": {
+      "v1.9.0": {
+        "date": "2025-10-08",
+        "changes": [
+          "Added document_count field to GET /api/assets response - Shows number of documents associated with each asset",
+          "Enhanced assets list API with document counting aggregation for accordion visibility control",
+          "Fixed storage stats endpoint to count document records separately from files",
+          "Added GET /api/documents/stats endpoint for simple document count",
+          "Updated storage stats to show totalRecords, documentsWithFiles, and documentsWithoutFiles",
+          "Added comprehensive asset floor_id migration script supporting all floor naming variations",
+          "Migration supports: Floor 05->5, Lvl 05->Level 5, Basement 2, B2, GF, Plaza, Terrace, Roof, Mezzanine, etc.",
+          "Added floor_number sorting support to document list API (location.floor.floor_number)"
+        ]
+      },
       "v1.8.0": {
         "date": "2025-10-08",
         "changes": [
@@ -875,7 +888,7 @@
       "list": {
         "method": "GET",
         "path": "/api/assets",
-        "description": "Get all assets with filtering and summary statistics",
+        "description": "Get all assets with filtering, summary statistics, and document counts",
         "status": "IMPLEMENTED",
         "queryParams": {
           "customer_id": "Filter by customer ID",
@@ -922,8 +935,14 @@
             "poor_condition": "number",
             "needs_maintenance": "number"
           },
-          "data": "Array of asset objects with populated references"
-        }
+          "data": "Array of asset objects with populated references and document_count field"
+        },
+        "notes": [
+          "Each asset in data array includes document_count field (number of associated documents)",
+          "document_count can be used to show/hide accordion icons in UI (show if count > 0)",
+          "Document count is calculated via MongoDB aggregation matching location.asset.asset_id",
+          "Efficient single-query aggregation for all assets in the current page"
+        ]
       },
       "getById": {
         "method": "GET",
@@ -1655,6 +1674,48 @@
           "Tags are sorted alphabetically for better UX",
           "Case-sensitive sorting",
           "Can be filtered by customer, site, or building for context-specific tag lists"
+        ]
+      },
+      "getStats": {
+        "method": "GET",
+        "path": "/api/documents/stats",
+        "description": "Get simple document count (total records only, no filters)",
+        "status": "IMPLEMENTED",
+        "response": {
+          "success": true,
+          "data": {
+            "totalDocuments": "number"
+          }
+        },
+        "notes": [
+          "Returns total document count from database using Document.countDocuments({})",
+          "No filtering - returns all documents in collection",
+          "Faster and simpler than /api/documents/summary/stats endpoint"
+        ]
+      },
+      "getStorageStats": {
+        "method": "GET",
+        "path": "/api/documents/storage/stats",
+        "description": "Get document storage statistics with file counts and sizes",
+        "status": "IMPLEMENTED",
+        "response": {
+          "success": true,
+          "data": {
+            "totalSizeBytes": "number",
+            "totalSizeMB": "number (2 decimal places)",
+            "totalSizeGB": "number (2 decimal places)",
+            "displaySize": "string (e.g., '153.40 MB' or '1.25 GB')",
+            "totalRecords": "number (all document records)",
+            "documentsWithFiles": "number (records with file.file_meta.file_size)",
+            "documentsWithoutFiles": "number (totalRecords - documentsWithFiles)"
+          }
+        },
+        "notes": [
+          "totalRecords counts ALL document records using Document.countDocuments({})",
+          "documentsWithFiles counts only records with file.file_meta.file_size field",
+          "File sizes aggregated from database field file.file_meta.file_size",
+          "displaySize automatically switches between MB and GB based on size (threshold: 1 GB)",
+          "Use totalRecords for document record count, not documentsWithFiles"
         ]
       },
       "requestApproval": {
