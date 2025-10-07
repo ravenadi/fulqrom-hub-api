@@ -255,6 +255,23 @@ AssetSchema.virtual('display_location').get(function() {
   return this.area || '';
 });
 
+// Legacy field compatibility - map old field names to new ones
+AssetSchema.virtual('purchase_cost_aud_computed').get(function() {
+  return this.purchase_cost_aud || this.purchase_cost || null;
+});
+
+AssetSchema.virtual('current_book_value_aud_computed').get(function() {
+  return this.current_book_value_aud || this.current_book_value || null;
+});
+
+AssetSchema.virtual('weight_kgs_computed').get(function() {
+  return this.weight_kgs || this.weight || null;
+});
+
+AssetSchema.virtual('date_of_installation_computed').get(function() {
+  return this.date_of_installation || this.installation_date || null;
+});
+
 // Indexes for performance
 AssetSchema.index({ asset_no: 1 });
 AssetSchema.index({ asset_id: 1 });
@@ -299,6 +316,21 @@ AssetSchema.set('toJSON', {
     if (ret.floor_id === null) {
       const originalId = doc.populated('floor_id') || doc._doc?.floor_id || doc.floor_id;
       if (originalId) ret.floor_id = originalId;
+    }
+
+    // Map legacy field names to new standardized names for API consistency
+    // This ensures frontend always gets the correct field names regardless of DB state
+    if (ret.purchase_cost !== undefined && ret.purchase_cost_aud === undefined) {
+      ret.purchase_cost_aud = ret.purchase_cost;
+    }
+    if (ret.current_book_value !== undefined && ret.current_book_value_aud === undefined) {
+      ret.current_book_value_aud = ret.current_book_value;
+    }
+    if (ret.weight !== undefined && ret.weight_kgs === undefined) {
+      ret.weight_kgs = ret.weight;
+    }
+    if (ret.installation_date !== undefined && ret.date_of_installation === undefined) {
+      ret.date_of_installation = ret.installation_date;
     }
 
     return ret;
