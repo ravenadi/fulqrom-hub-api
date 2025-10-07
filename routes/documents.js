@@ -390,6 +390,59 @@ router.get('/', validateQueryParams, async (req, res) => {
   }
 });
 
+// GET /api/documents/tags - Get all unique tags from documents
+router.get('/tags', async (req, res) => {
+  try {
+    const { customer_id, site_id, building_id } = req.query;
+
+    // Build match query for optional filtering
+    let matchQuery = {};
+    if (customer_id) matchQuery['customer.customer_id'] = customer_id;
+    if (site_id) matchQuery['location.site.site_id'] = site_id;
+    if (building_id) matchQuery['location.building.building_id'] = building_id;
+
+    // Aggregate unique tags
+    const pipeline = [
+      { $unwind: '$tags.tags' },
+      {
+        $group: {
+          _id: '$tags.tags'
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          tag: '$_id'
+        }
+      }
+    ];
+
+    // Add match stage if filters are provided
+    if (Object.keys(matchQuery).length > 0) {
+      pipeline.unshift({ $match: matchQuery });
+    }
+
+    const tagResults = await Document.aggregate(pipeline);
+
+    // Extract tags as flat array of strings
+    const tags = tagResults
+      .map(item => item.tag)
+      .filter(tag => tag && tag.trim().length > 0); // Filter out empty/null tags
+
+    res.status(200).json({
+      success: true,
+      data: tags
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching document tags',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/documents/:id - Get single document
 router.get('/:id', validateObjectId, async (req, res) => {
   try {
@@ -1292,59 +1345,6 @@ router.get('/by-category', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching category statistics',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/documents/tags - Get all unique tags from documents
-router.get('/tags', async (req, res) => {
-  try {
-    const { customer_id, site_id, building_id } = req.query;
-
-    // Build match query for optional filtering
-    let matchQuery = {};
-    if (customer_id) matchQuery['customer.customer_id'] = customer_id;
-    if (site_id) matchQuery['location.site.site_id'] = site_id;
-    if (building_id) matchQuery['location.building.building_id'] = building_id;
-
-    // Aggregate unique tags
-    const pipeline = [
-      { $unwind: '$tags.tags' },
-      {
-        $group: {
-          _id: '$tags.tags'
-        }
-      },
-      { $sort: { _id: 1 } },
-      {
-        $project: {
-          _id: 0,
-          tag: '$_id'
-        }
-      }
-    ];
-
-    // Add match stage if filters are provided
-    if (Object.keys(matchQuery).length > 0) {
-      pipeline.unshift({ $match: matchQuery });
-    }
-
-    const tagResults = await Document.aggregate(pipeline);
-
-    // Extract tags as flat array of strings
-    const tags = tagResults
-      .map(item => item.tag)
-      .filter(tag => tag && tag.trim().length > 0); // Filter out empty/null tags
-
-    res.status(200).json({
-      success: true,
-      data: tags
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching document tags',
       error: error.message
     });
   }
