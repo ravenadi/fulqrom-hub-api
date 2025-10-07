@@ -1011,7 +1011,7 @@ router.put('/:id', validateObjectId, async (req, res) => {
       req.params.id,
       updateData,
       { new: true, runValidators: true }
-    );
+    ).lean();
 
     if (!document) {
       return res.status(404).json({
@@ -1020,10 +1020,47 @@ router.put('/:id', validateObjectId, async (req, res) => {
       });
     }
 
+    // Populate entity names dynamically
+    const names = await fetchEntityNames(document);
+    const documentWithNames = {
+      ...document,
+      customer: {
+        customer_id: document.customer?.customer_id,
+        customer_name: names.customer_name
+      },
+      location: {
+        site: document.location?.site?.site_id ? {
+          site_id: document.location.site.site_id,
+          site_name: names.site_name
+        } : undefined,
+        building: document.location?.building?.building_id ? {
+          building_id: document.location.building.building_id,
+          building_name: names.building_name
+        } : undefined,
+        floor: document.location?.floor?.floor_id ? {
+          floor_id: document.location.floor.floor_id,
+          floor_name: names.floor_name
+        } : undefined,
+        asset: document.location?.asset?.asset_id ? {
+          asset_id: document.location.asset.asset_id,
+          asset_name: names.asset_name,
+          asset_type: names.asset_type
+        } : undefined,
+        tenant: document.location?.tenant?.tenant_id ? {
+          tenant_id: document.location.tenant.tenant_id,
+          tenant_name: names.tenant_name
+        } : undefined,
+        vendor: document.location?.vendor?.vendor_id ? {
+          vendor_id: document.location.vendor.vendor_id,
+          vendor_name: names.vendor_name
+        } : undefined
+      }
+    };
+
     res.status(200).json({
       success: true,
       message: 'Document updated successfully',
-      data: document
+      data: documentWithNames
     });
   } catch (error) {
     res.status(400).json({
