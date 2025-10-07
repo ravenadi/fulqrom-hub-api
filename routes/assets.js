@@ -47,31 +47,59 @@ router.get('/', async (req, res) => {
     let filterQuery = {};
 
     if (customer_id) {
-      filterQuery.customer_id = customer_id;
+      // Support multiple customer IDs (comma-separated)
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+      filterQuery.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
     }
 
     if (site_id) {
-      filterQuery.site_id = site_id;
+      // Support multiple site IDs (comma-separated)
+      const siteIds = site_id.includes(',')
+        ? site_id.split(',').map(id => id.trim())
+        : site_id;
+      filterQuery.site_id = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
     }
 
     if (building_id) {
-      filterQuery.building_id = building_id;
+      // Support multiple building IDs (comma-separated)
+      const buildingIds = building_id.includes(',')
+        ? building_id.split(',').map(id => id.trim())
+        : building_id;
+      filterQuery.building_id = Array.isArray(buildingIds) ? { $in: buildingIds } : buildingIds;
     }
 
     if (floor_id) {
-      filterQuery.floor_id = floor_id;
+      // Support multiple floor IDs (comma-separated)
+      const floorIds = floor_id.includes(',')
+        ? floor_id.split(',').map(id => id.trim())
+        : floor_id;
+      filterQuery.floor_id = Array.isArray(floorIds) ? { $in: floorIds } : floorIds;
     }
 
     if (category) {
-      filterQuery.category = category;
+      // Support multiple categories (comma-separated)
+      const categories = category.includes(',')
+        ? category.split(',').map(cat => cat.trim())
+        : category;
+      filterQuery.category = Array.isArray(categories) ? { $in: categories } : categories;
     }
 
     if (status) {
-      filterQuery.status = status;
+      // Support multiple statuses (comma-separated)
+      const statuses = status.includes(',')
+        ? status.split(',').map(s => s.trim())
+        : status;
+      filterQuery.status = Array.isArray(statuses) ? { $in: statuses } : statuses;
     }
 
     if (condition) {
-      filterQuery.condition = condition;
+      // Support multiple conditions (comma-separated)
+      const conditions = condition.includes(',')
+        ? condition.split(',').map(c => c.trim())
+        : condition;
+      filterQuery.condition = Array.isArray(conditions) ? { $in: conditions } : conditions;
     }
 
     if (make) {
