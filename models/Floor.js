@@ -152,23 +152,23 @@ FloorSchema.virtual('occupancy').get(function() {
 });
 
 // Indexes for performance
-FloorSchema.index({ floor_name: 1 });
-FloorSchema.index({ site_id: 1 });
-FloorSchema.index({ building_id: 1 });
-FloorSchema.index({ customer_id: 1 });
-FloorSchema.index({ floor_type: 1 });
-FloorSchema.index({ status: 1 });
-FloorSchema.index({ occupancy_type: 1 });
-FloorSchema.index({ access_control: 1 });
-FloorSchema.index({ special_features: 1 });
+// FloorSchema.index({ floor_name: 1 });
+// FloorSchema.index({ site_id: 1 });
+// FloorSchema.index({ building_id: 1 });
+// FloorSchema.index({ customer_id: 1 });
+// FloorSchema.index({ floor_type: 1 });
+// FloorSchema.index({ status: 1 });
+// FloorSchema.index({ occupancy_type: 1 });
+// FloorSchema.index({ access_control: 1 });
+// FloorSchema.index({ special_features: 1 });
 
 // Compound indexes
-FloorSchema.index({ building_id: 1, floor_name: 1 });
-FloorSchema.index({ site_id: 1, building_id: 1 });
-FloorSchema.index({ customer_id: 1, building_id: 1 });
+// FloorSchema.index({ building_id: 1, floor_name: 1 });
+// FloorSchema.index({ site_id: 1, building_id: 1 });
+// FloorSchema.index({ customer_id: 1, building_id: 1 });
 
 // Unique constraint: One floor_name per customer_id
-FloorSchema.index({ customer_id: 1, floor_name: 1 }, { unique: true });
+// FloorSchema.index({ customer_id: 1, floor_name: 1 }, { unique: true });
 
 // Ensure virtual fields are serialized and preserve unpopulated IDs
 FloorSchema.set('toJSON', {

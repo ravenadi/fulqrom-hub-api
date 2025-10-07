@@ -185,20 +185,20 @@ router.get('/entities/floors', async (req, res) => {
     const { building_id, site_id, customer_id } = req.query;
     const filter = {}; // Removed is_active filter to show all floors
 
-    // if (customer_id) {
-    //   // Support multiple customer IDs (comma-separated)
-    //   const customerIds = customer_id.includes(',')
-    //     ? customer_id.split(',').map(id => id.trim())
-    //     : customer_id;
-    //   filter.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
-    // }
-    // if (site_id) {
-    //   // Support multiple site IDs (comma-separated)
-    //   const siteIds = site_id.includes(',')
-    //     ? site_id.split(',').map(id => id.trim())
-    //     : site_id;
-    //   filter.site_id = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
-    // }
+    if (customer_id) {
+      // Support multiple customer IDs (comma-separated)
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+      filter.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
+    }
+    if (site_id) {
+      // Support multiple site IDs (comma-separated)
+      const siteIds = site_id.includes(',')
+        ? site_id.split(',').map(id => id.trim())
+        : site_id;
+      filter.site_id = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
+    }
     if (building_id) {
       // Support multiple building IDs (comma-separated)
       const buildingIds = building_id.includes(',')
@@ -207,7 +207,7 @@ router.get('/entities/floors', async (req, res) => {
       filter.building_id = Array.isArray(buildingIds) ? { $in: buildingIds } : buildingIds;
     }
 
-    const floors = await Floor.find(filter)
+    const floors = await Floor.find()// tmp done
       .select('_id floor_name building_id site_id customer_id')
       .sort({ floor_name: 1 })
       .lean();
