@@ -2,11 +2,24 @@
   "apiInfo": {
     "title": "Fulqrom Hub REST API",
     "description": "Australian Commercial Real Estate & HVAC Building Management System API",
-    "version": "1.7.0",
+    "version": "1.8.0",
     "baseUrl": "http://localhost:30001",
     "database": "MongoDB Atlas - hub_fulqrom database",
-    "lastUpdated": "2025-10-06T12:00:00.000Z",
+    "lastUpdated": "2025-10-08T12:00:00.000Z",
     "changeLog": {
+      "v1.8.0": {
+        "date": "2025-10-08",
+        "changes": [
+          "Added GET /api/documents/tags endpoint - Returns all unique tags from documents for dropdown filtering",
+          "Enhanced document tag filtering with both 'tag' and 'tags' query parameters (case-insensitive, comma-separated support)",
+          "Added sorting support for hierarchical fields in document list API",
+          "New sortable fields: location.site.site_name, location.floor.floor_name, location.asset.asset_name",
+          "All floor APIs now sort by floor_number in ascending order by default",
+          "Standardized document categories to human-readable format (e.g., 'Fire Safety Reports' instead of 'fire_safety_reports')",
+          "Added 'Drawing Register' to document categories dropdown",
+          "Migration script for standardizing existing document categories in database"
+        ]
+      },
       "v1.7.0": {
         "date": "2025-10-06",
         "changes": [
@@ -1411,9 +1424,15 @@
           "approval_status": "Filter by approval status",
           "engineering_discipline": "Filter by engineering discipline",
           "uploaded_by": "Filter by uploader name (case insensitive)",
+          "tag": "Filter by tag (single or comma-separated tags, case-insensitive)",
+          "tags": "Filter by tags (single or comma-separated tags, case-insensitive) - alias for 'tag'",
           "is_active": "boolean - Filter by active status",
           "is_archived": "boolean - Filter by archived status",
-          "search": "Text search across all document fields including name, description, category, type, status, approval_status, tags, customer/location names, file name, version, compliance data, drawing info, approval users, version metadata, and all nested fields"
+          "search": "Text search across all document fields including name, description, category, type, status, approval_status, tags, customer/location names, file name, version, compliance data, drawing info, approval users, version metadata, and all nested fields",
+          "page": "Page number (default: 1)",
+          "limit": "Items per page (default: 50, max: 100)",
+          "sort": "Sort field - name, category, type, status, created_at, updated_at, customer.customer_name, location.site.site_name, location.building.building_name, location.floor.floor_name, location.asset.asset_name, file.file_meta.file_name, file.file_meta.file_size, metadata.issue_date, drawing_info.date_issued, version, version_number, approval_status, engineering_discipline",
+          "order": "Sort order - asc or desc (default: desc)"
         },
         "response": {
           "success": true,
@@ -1615,6 +1634,28 @@
           "success": true,
           "data": "Array of category statistics"
         }
+      },
+      "getTags": {
+        "method": "GET",
+        "path": "/api/documents/tags",
+        "description": "Get all unique tags from documents for dropdown filtering",
+        "status": "IMPLEMENTED",
+        "queryParams": {
+          "customer_id": "Filter tags by customer ID (optional)",
+          "site_id": "Filter tags by site ID (optional)",
+          "building_id": "Filter tags by building ID (optional)"
+        },
+        "response": {
+          "success": true,
+          "data": "Array of unique tag strings, alphabetically sorted (e.g., ['Compliance', 'Electrical', 'HVAC', 'Mechanical'])"
+        },
+        "notes": [
+          "Returns flat array of unique tags from all documents",
+          "Empty/null tags are filtered out",
+          "Tags are sorted alphabetically for better UX",
+          "Case-sensitive sorting",
+          "Can be filtered by customer, site, or building for context-specific tag lists"
+        ]
       },
       "requestApproval": {
         "method": "POST",
