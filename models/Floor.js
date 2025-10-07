@@ -126,12 +126,6 @@ const FloorSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
-  },
-
-  // System fields
-  is_active: {
-    type: Boolean,
-    default: true
   }
 }, {
   timestamps: true
@@ -164,7 +158,6 @@ FloorSchema.index({ building_id: 1 });
 FloorSchema.index({ customer_id: 1 });
 FloorSchema.index({ floor_type: 1 });
 FloorSchema.index({ status: 1 });
-FloorSchema.index({ is_active: 1 });
 FloorSchema.index({ occupancy_type: 1 });
 FloorSchema.index({ access_control: 1 });
 FloorSchema.index({ special_features: 1 });

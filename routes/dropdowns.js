@@ -208,7 +208,7 @@ router.get('/entities/floors', async (req, res) => {
     }
 
     const floors = await Floor.find(filter)
-      .select('_id floor_name building_id site_id customer_id is_active')
+      .select('_id floor_name building_id site_id customer_id')
       .sort({ floor_name: 1 })
       .lean();
 
@@ -218,8 +218,7 @@ router.get('/entities/floors', async (req, res) => {
       value: floor._id,
       building_id: floor.building_id,
       site_id: floor.site_id,
-      customer_id: floor.customer_id,
-      is_active: floor.is_active !== false // Include is_active status
+      customer_id: floor.customer_id
     }));
 
     res.status(200).json({
