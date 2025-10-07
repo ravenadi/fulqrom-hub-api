@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Asset = require('../models/Asset');
+const Document = require('../models/Document');
 const { validateCreateAsset, validateUpdateAsset } = require('../middleware/assetValidation');
 
 const router = express.Router();
@@ -231,7 +232,36 @@ router.get('/', async (req, res) => {
       .populate('floor_id', 'floor_name floor_level')
       .sort({ [sortField]: sortDirection })
       .skip(skip)
-      .limit(limitNumber);
+      .limit(limitNumber)
+      .lean();
+
+    // Get document counts for each asset
+    const assetIds = assets.map(asset => asset._id.toString());
+    const documentCounts = await Document.aggregate([
+      {
+        $match: {
+          'location.asset.asset_id': { $in: assetIds }
+        }
+      },
+      {
+        $group: {
+          _id: '$location.asset.asset_id',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Create a map of asset_id to document count
+    const documentCountMap = {};
+    documentCounts.forEach(item => {
+      documentCountMap[item._id] = item.count;
+    });
+
+    // Add document count to each asset
+    const assetsWithDocCount = assets.map(asset => ({
+      ...asset,
+      document_count: documentCountMap[asset._id.toString()] || 0
+    }));
 
     // Calculate summary statistics (on filtered data, not paginated)
     const summaryStats = await Asset.aggregate([
@@ -286,7 +316,7 @@ router.get('/', async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: assets,
+      data: assetsWithDocCount,
       pagination: {
         current_page: pageNumber,
         per_page: limitNumber,
