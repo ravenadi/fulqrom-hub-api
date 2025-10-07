@@ -302,7 +302,7 @@ const DocumentSchema = new mongoose.Schema({
   // Compliance & Regulatory Metadata
   metadata: MetadataSchema,
 
-  // Drawing Register Information (for category === 'drawing_register')
+  // Drawing Register Information (for category === 'Drawing Register' or similar drawing categories)
   drawing_info: DrawingInfoSchema,
 
   // Access Control

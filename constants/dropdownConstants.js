@@ -243,6 +243,7 @@ const DROPDOWN_CONSTANTS = {
       'Warranty Certificates',
       'Service Reports',
       'Asset Registers',
+      'Drawing Register',
       'Drawing Schedules',
       'Compliance Documents',
       'Project Management Documentation',

@@ -19,7 +19,7 @@ Complete implementation of document review and approval workflow APIs for Fulqro
   "data": {
     "_id": "68e42c6e4bbb942a0091bdaa",
     "name": "architectural_-_annotation_scaling_and_multileaders",
-    "category": "electrical_schematics",
+    "category": "Electrical%20Schematics",
     "type": "DWG",
     "description": "",
     "file": {
@@ -254,9 +254,9 @@ Added/updated fields in existing Document schema:
 
 **Email Configuration:**
 ```env
-EMAIL_PROVIDER=smtp
-EMAIL_FROM_ADDRESS=sdeven@gkblabs.com
-EMAIL_FROM_NAME=Fulqrom Hub
+MAIL_PROVIDER=smtp
+MAIL_FROM_ADDRESS=sdeven@gkblabs.com
+MAIL_FROM_NAME=Fulqrom Hub
 MAIL_HOST=127.0.0.1
 MAIL_PORT=1025
 MAIL_ENCRYPTION=none
@@ -293,7 +293,7 @@ approval_config: Joi.object({
 curl -X POST http://localhost:30001/api/documents \
   -F "file=@test.dwg" \
   -F 'name=Test Document' \
-  -F 'category=drawing_register' \
+  -F 'category=Drawing%20Register' \
   -F 'type=DWG' \
   -F 'customer_id=68e3c827edb0f65e2cb2f809' \
   -F 'approval_config={"enabled":true,"status":"Pending Approval","approvers":[{"user_email":"demo@fulqrom.com.au"}]}'
