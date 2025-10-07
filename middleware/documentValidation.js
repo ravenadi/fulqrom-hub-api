@@ -50,6 +50,7 @@ const createDocumentSchema = Joi.object({
   issue_date: Joi.string().optional().isoDate(),
   expiry_date: Joi.string().optional().isoDate(),
   review_date: Joi.string().optional().isoDate(),
+  frequency: Joi.string().optional().trim().valid('weekly', 'monthly', 'quarterly', 'annual'),
 
   // Approval fields - loaded from GET /api/dropdowns (document_document_approval_statuses)
   approval_required: Joi.boolean().optional(),
@@ -148,7 +149,8 @@ const updateDocumentSchema = Joi.object({
     compliance_status: Joi.string().optional().trim().allow('', null),
     issue_date: Joi.string().optional().isoDate().allow(''),
     expiry_date: Joi.string().optional().isoDate().allow(''),
-    review_date: Joi.string().optional().isoDate().allow('')
+    review_date: Joi.string().optional().isoDate().allow(''),
+    frequency: Joi.string().optional().trim().valid('weekly', 'monthly', 'quarterly', 'annual').allow('', null)
   }).optional(),
 
   // Audit fields

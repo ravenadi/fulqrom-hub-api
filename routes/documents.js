@@ -608,7 +608,8 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
         ...(documentData.compliance_status && documentData.compliance_status !== 'none' && { compliance_status: documentData.compliance_status }),
         ...(documentData.issue_date && documentData.issue_date !== 'none' && { issue_date: documentData.issue_date }),
         ...(documentData.expiry_date && documentData.expiry_date !== 'none' && { expiry_date: documentData.expiry_date }),
-        ...(documentData.review_date && documentData.review_date !== 'none' && { review_date: documentData.review_date })
+        ...(documentData.review_date && documentData.review_date !== 'none' && { review_date: documentData.review_date }),
+        ...(documentData.frequency && documentData.frequency !== 'none' && { frequency: documentData.frequency })
       },
 
       // Drawing Register information - category restriction removed, allow for all documents

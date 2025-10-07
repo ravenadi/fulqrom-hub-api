@@ -140,6 +140,11 @@ const MetadataSchema = new mongoose.Schema({
   review_date: {
     type: String,
     trim: true
+  },
+  frequency: {
+    type: String,
+    enum: ['weekly', 'monthly', 'quarterly', 'annual', null],
+    trim: true
   }
 }, { _id: false });
 
