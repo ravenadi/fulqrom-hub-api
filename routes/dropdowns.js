@@ -98,7 +98,11 @@ router.get('/entities/sites', async (req, res) => {
     const filter = { is_active: true };
 
     if (customer_id) {
-      filter.customer_id = customer_id;
+      // Support multiple customer IDs (comma-separated)
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+      filter.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
     }
 
     const sites = await Site.find(filter)
@@ -134,10 +138,18 @@ router.get('/entities/buildings', async (req, res) => {
     const filter = { is_active: true };
 
     if (customer_id) {
-      filter.customer_id = customer_id;
+      // Support multiple customer IDs (comma-separated)
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+      filter.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
     }
     if (site_id) {
-      filter.site_id = site_id;
+      // Support multiple site IDs (comma-separated)
+      const siteIds = site_id.includes(',')
+        ? site_id.split(',').map(id => id.trim())
+        : site_id;
+      filter.site_id = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
     }
 
     const buildings = await Building.find(filter)
@@ -174,13 +186,25 @@ router.get('/entities/floors', async (req, res) => {
     const filter = { is_active: true };
 
     if (customer_id) {
-      filter.customer_id = customer_id;
+      // Support multiple customer IDs (comma-separated)
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+      filter.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
     }
     if (site_id) {
-      filter.site_id = site_id;
+      // Support multiple site IDs (comma-separated)
+      const siteIds = site_id.includes(',')
+        ? site_id.split(',').map(id => id.trim())
+        : site_id;
+      filter.site_id = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
     }
     if (building_id) {
-      filter.building_id = building_id;
+      // Support multiple building IDs (comma-separated)
+      const buildingIds = building_id.includes(',')
+        ? building_id.split(',').map(id => id.trim())
+        : building_id;
+      filter.building_id = Array.isArray(buildingIds) ? { $in: buildingIds } : buildingIds;
     }
 
     const floors = await Floor.find(filter)
@@ -217,10 +241,34 @@ router.get('/entities/assets', async (req, res) => {
     const { floor_id, building_id, site_id, customer_id, category, status, condition } = req.query;
     const filter = { is_active: true };
 
-    if (customer_id) filter.customer_id = customer_id;
-    if (floor_id) filter.floor_id = floor_id;
-    if (building_id) filter.building_id = building_id;
-    if (site_id) filter.site_id = site_id;
+    if (customer_id) {
+      // Support multiple customer IDs (comma-separated)
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+      filter.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
+    }
+    if (site_id) {
+      // Support multiple site IDs (comma-separated)
+      const siteIds = site_id.includes(',')
+        ? site_id.split(',').map(id => id.trim())
+        : site_id;
+      filter.site_id = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
+    }
+    if (building_id) {
+      // Support multiple building IDs (comma-separated)
+      const buildingIds = building_id.includes(',')
+        ? building_id.split(',').map(id => id.trim())
+        : building_id;
+      filter.building_id = Array.isArray(buildingIds) ? { $in: buildingIds } : buildingIds;
+    }
+    if (floor_id) {
+      // Support multiple floor IDs (comma-separated)
+      const floorIds = floor_id.includes(',')
+        ? floor_id.split(',').map(id => id.trim())
+        : floor_id;
+      filter.floor_id = Array.isArray(floorIds) ? { $in: floorIds } : floorIds;
+    }
     if (category) filter.category = category;
     if (status) filter.status = status;
     if (condition) filter.condition = condition;
@@ -263,10 +311,34 @@ router.get('/entities/tenants', async (req, res) => {
     const { building_id, site_id, customer_id, floor_id, tenant_status } = req.query;
     const filter = { is_active: true };
 
-    if (customer_id) filter.customer_id = customer_id;
-    if (site_id) filter.site_id = site_id;
-    if (building_id) filter.building_id = building_id;
-    if (floor_id) filter.floor_id = floor_id;
+    if (customer_id) {
+      // Support multiple customer IDs (comma-separated)
+      const customerIds = customer_id.includes(',')
+        ? customer_id.split(',').map(id => id.trim())
+        : customer_id;
+      filter.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
+    }
+    if (site_id) {
+      // Support multiple site IDs (comma-separated)
+      const siteIds = site_id.includes(',')
+        ? site_id.split(',').map(id => id.trim())
+        : site_id;
+      filter.site_id = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
+    }
+    if (building_id) {
+      // Support multiple building IDs (comma-separated)
+      const buildingIds = building_id.includes(',')
+        ? building_id.split(',').map(id => id.trim())
+        : building_id;
+      filter.building_id = Array.isArray(buildingIds) ? { $in: buildingIds } : buildingIds;
+    }
+    if (floor_id) {
+      // Support multiple floor IDs (comma-separated)
+      const floorIds = floor_id.includes(',')
+        ? floor_id.split(',').map(id => id.trim())
+        : floor_id;
+      filter.floor_id = Array.isArray(floorIds) ? { $in: floorIds } : floorIds;
+    }
     if (tenant_status) filter.tenant_status = tenant_status;
 
     const tenants = await Tenant.find(filter)
