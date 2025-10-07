@@ -165,6 +165,7 @@ const queryParamsSchema = Joi.object({
   floor_id: Joi.string().optional(),
   asset_id: Joi.string().optional(),
   tenant_id: Joi.string().optional(),
+  vendor_id: Joi.string().optional(),
   // All dropdown values loaded from GET /api/dropdowns
   category: Joi.string().optional().trim(),
   type: Joi.string().optional().trim(),
@@ -172,6 +173,14 @@ const queryParamsSchema = Joi.object({
   regulatory_framework: Joi.string().optional().trim(),
   compliance_status: Joi.string().optional().trim(),
   status: Joi.string().optional().trim(),
+  drawing_status: Joi.string().optional().trim(),
+  prepared_by: Joi.string().optional().trim(),
+  approved_by_user: Joi.string().optional().trim(),
+  access_level: Joi.string().optional().trim(),
+  tag: Joi.alternatives().try(
+    Joi.array().items(Joi.string()),
+    Joi.string()
+  ).optional(),
   tags: Joi.alternatives().try(
     Joi.array().items(Joi.string()),
     Joi.string()
@@ -179,7 +188,32 @@ const queryParamsSchema = Joi.object({
   search: Joi.string().optional().trim().min(1),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(50),
-  sort: Joi.string().optional().valid('name', 'category', 'type', 'created_at', 'metadata.compliance_status', 'status', 'expiry_date').default('created_at'),
+  sort: Joi.string().optional().valid(
+    'name',
+    'category',
+    'type',
+    'status',
+    'approval_status',
+    'engineering_discipline',
+    'version',
+    'version_number',
+    'version_sequence',
+    'created_at',
+    'updated_at',
+    'customer.customer_name',
+    'location.site.site_name',
+    'location.building.building_name',
+    'location.floor.floor_name',
+    'location.asset.asset_name',
+    'file.file_meta.file_name',
+    'file.file_meta.file_size',
+    'metadata.issue_date',
+    'metadata.expiry_date',
+    'metadata.review_date',
+    'drawing_info.date_issued',
+    'drawing_info.drawing_status',
+    'is_current_version'
+  ).default('created_at'),
   order: Joi.string().optional().valid('asc', 'desc').default('desc')
 });
 
