@@ -207,7 +207,7 @@ router.get('/entities/floors', async (req, res) => {
       filter.building_id = Array.isArray(buildingIds) ? { $in: buildingIds } : buildingIds;
     }
 
-    const floors = await Floor.find()// tmp done
+    const floors = await Floor.find(filter)
       .select('_id floor_name building_id site_id customer_id')
       .sort({ floor_name: 1 })
       .lean();
