@@ -151,6 +151,7 @@ router.get('/', validateQueryParams, async (req, res) => {
       prepared_by,
       approved_by_user,
       access_level,
+      tag,
       tags,
       search,
       page = 1,
@@ -275,14 +276,16 @@ router.get('/', validateQueryParams, async (req, res) => {
     }
 
     // Tags filter (multi-select support with case-insensitive matching)
-    if (tags) {
-      const tagsList = tags.includes(',')
-        ? tags.split(',').map(t => t.trim())
-        : tags;
+    // Support both 'tag' (singular) and 'tags' (plural) query parameters
+    const tagParam = tag || tags;
+    if (tagParam) {
+      const tagsList = tagParam.includes(',')
+        ? tagParam.split(',').map(t => t.trim())
+        : tagParam;
       const tagArray = Array.isArray(tagsList) ? tagsList : [tagsList];
       // Case-insensitive matching for tags
       filterQuery['tags.tags'] = {
-        $in: tagArray.map(tag => new RegExp(`^${escapeRegex(tag)}$`, 'i'))
+        $in: tagArray.map(t => new RegExp(`^${escapeRegex(t)}$`, 'i'))
       };
     }
 
