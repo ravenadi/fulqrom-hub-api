@@ -208,8 +208,8 @@ router.get('/entities/floors', async (req, res) => {
     }
 
     const floors = await Floor.find(filter)
-      .select('_id floor_name building_id site_id customer_id')
-      .sort({ floor_name: 1 })
+      .select('_id floor_name floor_number building_id site_id customer_id')
+      .sort({ floor_number: 1 })
       .lean();
 
     const formattedFloors = floors.map(floor => ({

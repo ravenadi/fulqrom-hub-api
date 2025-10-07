@@ -1342,6 +1342,7 @@ router.get('/options/entities', async (req, res) => {
     // Get floors (filtered by building if provided)
     const floorFilter = building_id ? { building_id } : {};
     const floors = await Floor.find(floorFilter, '_id floor_name building_id')
+      .sort({ floor_number: 1 })
       .limit(100)
       .lean();
 

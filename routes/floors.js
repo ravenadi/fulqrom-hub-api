@@ -14,8 +14,8 @@ router.get('/', async (req, res) => {
       site_id,
       building_id,
       floor_type,
-      sort_by = 'createdAt',
-      sort_order = 'desc'
+      sort_by = 'floor_number',
+      sort_order = 'asc'
     } = req.query;
 
     // Build filter query
