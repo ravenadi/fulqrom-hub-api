@@ -9,9 +9,9 @@ const { formatAustralianDate, formatAustralianDateTime } = require('./dateFormat
  */
 class EmailService {
   constructor() {
-    this.provider = process.env.EMAIL_PROVIDER || 'console';
-    this.fromAddress = process.env.EMAIL_FROM_ADDRESS || 'noreply@fulqrom.com';
-    this.fromName = process.env.EMAIL_FROM_NAME || 'Fulqrom Hub';
+    this.provider = process.env.MAIL_PROVIDER || 'console';
+    this.fromAddress = process.env.MAIL_FROM_ADDRESS || 'noreply@fulqrom.com';
+    this.fromName = process.env.MAIL_FROM_NAME || 'Fulqrom Hub';
     this.appBaseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
     // Initialize email provider
