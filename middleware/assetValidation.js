@@ -57,26 +57,22 @@ const createAssetSchema = Joi.object({
 
   // Dates & Testing
   date_of_installation: dateSchema,
-  age: Joi.number().integer().min(0).allow(null).optional(),
+  age: Joi.string().trim().allow('', null).optional(),
   last_test_date: dateSchema,
   last_test_result: Joi.string().trim().allow('', null).optional(),
 
-  // Lifecycle & Maintenance (new fields)
-  warranty_expiry: dateSchema,
-  service_contractor: Joi.string().trim().max(255).allow('', null).optional(),
-  last_service_date: dateSchema,
-  next_service_due: dateSchema,
-
-  // Financial Information
+  // Financial Information (primary field names)
   purchase_cost_aud: currencySchema,
   current_book_value_aud: currencySchema,
   weight_kgs: Joi.number().min(0).allow(null).optional(),
 
-  // Additional Specifications (new fields)
-  energy_rating: Joi.string().trim().max(50).allow('', null).optional(),
-  capacity_specifications: Joi.string().trim().allow('', null).optional(),
-  qr_code: Joi.string().trim().max(255).allow('', null).optional(),
-  notes: Joi.string().trim().allow('', null).optional(),
+  // Legacy field names (for backward compatibility)
+  acquisition_cost: currencySchema,
+  current_value: currencySchema,
+  purchase_cost: currencySchema,
+  current_book_value: currencySchema,
+  weight: Joi.number().min(0).allow(null).optional(),
+  installation_date: dateSchema,
 
   // System fields
   is_active: Joi.boolean().optional()
@@ -126,26 +122,22 @@ const updateAssetSchema = Joi.object({
 
   // Dates & Testing
   date_of_installation: dateSchema,
-  age: Joi.number().integer().min(0).allow(null).optional(),
+  age: Joi.string().trim().allow('', null).optional(),
   last_test_date: dateSchema,
   last_test_result: Joi.string().trim().allow('', null).optional(),
 
-  // Lifecycle & Maintenance (new fields)
-  warranty_expiry: dateSchema,
-  service_contractor: Joi.string().trim().max(255).allow('', null).optional(),
-  last_service_date: dateSchema,
-  next_service_due: dateSchema,
-
-  // Financial Information
+  // Financial Information (primary field names)
   purchase_cost_aud: currencySchema,
   current_book_value_aud: currencySchema,
   weight_kgs: Joi.number().min(0).allow(null).optional(),
 
-  // Additional Specifications (new fields)
-  energy_rating: Joi.string().trim().max(50).allow('', null).optional(),
-  capacity_specifications: Joi.string().trim().allow('', null).optional(),
-  qr_code: Joi.string().trim().max(255).allow('', null).optional(),
-  notes: Joi.string().trim().allow('', null).optional(),
+  // Legacy field names (for backward compatibility)
+  acquisition_cost: currencySchema,
+  current_value: currencySchema,
+  purchase_cost: currencySchema,
+  current_book_value: currencySchema,
+  weight: Joi.number().min(0).allow(null).optional(),
+  installation_date: dateSchema,
 
   // System fields
   is_active: Joi.boolean().optional()

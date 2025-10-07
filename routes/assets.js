@@ -386,7 +386,6 @@ router.get('/:id', async (req, res) => {
 // POST /api/assets - Create new asset
 router.post('/', validateCreateAsset, async (req, res) => {
   try {
-    // Ensure required fields are present
     const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
     if (!customer_id) {
@@ -396,7 +395,7 @@ router.post('/', validateCreateAsset, async (req, res) => {
       });
     }
 
-    // Create asset with all fields
+    // Handle legacy field mapping for backward compatibility
     const assetData = {
       customer_id,
       site_id: site_id || null,
@@ -404,6 +403,26 @@ router.post('/', validateCreateAsset, async (req, res) => {
       floor_id: floor_id || null,
       ...otherFields
     };
+
+    // Map legacy fields to new field names if provided
+    if (otherFields.installation_date && !otherFields.date_of_installation) {
+      assetData.date_of_installation = otherFields.installation_date;
+    }
+    if (otherFields.acquisition_cost && !otherFields.purchase_cost_aud) {
+      assetData.purchase_cost_aud = otherFields.acquisition_cost;
+    }
+    if (otherFields.current_value && !otherFields.current_book_value_aud) {
+      assetData.current_book_value_aud = otherFields.current_value;
+    }
+    if (otherFields.purchase_cost && !otherFields.purchase_cost_aud) {
+      assetData.purchase_cost_aud = otherFields.purchase_cost;
+    }
+    if (otherFields.current_book_value && !otherFields.current_book_value_aud) {
+      assetData.current_book_value_aud = otherFields.current_book_value;
+    }
+    if (otherFields.weight && !otherFields.weight_kgs) {
+      assetData.weight_kgs = otherFields.weight;
+    }
 
     const asset = new Asset(assetData);
     await asset.save();
@@ -420,6 +439,15 @@ router.post('/', validateCreateAsset, async (req, res) => {
       data: asset
     });
   } catch (error) {
+    // Check for duplicate asset_no error
+    if (error.code === 11000 && error.keyPattern?.asset_no) {
+      return res.status(400).json({
+        success: false,
+        message: 'Asset number already exists for this customer',
+        error: 'Duplicate asset_no'
+      });
+    }
+
     res.status(400).json({
       success: false,
       message: 'Error creating asset',
@@ -431,7 +459,6 @@ router.post('/', validateCreateAsset, async (req, res) => {
 // PUT /api/assets/:id - Update asset
 router.put('/:id', validateUpdateAsset, async (req, res) => {
   try {
-    // Extract fields to ensure proper handling
     const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
     // Build update object
@@ -444,6 +471,26 @@ router.put('/:id', validateUpdateAsset, async (req, res) => {
     if (site_id !== undefined) updateData.site_id = site_id || null;
     if (building_id !== undefined) updateData.building_id = building_id || null;
     if (floor_id !== undefined) updateData.floor_id = floor_id || null;
+
+    // Handle legacy field mapping for backward compatibility
+    if (otherFields.installation_date && !otherFields.date_of_installation) {
+      updateData.date_of_installation = otherFields.installation_date;
+    }
+    if (otherFields.acquisition_cost && !otherFields.purchase_cost_aud) {
+      updateData.purchase_cost_aud = otherFields.acquisition_cost;
+    }
+    if (otherFields.current_value && !otherFields.current_book_value_aud) {
+      updateData.current_book_value_aud = otherFields.current_value;
+    }
+    if (otherFields.purchase_cost && !otherFields.purchase_cost_aud) {
+      updateData.purchase_cost_aud = otherFields.purchase_cost;
+    }
+    if (otherFields.current_book_value && !otherFields.current_book_value_aud) {
+      updateData.current_book_value_aud = otherFields.current_book_value;
+    }
+    if (otherFields.weight && !otherFields.weight_kgs) {
+      updateData.weight_kgs = otherFields.weight;
+    }
 
     const asset = await Asset.findByIdAndUpdate(
       req.params.id,
@@ -468,6 +515,15 @@ router.put('/:id', validateUpdateAsset, async (req, res) => {
       data: asset
     });
   } catch (error) {
+    // Check for duplicate asset_no error
+    if (error.code === 11000 && error.keyPattern?.asset_no) {
+      return res.status(400).json({
+        success: false,
+        message: 'Asset number already exists for this customer',
+        error: 'Duplicate asset_no'
+      });
+    }
+
     res.status(400).json({
       success: false,
       message: 'Error updating asset',
