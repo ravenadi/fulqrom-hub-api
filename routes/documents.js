@@ -1272,8 +1272,6 @@ router.get('/summary/stats', async (req, res) => {
 // GET /api/storage/stats - Get document storage statistics
 router.get('/storage/stats', async (req, res) => {
   try {
-    // Count total document records
-    const totalRecords = await Document.countDocuments({});
 
     // Aggregate total file size and count documents with files
     const sizeAggregation = await Document.aggregate([
@@ -1298,6 +1296,9 @@ router.get('/storage/stats', async (req, res) => {
     const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
     const totalSizeGB = (totalSize / (1024 * 1024 * 1024)).toFixed(2);
     const displaySize = parseFloat(totalSizeGB) >= 1 ? `${totalSizeGB} GB` : `${totalSizeMB} MB`;
+
+        // Count total document records
+    const totalRecords = await Document.count({});
 
     res.status(200).json({
       success: true,
