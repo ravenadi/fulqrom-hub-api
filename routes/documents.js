@@ -446,6 +446,28 @@ router.get('/tags', async (req, res) => {
   }
 });
 
+// GET /api/documents/stats - Get simple document count statistics
+router.get('/stats', async (req, res) => {
+  try {
+    const totalDocuments = await Document.countDocuments({});
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalDocuments
+      }
+    });
+
+  } catch (error) {
+    console.error('Document Stats Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching document statistics',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/documents/:id - Get single document
 router.get('/:id', validateObjectId, async (req, res) => {
   try {
@@ -1295,28 +1317,6 @@ router.get('/storage/stats', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching storage statistics',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/documents/stats - Get simple document count statistics
-router.get('/stats', async (req, res) => {
-  try {
-    const totalDocuments = await Document.countDocuments({});
-
-    res.status(200).json({
-      success: true,
-      data: {
-        totalDocuments
-      }
-    });
-
-  } catch (error) {
-    console.error('Document Stats Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching document statistics',
       error: error.message
     });
   }
