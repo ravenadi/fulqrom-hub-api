@@ -107,15 +107,15 @@ async function reimportAssets() {
             service_status: row['Service Status'] || null,
 
             // Dates & Testing
-            installation_date: parseDate(row['Date of Installation']),
+            date_of_installation: parseDate(row['Date of Installation']),
             age: row.Age || null,
             last_test_date: parseDate(row['Last Test Date']),
             last_test_result: row['Last Test Result'] || null,
 
             // Financial
-            purchase_cost: parseFloat(row['Purchase Cost (AUD)']) || null,
-            current_book_value: parseFloat(row['Current Book Value (AUD)']) || null,
-            weight: parseFloat(row['Weight (KG\'s)']) || null,
+            purchase_cost_aud: parseFloat(row['Purchase Cost (AUD)']) || null,
+            current_book_value_aud: parseFloat(row['Current Book Value (AUD)']) || null,
+            weight_kgs: parseFloat(row['Weight (KG\'s)']) || null,
 
             // System fields
             is_active: true,

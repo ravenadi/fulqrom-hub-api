@@ -28,7 +28,6 @@ router.get('/', async (req, res) => {
       refrigerant,
       owner,
       service_status,
-      service_contractor,
       age_min,
       age_max,
       purchase_cost_min,
@@ -36,7 +35,6 @@ router.get('/', async (req, res) => {
       current_value_min,
       current_value_max,
       test_result,
-      energy_rating,
       is_active,
       search,
       page = 1,
@@ -120,14 +118,6 @@ router.get('/', async (req, res) => {
       filterQuery.model = new RegExp(model, 'i');
     }
 
-    if (service_contractor) {
-      filterQuery.service_contractor = new RegExp(service_contractor, 'i');
-    }
-
-    if (energy_rating) {
-      filterQuery.energy_rating = new RegExp(energy_rating, 'i');
-    }
-
     if (level) {
       filterQuery.level = level;
     }
@@ -193,10 +183,7 @@ router.get('/', async (req, res) => {
         { serial: new RegExp(search, 'i') },
         { area: new RegExp(search, 'i') },
         { category: new RegExp(search, 'i') },
-        { type: new RegExp(search, 'i') },
-        { service_contractor: new RegExp(search, 'i') },
-        { qr_code: new RegExp(search, 'i') },
-        { notes: new RegExp(search, 'i') }
+        { type: new RegExp(search, 'i') }
       ];
     }
 
@@ -215,8 +202,7 @@ router.get('/', async (req, res) => {
       'category', 'status', 'condition', 'criticality_level',
       'make', 'model',
       'level', 'area', 'age',
-      'purchase_cost_aud', 'current_book_value_aud',
-      'warranty_expiry', 'next_service_due', 'last_service_date'
+      'purchase_cost_aud', 'current_book_value_aud'
     ];
     const sortField = validSortFields.includes(sort_by) ? sort_by : 'createdAt';
     const sortDirection = sort_order === 'asc' ? 1 : -1;

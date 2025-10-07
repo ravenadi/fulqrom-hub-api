@@ -141,22 +141,6 @@ const AssetSchema = new mongoose.Schema({
     trim: true
   },
 
-  // Lifecycle & Maintenance
-  warranty_expiry: {
-    type: Date
-  },
-  service_contractor: {
-    type: String,
-    trim: true,
-    maxlength: 255
-  },
-  last_service_date: {
-    type: Date
-  },
-  next_service_due: {
-    type: Date
-  },
-
   // Financial Information
   purchase_cost_aud: {
     type: Number,
@@ -168,26 +152,6 @@ const AssetSchema = new mongoose.Schema({
   },
   weight_kgs: {
     type: Number
-  },
-
-  // Additional Specifications
-  energy_rating: {
-    type: String,
-    trim: true,
-    maxlength: 50
-  },
-  capacity_specifications: {
-    type: String,
-    trim: true
-  },
-  qr_code: {
-    type: String,
-    trim: true,
-    maxlength: 255
-  },
-  notes: {
-    type: String,
-    trim: true
   },
 
   // System fields
@@ -217,22 +181,6 @@ AssetSchema.virtual('formatted_installation_date').get(function() {
     month: '2-digit',
     year: 'numeric'
   });
-});
-
-// Virtual for formatted warranty expiry
-AssetSchema.virtual('formatted_warranty_expiry').get(function() {
-  if (!this.warranty_expiry) return '';
-  return this.warranty_expiry.toLocaleDateString('en-AU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
-});
-
-// Virtual to check if warranty is expired
-AssetSchema.virtual('warranty_expired').get(function() {
-  if (!this.warranty_expiry) return false;
-  return this.warranty_expiry < new Date();
 });
 
 // Virtual for full asset description (like in the table)
@@ -284,8 +232,6 @@ AssetSchema.index({ status: 1 });
 AssetSchema.index({ condition: 1 });
 AssetSchema.index({ criticality_level: 1 });
 AssetSchema.index({ make: 1 });
-AssetSchema.index({ warranty_expiry: 1 });
-AssetSchema.index({ next_service_due: 1 });
 AssetSchema.index({ is_active: 1 });
 
 // Compound indexes for common queries
