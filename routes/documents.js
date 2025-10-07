@@ -1247,50 +1247,28 @@ router.get('/summary/stats', async (req, res) => {
   }
 });
 
-// GET /api/storage/stats - Get S3 storage statistics
+// GET /api/storage/stats - Get document storage statistics
 router.get('/storage/stats', async (req, res) => {
   try {
-    // Configure S3 Client (reuse configuration from s3Upload.js)
-    const s3Client = new S3Client({
-      region: process.env.AWS_DEFAULT_REGION || 'ap-southeast-2',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    // Count total documents
+    const documentCount = await Document.countDocuments();
+
+    // Aggregate total file size from documents
+    const sizeAggregation = await Document.aggregate([
+      {
+        $match: {
+          'file.file_meta.file_size': { $exists: true, $ne: null }
+        }
       },
-      forcePathStyle: process.env.AWS_USE_PATH_STYLE_ENDPOINT === 'true'
-    });
-
-    const bucketName = process.env.AWS_BUCKET;
-
-    if (!bucketName) {
-      return res.status(500).json({
-        success: false,
-        message: 'S3 bucket not configured'
-      });
-    }
-
-    let totalSize = 0;
-    let objectCount = 0;
-    let continuationToken = null;
-
-    // List all objects in the bucket and sum their sizes
-    do {
-      const listCommand = new ListObjectsV2Command({
-        Bucket: bucketName,
-        ContinuationToken: continuationToken
-      });
-
-      const response = await s3Client.send(listCommand);
-
-      if (response.Contents) {
-        for (const object of response.Contents) {
-          totalSize += object.Size || 0;
-          objectCount++;
+      {
+        $group: {
+          _id: null,
+          totalSize: { $sum: '$file.file_meta.file_size' }
         }
       }
+    ]);
 
-      continuationToken = response.NextContinuationToken;
-    } while (continuationToken);
+    const totalSize = sizeAggregation.length > 0 ? sizeAggregation[0].totalSize : 0;
 
     // Convert bytes to MB and GB
     const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
@@ -1304,15 +1282,15 @@ router.get('/storage/stats', async (req, res) => {
         totalSizeMB: parseFloat(totalSizeMB),
         totalSizeGB: parseFloat(totalSizeGB),
         displaySize: displaySize,
-        objectCount: objectCount
+        documentCount: documentCount
       }
     });
 
   } catch (error) {
-    console.error('S3 Storage Stats Error:', error);
+    console.error('Storage Stats Error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching S3 storage statistics',
+      message: 'Error fetching storage statistics',
       error: error.message
     });
   }
