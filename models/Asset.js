@@ -68,6 +68,11 @@ const AssetSchema = new mongoose.Schema({
     trim: true
     // Excellent, Good, Average, Poor, Critical
   },
+  criticality_level: {
+    type: String,
+    trim: true
+    // Low, Medium, High, Critical - loaded from GET /api/dropdowns
+  },
 
   // Details
   make: {
@@ -260,6 +265,7 @@ AssetSchema.index({ floor_id: 1 });
 AssetSchema.index({ category: 1 });
 AssetSchema.index({ status: 1 });
 AssetSchema.index({ condition: 1 });
+AssetSchema.index({ criticality_level: 1 });
 AssetSchema.index({ make: 1 });
 AssetSchema.index({ warranty_expiry: 1 });
 AssetSchema.index({ next_service_due: 1 });

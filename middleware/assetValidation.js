@@ -34,6 +34,7 @@ const createAssetSchema = Joi.object({
   category: Joi.string().trim().allow('', null).optional(),
   type: Joi.string().trim().allow('', null).optional(),
   condition: Joi.string().trim().allow('', null).optional(),
+  criticality_level: Joi.string().trim().allow('', null).optional(),
 
   // Details
   make: Joi.string().trim().max(255).allow('', null).optional(),
@@ -102,6 +103,7 @@ const updateAssetSchema = Joi.object({
   category: Joi.string().trim().allow('', null).optional(),
   type: Joi.string().trim().allow('', null).optional(),
   condition: Joi.string().trim().allow('', null).optional(),
+  criticality_level: Joi.string().trim().allow('', null).optional(),
 
   // Details
   make: Joi.string().trim().max(255).allow('', null).optional(),

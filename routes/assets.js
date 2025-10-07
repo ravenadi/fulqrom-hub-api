@@ -16,6 +16,7 @@ router.get('/', async (req, res) => {
       category,
       status,
       condition,
+      criticality_level,
       make,
       model,
       level,
@@ -100,6 +101,14 @@ router.get('/', async (req, res) => {
         ? condition.split(',').map(c => c.trim())
         : condition;
       filterQuery.condition = Array.isArray(conditions) ? { $in: conditions } : conditions;
+    }
+
+    if (criticality_level) {
+      // Support multiple criticality levels (comma-separated)
+      const criticalityLevels = criticality_level.includes(',')
+        ? criticality_level.split(',').map(c => c.trim())
+        : criticality_level;
+      filterQuery.criticality_level = Array.isArray(criticalityLevels) ? { $in: criticalityLevels } : criticalityLevels;
     }
 
     if (make) {
@@ -202,7 +211,7 @@ router.get('/', async (req, res) => {
     // Sort configuration
     const validSortFields = [
       'createdAt', 'updatedAt', 'asset_no', 'asset_id', 'device_id',
-      'category', 'status', 'condition',
+      'category', 'status', 'condition', 'criticality_level',
       'make', 'model',
       'level', 'area', 'age',
       'purchase_cost_aud', 'current_book_value_aud',
@@ -297,6 +306,7 @@ router.get('/', async (req, res) => {
         category: category || null,
         status: status || null,
         condition: condition || null,
+        criticality_level: criticality_level || null,
         make: make || null,
         model: model || null,
         level: level || null,
