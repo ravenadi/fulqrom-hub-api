@@ -293,6 +293,7 @@ router.get('/', async (req, res) => {
         customer_id: customer_id || null,
         site_id: site_id || null,
         building_id: building_id || null,
+        floor_id: floor_id || null,
         category: category || null,
         status: status || null,
         condition: condition || null,
@@ -360,7 +361,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', validateCreateAsset, async (req, res) => {
   try {
     // Ensure required fields are present
-    const { customer_id, site_id, building_id, ...otherFields } = req.body;
+    const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
     if (!customer_id) {
       return res.status(400).json({
@@ -374,6 +375,7 @@ router.post('/', validateCreateAsset, async (req, res) => {
       customer_id,
       site_id: site_id || null,
       building_id: building_id || null,
+      floor_id: floor_id || null,
       ...otherFields
     };
 
@@ -404,7 +406,7 @@ router.post('/', validateCreateAsset, async (req, res) => {
 router.put('/:id', validateUpdateAsset, async (req, res) => {
   try {
     // Extract fields to ensure proper handling
-    const { customer_id, site_id, building_id, ...otherFields } = req.body;
+    const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
     // Build update object
     const updateData = {
@@ -415,6 +417,7 @@ router.put('/:id', validateUpdateAsset, async (req, res) => {
     if (customer_id !== undefined) updateData.customer_id = customer_id;
     if (site_id !== undefined) updateData.site_id = site_id || null;
     if (building_id !== undefined) updateData.building_id = building_id || null;
+    if (floor_id !== undefined) updateData.floor_id = floor_id || null;
 
     const asset = await Asset.findByIdAndUpdate(
       req.params.id,
