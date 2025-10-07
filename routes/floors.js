@@ -15,8 +15,7 @@ router.get('/', async (req, res) => {
       building_id,
       floor_type,
       sort_by = 'createdAt',
-      sort_order = 'desc',
-      is_active
+      sort_order = 'desc'
     } = req.query;
 
     // Build filter query
@@ -53,10 +52,6 @@ router.get('/', async (req, res) => {
         ? floor_type.split(',').map(t => t.trim())
         : floor_type;
       filterQuery.floor_type = Array.isArray(types) ? { $in: types } : types;
-    }
-
-    if (is_active !== undefined) {
-      filterQuery.is_active = is_active === 'true';
     }
 
     // Pagination
