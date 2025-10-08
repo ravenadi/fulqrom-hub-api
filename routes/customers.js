@@ -123,6 +123,41 @@ router.get('/:id/stats', async (req, res) => {
   }
 });
 
+// GET /api/customers/:id/contacts/primary - Get primary contact
+router.get('/:id/contacts/primary', async (req, res) => {
+  try {
+    const customer = await Customer.findById(req.params.id);
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    // Find the primary contact in the contact_methods array
+    const primaryContact = customer.contact_methods?.find(contact => contact.is_primary === true);
+
+    if (!primaryContact) {
+      return res.status(404).json({
+        success: false,
+        message: 'No primary contact found for this customer'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: primaryContact
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching primary contact',
+      error: error.message
+    });
+  }
+});
+
 // POST /api/customers - Create new customer
 router.post('/', async (req, res) => {
   try {
