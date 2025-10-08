@@ -94,6 +94,8 @@ router.get('/', async (req, res) => {
       filterQuery.status = Array.isArray(statuses) ? { $in: statuses } : statuses;
     }
 
+    // condition and criticality_level both are same.
+
     if (condition) {
       // Support multiple conditions (comma-separated)
       const conditions = condition.includes(',')
@@ -187,6 +189,7 @@ router.get('/', async (req, res) => {
       ];
     }
 
+    // DB has "status": "Active",
     if (is_active !== undefined) {
       filterQuery.is_active = is_active === 'true';
     }
