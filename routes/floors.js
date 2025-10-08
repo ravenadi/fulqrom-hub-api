@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Floor = require('../models/Floor');
 
 const router = express.Router();
@@ -380,9 +381,9 @@ router.get('/summary/stats', async (req, res) => {
     const { customer_id, site_id, building_id } = req.query;
 
     let matchQuery = {};
-    if (customer_id) matchQuery.customer_id = mongoose.Types.ObjectId(customer_id);
-    if (site_id) matchQuery.site_id = mongoose.Types.ObjectId(site_id);
-    if (building_id) matchQuery.building_id = mongoose.Types.ObjectId(building_id);
+    if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+    if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
+    if (building_id) matchQuery.building_id = new mongoose.Types.ObjectId(building_id);
 
     const stats = await Floor.aggregate([
       { $match: matchQuery },
@@ -433,9 +434,9 @@ router.get('/by-type', async (req, res) => {
     const { customer_id, site_id, building_id } = req.query;
 
     let matchQuery = {};
-    if (customer_id) matchQuery.customer_id = mongoose.Types.ObjectId(customer_id);
-    if (site_id) matchQuery.site_id = mongoose.Types.ObjectId(site_id);
-    if (building_id) matchQuery.building_id = mongoose.Types.ObjectId(building_id);
+    if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+    if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
+    if (building_id) matchQuery.building_id = new mongoose.Types.ObjectId(building_id);
 
     const typeStats = await Floor.aggregate([
       { $match: matchQuery },
