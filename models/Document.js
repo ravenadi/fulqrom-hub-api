@@ -77,6 +77,22 @@ const LocationSchema = new mongoose.Schema({
       trim: true
     }
   },
+  // Support for multiple assets
+  assets: [{
+    asset_id: {
+      type: String,
+      trim: true
+    },
+    asset_name: {
+      type: String,
+      trim: true
+    },
+    asset_type: {
+      type: String,
+      trim: true
+    }
+  }],
+  // Legacy single asset field - kept for backward compatibility
   asset: {
     asset_id: {
       type: String,

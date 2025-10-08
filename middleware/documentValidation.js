@@ -30,9 +30,15 @@ const createDocumentSchema = Joi.object({
   building_name: Joi.string().optional(),
   floor_id: Joi.string().optional(),
   floor_name: Joi.string().optional(),
-  asset_id: Joi.string().optional(),
+  asset_id: Joi.string().optional(), // Legacy single asset
+  asset_ids: Joi.array().items(Joi.string()).optional(), // New multiple assets
   asset_name: Joi.string().optional(),
   asset_type: Joi.string().optional(),
+  assets: Joi.array().items(Joi.object({
+    asset_id: Joi.string().required(),
+    asset_name: Joi.string().optional().allow('', null),
+    asset_type: Joi.string().optional().allow('', null)
+  })).optional(), // Array of asset objects
   tenant_id: Joi.string().optional(),
   tenant_name: Joi.string().optional(),
 
@@ -134,6 +140,16 @@ const updateDocumentSchema = Joi.object({
       floor_id: Joi.string().optional(),
       floor_name: Joi.string().optional()
     }).optional(),
+    asset: Joi.object({ // Legacy single asset
+      asset_id: Joi.string().optional(),
+      asset_name: Joi.string().optional().allow('', null),
+      asset_type: Joi.string().optional().allow('', null)
+    }).optional(),
+    assets: Joi.array().items(Joi.object({ // New multiple assets
+      asset_id: Joi.string().required(),
+      asset_name: Joi.string().optional().allow('', null),
+      asset_type: Joi.string().optional().allow('', null)
+    })).optional(),
     tenant: Joi.object({
       tenant_id: Joi.string().optional(),
       tenant_name: Joi.string().optional()

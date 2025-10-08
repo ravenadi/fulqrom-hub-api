@@ -94,7 +94,7 @@ async function fetchEntityNames(documentData) {
       }
     }
 
-    // Fetch asset name
+    // Fetch asset name (legacy single asset)
     if (assetId) {
       const asset = await Asset.findById(assetId.toString());
       if (asset) {
@@ -105,6 +105,18 @@ async function fetchEntityNames(documentData) {
         // Asset not found, use default name
         entityNames.asset_name = `Asset ${assetId}`;
       }
+    }
+
+    // Fetch multiple assets
+    const assetIds = documentData.location?.assets?.map(a => a.asset_id) || 
+                     (documentData.asset_ids && Array.isArray(documentData.asset_ids) ? documentData.asset_ids : []);
+    if (assetIds.length > 0) {
+      const assets = await Asset.find({ _id: { $in: assetIds.map(id => id.toString()) } });
+      entityNames.assets = assets.map(asset => ({
+        asset_id: asset._id.toString(),
+        asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
+        asset_type: asset.type || asset.category || '' // Allow empty string if no type
+      }));
     }
 
     // Fetch tenant name
@@ -192,7 +204,12 @@ router.get('/', validateQueryParams, async (req, res) => {
       const assetIds = asset_id.includes(',')
         ? asset_id.split(',').map(id => id.trim())
         : asset_id;
-      filterQuery['location.asset.asset_id'] = Array.isArray(assetIds) ? { $in: assetIds } : assetIds;
+      // Support both single asset (legacy) and multiple assets (new)
+      filterQuery.$or = filterQuery.$or || [];
+      filterQuery.$or.push(
+        { 'location.asset.asset_id': Array.isArray(assetIds) ? { $in: assetIds } : assetIds },
+        { 'location.assets.asset_id': Array.isArray(assetIds) ? { $in: assetIds } : assetIds }
+      );
     }
     if (tenant_id) {
       const tenantIds = tenant_id.includes(',')
@@ -344,6 +361,9 @@ router.get('/', validateQueryParams, async (req, res) => {
               floor_id: doc.location.floor.floor_id,
               floor_name: names.floor_name
             } : undefined,
+            // Multiple assets support
+            assets: names.assets && names.assets.length > 0 ? names.assets : undefined,
+            // Legacy single asset (for backward compatibility)
             asset: doc.location?.asset?.asset_id ? {
               asset_id: doc.location.asset.asset_id,
               asset_name: names.asset_name,
@@ -501,6 +521,10 @@ router.get('/:id', validateObjectId, async (req, res) => {
           floor_id: document.location.floor.floor_id,
           floor_name: names.floor_name
         } : undefined,
+        // Multiple assets support
+        assets: names.assets && names.assets.length > 0 ? names.assets : 
+                (document.location?.assets && document.location.assets.length > 0 ? document.location.assets : undefined),
+        // Legacy single asset (for backward compatibility)
         asset: document.location?.asset?.asset_id ? {
           asset_id: document.location.asset.asset_id,
           asset_name: names.asset_name,
@@ -738,7 +762,18 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
       };
     }
 
-    if (documentData.asset_id) {
+    // Handle multiple assets (new feature)
+    if (documentData.asset_ids && Array.isArray(documentData.asset_ids) && documentData.asset_ids.length > 0) {
+      // Fetch asset details from database
+      const assets = await Asset.find({ _id: { $in: documentData.asset_ids.map(id => id.toString()) } });
+      documentPayload.location.assets = assets.map(asset => ({
+        asset_id: asset._id.toString(),
+        asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
+        asset_type: asset.type || asset.category || '' // Allow empty string if no type
+      }));
+    }
+    // Handle single asset (legacy backward compatibility)
+    else if (documentData.asset_id) {
       documentPayload.location.asset = {
         asset_id: documentData.asset_id
       };
@@ -796,6 +831,10 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
           floor_id: documentLean.location.floor.floor_id,
           floor_name: names.floor_name
         } : undefined,
+        // Multiple assets support
+        assets: names.assets && names.assets.length > 0 ? names.assets : 
+                (documentLean.location?.assets && documentLean.location.assets.length > 0 ? documentLean.location.assets : undefined),
+        // Legacy single asset (for backward compatibility)
         asset: documentLean.location?.asset?.asset_id ? {
           asset_id: documentLean.location.asset.asset_id,
           asset_name: names.asset_name,
@@ -916,7 +955,20 @@ router.put('/bulk-update', async (req, res) => {
       };
     }
 
-    if (updates.asset_id) {
+    // Handle multiple assets (new feature)
+    if (updates.asset_ids && Array.isArray(updates.asset_ids) && updates.asset_ids.length > 0) {
+      // Fetch asset details from database
+      const assets = await Asset.find({ _id: { $in: updates.asset_ids.map(id => id.toString()) } });
+      locationUpdate['location.assets'] = assets.map(asset => ({
+        asset_id: asset._id.toString(),
+        asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
+        asset_type: asset.type || asset.category
+      }));
+      // Clear legacy single asset field when using multiple assets
+      locationUpdate['location.asset'] = undefined;
+    }
+    // Handle single asset (legacy backward compatibility)
+    else if (updates.asset_id) {
       locationUpdate['location.asset'] = {
         asset_id: updates.asset_id,
         ...(entityNames.asset_name && { asset_name: entityNames.asset_name }),
@@ -1041,6 +1093,10 @@ router.put('/:id', validateObjectId, async (req, res) => {
           floor_id: document.location.floor.floor_id,
           floor_name: names.floor_name
         } : undefined,
+        // Multiple assets support
+        assets: names.assets && names.assets.length > 0 ? names.assets : 
+                (document.location?.assets && document.location.assets.length > 0 ? document.location.assets : undefined),
+        // Legacy single asset (for backward compatibility)
         asset: document.location?.asset?.asset_id ? {
           asset_id: document.location.asset.asset_id,
           asset_name: names.asset_name,
