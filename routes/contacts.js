@@ -3,6 +3,105 @@ const Customer = require('../models/Customer');
 
 const router = express.Router({ mergeParams: true });
 
+// GET /api/customers/:customerId/contacts/primary - Get primary contact for customer
+router.get('/primary', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    const primaryContact = customer.contact_methods?.find(contact => contact.is_primary);
+
+    if (!primaryContact) {
+      return res.status(404).json({
+        success: false,
+        message: 'No primary contact found for this customer'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: primaryContact,
+      customer: {
+        id: customer._id,
+        name: customer.display_name
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching primary contact',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/customers/:customerId/contacts/search - Search contacts by name, email, or role
+router.get('/search', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    const { q, role_type, contact_type } = req.query;
+
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    let contacts = customer.contact_methods || [];
+
+    // Apply search filters
+    if (q) {
+      const searchTerm = q.toLowerCase();
+      contacts = contacts.filter(contact =>
+        (contact.full_name && contact.full_name.toLowerCase().includes(searchTerm)) ||
+        (contact.method_value && contact.method_value.toLowerCase().includes(searchTerm)) ||
+        (contact.job_title && contact.job_title.toLowerCase().includes(searchTerm)) ||
+        (contact.department && contact.department.toLowerCase().includes(searchTerm))
+      );
+    }
+
+    if (role_type) {
+      contacts = contacts.filter(contact => contact.role_type === role_type);
+    }
+
+    if (contact_type) {
+      contacts = contacts.filter(contact => contact.contact_type === contact_type);
+    }
+
+    // Sort by primary first, then by name
+    contacts.sort((a, b) => {
+      if (a.is_primary && !b.is_primary) return -1;
+      if (!a.is_primary && b.is_primary) return 1;
+      return (a.full_name || '').localeCompare(b.full_name || '');
+    });
+
+    res.status(200).json({
+      success: true,
+      count: contacts.length,
+      data: contacts,
+      customer: {
+        id: customer._id,
+        name: customer.display_name
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error searching contacts',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/customers/:customerId/contacts - List all contacts for a customer
 router.get('/', async (req, res) => {
   try {
@@ -44,45 +143,6 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching contacts',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/customers/:customerId/contacts/primary - Get primary contact for customer
-router.get('/primary', async (req, res) => {
-  try {
-    const { customerId } = req.params;
-
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
-    }
-
-    const primaryContact = customer.contact_methods?.find(contact => contact.is_primary);
-
-    if (!primaryContact) {
-      return res.status(404).json({
-        success: false,
-        message: 'No primary contact found for this customer'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: primaryContact,
-      customer: {
-        id: customer._id,
-        name: customer.display_name
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching primary contact',
       error: error.message
     });
   }
@@ -326,66 +386,6 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error deleting contact',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/customers/:customerId/contacts/search - Search contacts by name, email, or role
-router.get('/search', async (req, res) => {
-  try {
-    const { customerId } = req.params;
-    const { q, role_type, contact_type } = req.query;
-
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
-    }
-
-    let contacts = customer.contact_methods || [];
-
-    // Apply search filters
-    if (q) {
-      const searchTerm = q.toLowerCase();
-      contacts = contacts.filter(contact =>
-        (contact.full_name && contact.full_name.toLowerCase().includes(searchTerm)) ||
-        (contact.method_value && contact.method_value.toLowerCase().includes(searchTerm)) ||
-        (contact.job_title && contact.job_title.toLowerCase().includes(searchTerm)) ||
-        (contact.department && contact.department.toLowerCase().includes(searchTerm))
-      );
-    }
-
-    if (role_type) {
-      contacts = contacts.filter(contact => contact.role_type === role_type);
-    }
-
-    if (contact_type) {
-      contacts = contacts.filter(contact => contact.contact_type === contact_type);
-    }
-
-    // Sort by primary first, then by name
-    contacts.sort((a, b) => {
-      if (a.is_primary && !b.is_primary) return -1;
-      if (!a.is_primary && b.is_primary) return 1;
-      return (a.full_name || '').localeCompare(b.full_name || '');
-    });
-
-    res.status(200).json({
-      success: true,
-      count: contacts.length,
-      data: contacts,
-      customer: {
-        id: customer._id,
-        name: customer.display_name
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error searching contacts',
       error: error.message
     });
   }
