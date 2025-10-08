@@ -1,5 +1,35 @@
 const mongoose = require('mongoose');
 
+// Address schema for building location
+const BuildingAddressSchema = new mongoose.Schema({
+  street: {
+    type: String,
+    trim: true
+  },
+  suburb: {
+    type: String,
+    trim: true
+  },
+  state: {
+    type: String,
+    trim: true
+  },
+  postcode: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return !v || /^\d{4}$/.test(v);
+      },
+      message: 'Postcode must be 4 digits'
+    }
+  },
+  full_address: {
+    type: String,
+    trim: true
+  }
+}, { _id: false });
+
 // Metadata schema for additional building information
 const BuildingMetadataSchema = new mongoose.Schema({
   key: {
@@ -47,6 +77,14 @@ const BuildingSchema = new mongoose.Schema({
   image_url: {
     type: String,
     trim: true
+  },
+
+  // Address
+  address: {
+    type: BuildingAddressSchema,
+    default: function() {
+      return {};
+    }
   },
 
   // Relationships
@@ -198,6 +236,34 @@ BuildingSchema.virtual('building_identifier').get(function() {
   return this.building_name || this.building_code || 'Unnamed Building';
 });
 
+// Virtual for display address - formats address object into readable string
+BuildingSchema.virtual('display_address').get(function() {
+  if (!this.address) return '';
+
+  // If address is a string (backward compatibility)
+  if (typeof this.address === 'string') {
+    return this.address;
+  }
+
+  // If address is an object, use full_address or build from components
+  if (typeof this.address === 'object') {
+    if (this.address.full_address) {
+      return this.address.full_address;
+    }
+
+    // Build address from components
+    const parts = [];
+    if (this.address.street) parts.push(this.address.street);
+    if (this.address.suburb) parts.push(this.address.suburb);
+    if (this.address.state) parts.push(this.address.state);
+    if (this.address.postcode) parts.push(this.address.postcode);
+
+    return parts.join(', ');
+  }
+
+  return '';
+});
+
 // Indexes for performance
 BuildingSchema.index({ building_name: 1 });
 BuildingSchema.index({ building_code: 1 });
@@ -209,6 +275,9 @@ BuildingSchema.index({ is_active: 1 });
 BuildingSchema.index({ primary_use: 1 });
 BuildingSchema.index({ last_inspection_date: 1 });
 BuildingSchema.index({ accessibility_features: 1 });
+BuildingSchema.index({ 'address.state': 1 });
+BuildingSchema.index({ 'address.postcode': 1 });
+BuildingSchema.index({ 'address.suburb': 1 });
 
 // Compound indexes
 BuildingSchema.index({ customer_id: 1, site_id: 1 });

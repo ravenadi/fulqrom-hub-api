@@ -32,7 +32,11 @@ router.get('/', async (req, res) => {
       filterQuery.$or = [
         { building_name: new RegExp(search, 'i') },
         { building_code: new RegExp(search, 'i') },
-        { site_name: new RegExp(search, 'i') }
+        { site_name: new RegExp(search, 'i') },
+        { 'address.street': new RegExp(search, 'i') },
+        { 'address.suburb': new RegExp(search, 'i') },
+        { 'address.state': new RegExp(search, 'i') },
+        { 'address.postcode': new RegExp(search, 'i') }
       ];
     }
 
@@ -338,6 +342,14 @@ router.post('/', async (req, res) => {
       errors.push('Parking spaces must be 0 or greater');
     }
 
+    // Address validation
+    if (req.body.address) {
+      // Validate postcode format if provided
+      if (req.body.address.postcode && !/^\d{4}$/.test(req.body.address.postcode)) {
+        errors.push('Postcode must be 4 digits');
+      }
+    }
+
     // If validation errors exist, return them
     if (errors.length > 0) {
       return res.status(400).json({
@@ -390,6 +402,14 @@ router.put('/:id', async (req, res) => {
     // Parking Spaces - Optional, validate minimum value
     if (req.body.parking_spaces !== undefined && req.body.parking_spaces < 0) {
       errors.push('Parking spaces must be 0 or greater');
+    }
+
+    // Address validation
+    if (req.body.address) {
+      // Validate postcode format if provided
+      if (req.body.address.postcode && !/^\d{4}$/.test(req.body.address.postcode)) {
+        errors.push('Postcode must be 4 digits');
+      }
     }
 
     // If validation errors exist, return them
