@@ -226,16 +226,43 @@ router.get('/', async (req, res) => {
 
     // Get document counts for each asset
     const assetIds = assets.map(asset => asset._id.toString());
+    
+    // Count documents from both legacy single asset and new multiple assets array
     const documentCounts = await Document.aggregate([
       {
         $match: {
-          'location.asset.asset_id': { $in: assetIds }
+          $or: [
+            { 'location.asset.asset_id': { $in: assetIds } },  // Legacy single asset
+            { 'location.assets.asset_id': { $in: assetIds } }   // New multiple assets array
+          ]
         }
       },
       {
+        // Unwind the assets array to count each asset separately
+        $facet: {
+          legacyAssets: [
+            { $match: { 'location.asset.asset_id': { $in: assetIds } } },
+            { $group: { _id: '$location.asset.asset_id', count: { $sum: 1 } } }
+          ],
+          multipleAssets: [
+            { $match: { 'location.assets.asset_id': { $in: assetIds } } },
+            { $unwind: '$location.assets' },
+            { $match: { 'location.assets.asset_id': { $in: assetIds } } },
+            { $group: { _id: '$location.assets.asset_id', count: { $sum: 1 } } }
+          ]
+        }
+      },
+      {
+        // Combine both results
+        $project: {
+          combined: { $concatArrays: ['$legacyAssets', '$multipleAssets'] }
+        }
+      },
+      { $unwind: '$combined' },
+      {
         $group: {
-          _id: '$location.asset.asset_id',
-          count: { $sum: 1 }
+          _id: '$combined._id',
+          count: { $sum: '$combined.count' }
         }
       }
     ]);

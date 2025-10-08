@@ -203,13 +203,30 @@ router.get('/', validateQueryParams, async (req, res) => {
     if (asset_id) {
       const assetIds = asset_id.includes(',')
         ? asset_id.split(',').map(id => id.trim())
-        : asset_id;
+        : [asset_id];
+      
+      console.log('Filtering documents by asset_id:', assetIds);
+      
       // Support both single asset (legacy) and multiple assets (new)
-      filterQuery.$or = filterQuery.$or || [];
-      filterQuery.$or.push(
-        { 'location.asset.asset_id': Array.isArray(assetIds) ? { $in: assetIds } : assetIds },
-        { 'location.assets.asset_id': Array.isArray(assetIds) ? { $in: assetIds } : assetIds }
-      );
+      // For arrays of objects in MongoDB, use $elemMatch or direct field access
+      const assetFilter = {
+        $or: [
+          { 'location.asset.asset_id': { $in: assetIds } }, // Legacy single asset
+          { 'location.assets': { $elemMatch: { asset_id: { $in: assetIds } } } }  // New multiple assets array
+        ]
+      };
+      
+      console.log('Asset filter query:', JSON.stringify(assetFilter, null, 2));
+      
+      // Merge with existing filterQuery
+      if (filterQuery.$or) {
+        // If $or already exists (e.g., from search), combine with $and
+        filterQuery.$and = filterQuery.$and || [];
+        filterQuery.$and.push(assetFilter);
+      } else {
+        // No existing $or, add directly
+        Object.assign(filterQuery, assetFilter);
+      }
     }
     if (tenant_id) {
       const tenantIds = tenant_id.includes(',')
@@ -312,6 +329,9 @@ router.get('/', validateQueryParams, async (req, res) => {
       filterQuery = { ...filterQuery, ...searchQuery };
     }
 
+    // Log final query for debugging
+    console.log('Final MongoDB query:', JSON.stringify(filterQuery, null, 2));
+
     // Pagination and sorting
     const pagination = buildPagination(page, limit);
     const sortObj = buildSort(sort, order);
@@ -337,6 +357,8 @@ router.get('/', validateQueryParams, async (req, res) => {
         { $sort: { count: -1 } }
       ]).exec()
     ]);
+
+    console.log(`Query returned ${documents.length} documents out of ${totalDocuments} total matches`);
 
     // Populate entity names dynamically for each document
     const documentsWithNames = await Promise.all(
