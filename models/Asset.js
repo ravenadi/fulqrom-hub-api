@@ -144,35 +144,35 @@ const AssetSchema = new mongoose.Schema({
 
   // Financial Information
   purchase_cost_aud: {
-    type: Number,
+    type: String,
     min: 0
   },
   current_book_value_aud: {
-    type: Number,
+    type: String,
     min: 0
   },
   weight_kgs: {
-    type: Number
+    type: String
   },
   // Legacy field names (kept for backward compatibility)
   acquisition_cost: {
-    type: Number,
+    type: String,
     min: 0
   },
   current_value: {
-    type: Number,
+    type: String,
     min: 0
   },
   purchase_cost: {
-    type: Number,
+    type: String,
     min: 0
   },
   current_book_value: {
-    type: Number,
+    type: String,
     min: 0
   },
   weight: {
-    type: Number
+    type: String
   },
   installation_date: {
     type: Date
