@@ -147,7 +147,7 @@ router.get('/', async (req, res) => {
       // Lookup tenants count
       {
         $lookup: {
-          from: 'tenants',
+          from: 'building_tenants',
           let: { siteId: '$_id' },
           pipeline: [
             { $match: { $expr: { $eq: ['$site_id', '$$siteId'] } } },
@@ -314,7 +314,7 @@ router.get('/:id', async (req, res) => {
       // Lookup tenants count
       {
         $lookup: {
-          from: 'tenants',
+          from: 'building_tenants',
           let: { siteId: '$_id' },
           pipeline: [
             { $match: { $expr: { $eq: ['$site_id', '$$siteId'] } } },
