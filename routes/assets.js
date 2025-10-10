@@ -273,10 +273,15 @@ router.get('/', async (req, res) => {
       documentCountMap[item._id] = item.count;
     });
 
-    // Add document count to each asset
+    // Add document count and backward compatibility fields to each asset
     const assetsWithDocCount = assets.map(asset => ({
       ...asset,
-      document_count: documentCountMap[asset._id.toString()] || 0
+      document_count: documentCountMap[asset._id.toString()] || 0,
+      // Add backward compatibility fields for frontend
+      purchase_cost: asset.purchase_cost_aud || asset.purchase_cost || undefined,
+      current_book_value: asset.current_book_value_aud || asset.current_book_value || undefined,
+      weight: asset.weight_kgs || asset.weight || undefined,
+      installation_date: asset.date_of_installation || asset.installation_date || undefined
     }));
 
     // Calculate summary statistics (on filtered data, not paginated)
@@ -391,7 +396,8 @@ router.get('/:id', async (req, res) => {
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address')
       .populate('building_id', 'building_name building_code')
-      .populate('floor_id', 'floor_name floor_level');
+      .populate('floor_id', 'floor_name floor_level')
+      .lean();
 
     if (!asset) {
       return res.status(404).json({
@@ -400,9 +406,18 @@ router.get('/:id', async (req, res) => {
       });
     }
 
+    // Add backward compatibility fields for frontend
+    const assetWithCompatibility = {
+      ...asset,
+      purchase_cost: asset.purchase_cost_aud || asset.purchase_cost || undefined,
+      current_book_value: asset.current_book_value_aud || asset.current_book_value || undefined,
+      weight: asset.weight_kgs || asset.weight || undefined,
+      installation_date: asset.date_of_installation || asset.installation_date || undefined
+    };
+
     res.status(200).json({
       success: true,
-      data: asset
+      data: assetWithCompatibility
     });
   } catch (error) {
     res.status(500).json({
@@ -463,10 +478,20 @@ router.post('/', validateCreateAsset, async (req, res) => {
     await asset.populate('building_id', 'building_name building_code');
     await asset.populate('floor_id', 'floor_name floor_level');
 
+    // Convert to plain object and add backward compatibility fields
+    const assetObj = asset.toObject();
+    const assetWithCompatibility = {
+      ...assetObj,
+      purchase_cost: assetObj.purchase_cost_aud || assetObj.purchase_cost || undefined,
+      current_book_value: assetObj.current_book_value_aud || assetObj.current_book_value || undefined,
+      weight: assetObj.weight_kgs || assetObj.weight || undefined,
+      installation_date: assetObj.date_of_installation || assetObj.installation_date || undefined
+    };
+
     res.status(201).json({
       success: true,
       message: 'Asset created successfully',
-      data: asset
+      data: assetWithCompatibility
     });
   } catch (error) {
     // Check for duplicate asset_no error
@@ -530,7 +555,8 @@ router.put('/:id', validateUpdateAsset, async (req, res) => {
     .populate('customer_id', 'organisation.organisation_name')
     .populate('site_id', 'site_name address')
     .populate('building_id', 'building_name building_code')
-    .populate('floor_id', 'floor_name floor_level');
+    .populate('floor_id', 'floor_name floor_level')
+    .lean();
 
     if (!asset) {
       return res.status(404).json({
@@ -539,10 +565,19 @@ router.put('/:id', validateUpdateAsset, async (req, res) => {
       });
     }
 
+    // Add backward compatibility fields for frontend
+    const assetWithCompatibility = {
+      ...asset,
+      purchase_cost: asset.purchase_cost_aud || asset.purchase_cost || undefined,
+      current_book_value: asset.current_book_value_aud || asset.current_book_value || undefined,
+      weight: asset.weight_kgs || asset.weight || undefined,
+      installation_date: asset.date_of_installation || asset.installation_date || undefined
+    };
+
     res.status(200).json({
       success: true,
       message: 'Asset updated successfully',
-      data: asset
+      data: assetWithCompatibility
     });
   } catch (error) {
     // Check for duplicate asset_no error
@@ -647,7 +682,17 @@ router.get('/by-building/:buildingId', async (req, res) => {
       .populate('building_id', 'building_name building_code')
       .sort({ level: 1, area: 1, asset_no: 1 })
       .skip(skip)
-      .limit(limitNumber);
+      .limit(limitNumber)
+      .lean();
+
+    // Add backward compatibility fields to each asset
+    const assetsWithCompatibility = assets.map(asset => ({
+      ...asset,
+      purchase_cost: asset.purchase_cost_aud || asset.purchase_cost || undefined,
+      current_book_value: asset.current_book_value_aud || asset.current_book_value || undefined,
+      weight: asset.weight_kgs || asset.weight || undefined,
+      installation_date: asset.date_of_installation || asset.installation_date || undefined
+    }));
 
     // Calculate summary statistics
     const summaryStats = await Asset.aggregate([
@@ -681,9 +726,9 @@ router.get('/by-building/:buildingId', async (req, res) => {
 
     res.status(200).json({
       success: true,
-      count: assets.length,
+      count: assetsWithCompatibility.length,
       summary: summary,
-      data: assets,
+      data: assetsWithCompatibility,
       pagination: {
         current_page: pageNumber,
         per_page: limitNumber,

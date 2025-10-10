@@ -358,7 +358,7 @@ router.get('/', validateQueryParams, async (req, res) => {
       ]).exec()
     ]);
 
-    console.log(`Query returned ${documents.length} documents out of ${totalDocuments} total matches`);
+    // console.log(`Query returned ${documents.length} documents out of ${totalDocuments} total matches`);
 
     // Populate entity names dynamically for each document
     const documentsWithNames = await Promise.all(

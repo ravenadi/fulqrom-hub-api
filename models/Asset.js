@@ -144,11 +144,11 @@ const AssetSchema = new mongoose.Schema({
 
   // Financial Information
   purchase_cost_aud: {
-    type: String,
+    type: Number,
     min: 0
   },
   current_book_value_aud: {
-    type: String,
+    type: Number,
     min: 0
   },
   weight_kgs: {
@@ -164,11 +164,11 @@ const AssetSchema = new mongoose.Schema({
     min: 0
   },
   purchase_cost: {
-    type: String,
+    type: Number,
     min: 0
   },
   current_book_value: {
-    type: String,
+    type: Number,
     min: 0
   },
   weight: {
