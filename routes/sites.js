@@ -247,7 +247,7 @@ router.get('/', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching sites:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching sites',
@@ -415,7 +415,7 @@ router.get('/:id', async (req, res) => {
       data: siteAggregation[0]
     });
   } catch (error) {
-    console.error('Error fetching site:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching site',
@@ -456,7 +456,7 @@ router.post('/', async (req, res) => {
       data: createdSite
     });
   } catch (error) {
-    console.error('Error creating site:', error);
+
     res.status(400).json({
       success: false,
       message: 'Error creating site',
@@ -495,7 +495,7 @@ router.put('/:id', async (req, res) => {
       data: site
     });
   } catch (error) {
-    console.error('Error updating site:', error);
+
     res.status(400).json({
       success: false,
       message: 'Error updating site',
@@ -526,7 +526,7 @@ router.delete('/:id', async (req, res) => {
       data: site
     });
   } catch (error) {
-    console.error('Error deleting site:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error deleting site',

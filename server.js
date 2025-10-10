@@ -116,30 +116,26 @@ const initializeDatabase = require('./utils/initializeDatabase');
 // Database connection
 mongoose.connect(MONGODB_URI)
   .then(async () => {
-    console.log('✅ Connected to MongoDB');
-    console.log(`📍 Database: ${MONGODB_URI}`);
-
+    console.log('✓ Database connected successfully');
     // Initialize database with default data
     await initializeDatabase();
   })
   .catch((error) => {
-    console.error('❌ MongoDB connection error:', error);
+    console.error('✗ Database connection failed:', error.message);
     process.exit(1);
   });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down server...');
+  console.log('\n✓ Shutting down gracefully...');
   await mongoose.connection.close();
-  console.log('✅ Database connection closed');
+  console.log('✓ Database connection closed');
   process.exit(0);
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Fulqrom Hub API running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  console.log(`✓ Server is running on port ${PORT}`);
 });
 
 module.exports = app;

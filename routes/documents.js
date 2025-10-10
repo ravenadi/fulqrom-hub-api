@@ -135,7 +135,7 @@ async function fetchEntityNames(documentData) {
       }
     }
   } catch (error) {
-    console.warn('Error fetching entity names:', error.message);
+
   }
 
   return entityNames;
@@ -204,9 +204,7 @@ router.get('/', validateQueryParams, async (req, res) => {
       const assetIds = asset_id.includes(',')
         ? asset_id.split(',').map(id => id.trim())
         : [asset_id];
-      
-      console.log('Filtering documents by asset_id:', assetIds);
-      
+
       // Support both single asset (legacy) and multiple assets (new)
       // For arrays of objects in MongoDB, use $elemMatch or direct field access
       const assetFilter = {
@@ -215,8 +213,6 @@ router.get('/', validateQueryParams, async (req, res) => {
           { 'location.assets': { $elemMatch: { asset_id: { $in: assetIds } } } }  // New multiple assets array
         ]
       };
-      
-      console.log('Asset filter query:', JSON.stringify(assetFilter, null, 2));
       
       // Merge with existing filterQuery
       if (filterQuery.$or) {
@@ -329,9 +325,6 @@ router.get('/', validateQueryParams, async (req, res) => {
       filterQuery = { ...filterQuery, ...searchQuery };
     }
 
-    // Log final query for debugging
-    console.log('Final MongoDB query:', JSON.stringify(filterQuery, null, 2));
-
     // Pagination and sorting
     const pagination = buildPagination(page, limit);
     const sortObj = buildSort(sort, order);
@@ -357,8 +350,6 @@ router.get('/', validateQueryParams, async (req, res) => {
         { $sort: { count: -1 } }
       ]).exec()
     ]);
-
-    // console.log(`Query returned ${documents.length} documents out of ${totalDocuments} total matches`);
 
     // Populate entity names dynamically for each document
     const documentsWithNames = await Promise.all(
@@ -501,7 +492,7 @@ router.get('/stats', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Document Stats Error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching document statistics',
@@ -895,10 +886,8 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
               approverName: approver.user_name || approver.user_email,
               documentDetails
             });
-            console.log(`✓ Approval email sent to ${approver.user_email}`);
           } catch (emailError) {
-            console.error(`✗ Failed to send approval email to ${approver.user_email}:`, emailError);
-            // Continue with other approvers even if one fails
+            // Continue with other approvers
           }
         }
       }
@@ -911,7 +900,7 @@ router.post('/', upload.single('file'), validateCreateDocument, async (req, res)
     });
 
   } catch (error) {
-    console.error('Document creation error:', error);
+
     res.status(400).json({
       success: false,
       message: 'Error creating document',
@@ -1030,7 +1019,7 @@ router.put('/bulk-update', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Bulk update error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error updating documents',
@@ -1165,7 +1154,7 @@ router.delete('/:id', async (req, res) => {
     if (document.file && document.file.file_meta && document.file.file_meta.file_key) {
       const deleteResult = await deleteFileFromS3(document.file.file_meta.file_key);
       if (!deleteResult.success) {
-        console.warn('Failed to delete file from S3:', deleteResult.error);
+
       }
     }
 
@@ -1251,7 +1240,7 @@ router.get('/by-type/:type', async (req, res) => {
       data: documents
     });
   } catch (error) {
-    console.error('Error fetching documents by type:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching documents by type',
@@ -1334,7 +1323,7 @@ router.get('/by-building/:buildingId', async (req, res) => {
       data: documents
     });
   } catch (error) {
-    console.error('Error fetching documents by building:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching documents by building',
@@ -1429,7 +1418,7 @@ router.get('/storage/stats', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Storage Stats Error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching storage statistics',
@@ -1642,7 +1631,7 @@ router.post('/:id/request-approval', validateObjectId, validateRequestApproval, 
     });
 
   } catch (error) {
-    console.error('Error requesting approval:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error requesting approval',
@@ -1722,7 +1711,7 @@ router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) =
     });
 
   } catch (error) {
-    console.error('Error approving document:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error approving document',
@@ -1809,7 +1798,7 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
     });
 
   } catch (error) {
-    console.error('Error rejecting document:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error rejecting document',
@@ -1889,7 +1878,7 @@ router.put('/:id/revoke-approval', validateObjectId, validateRevokeApproval, asy
     });
 
   } catch (error) {
-    console.error('Error revoking approval:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error revoking approval',
@@ -1935,7 +1924,7 @@ router.get('/pending-approval', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching pending approvals:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching pending approvals',
@@ -1973,7 +1962,7 @@ router.get('/:id/approval-history', validateObjectId, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching approval history:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching approval history',
@@ -2231,9 +2220,8 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
                 documentDetails,
                 statusUpdate
               });
-              console.log(`✓ Version update notification sent to ${approver.user_email}`);
             } catch (emailError) {
-              console.error(`✗ Failed to send version update notification to ${approver.user_email}:`, emailError);
+              // Email notification failed - continue
             }
           }
         }
@@ -2247,7 +2235,7 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     });
 
   } catch (error) {
-    console.error('Error uploading new version:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error uploading new version',
@@ -2294,7 +2282,7 @@ router.get('/versions/:documentGroupId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching document versions:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching document versions',
@@ -2347,7 +2335,7 @@ router.get('/versions/:versionId/download', validateObjectId, async (req, res) =
     });
 
   } catch (error) {
-    console.error('Error downloading version:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error downloading version',
@@ -2471,7 +2459,7 @@ router.post('/versions/:versionId/restore', validateObjectId, async (req, res) =
     });
 
   } catch (error) {
-    console.error('Error restoring version:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error restoring version',
@@ -2513,7 +2501,7 @@ router.get('/:id/comments', validateObjectId, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching document comments:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching comments',
@@ -2621,9 +2609,8 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
               documentDetails,
               statusUpdate
             });
-            console.log(`✓ Review notification sent to ${recipient}`);
           } catch (emailError) {
-            console.error(`✗ Failed to send review notification to ${recipient}:`, emailError);
+            // Email notification failed - continue
           }
         }
       });
@@ -2636,7 +2623,7 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error submitting review:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error submitting review',
@@ -2686,7 +2673,7 @@ router.get('/:id/download', validateObjectId, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error generating download URL:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error generating download URL',

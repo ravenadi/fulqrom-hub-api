@@ -15,7 +15,7 @@ async function logAudit(logData, req) {
     });
     await auditLog.save();
   } catch (error) {
-    console.error('Error logging audit:', error);
+
   }
 }
 
@@ -70,7 +70,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching users:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching users',
@@ -108,7 +108,7 @@ router.get('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching user:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching user',
@@ -212,7 +212,6 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating user:', error);
 
     // Log audit failure
     await logAudit({
@@ -332,7 +331,6 @@ router.put('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error updating user:', error);
 
     // Log audit failure
     await logAudit({
@@ -399,7 +397,6 @@ router.delete('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error deleting user:', error);
 
     // Log audit failure
     await logAudit({
@@ -481,7 +478,6 @@ router.post('/:id/deactivate', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error deactivating user:', error);
 
     // Log audit failure
     await logAudit({
@@ -530,7 +526,7 @@ router.get('/:id/resource-access', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching resource access:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching resource access',
@@ -626,7 +622,6 @@ router.post('/resource-access', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error assigning resource access:', error);
 
     // Log audit failure
     await logAudit({
@@ -708,7 +703,6 @@ router.delete('/resource-access/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error removing resource access:', error);
 
     // Log audit failure
     await logAudit({
@@ -781,7 +775,7 @@ router.post('/audit-logs', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating audit log:', error);
+
     res.status(400).json({
       success: false,
       message: 'Error creating audit log',

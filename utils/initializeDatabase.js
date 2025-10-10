@@ -7,14 +7,9 @@ const User = require('../models/User');
  */
 async function initializeDatabase() {
   try {
-    console.log('Initializing database with default data...');
-
-    // Create Site Manager role if it doesn't exist
     let siteManagerRole = await Role.findOne({ name: 'Site Manager' });
 
     if (!siteManagerRole) {
-      console.log('Creating Site Manager role...');
-
       siteManagerRole = new Role({
         name: 'Site Manager',
         description: 'Default role for site management with full access',
@@ -34,17 +29,11 @@ async function initializeDatabase() {
       });
 
       await siteManagerRole.save();
-      console.log('✓ Site Manager role created');
-    } else {
-      console.log('✓ Site Manager role already exists');
     }
 
-    // Create demo user if it doesn't exist
     let demoUser = await User.findOne({ email: 'demo@fulqrom.com.au' });
 
     if (!demoUser) {
-      console.log('Creating demo user...');
-
       demoUser = new User({
         email: 'demo@fulqrom.com.au',
         full_name: 'Demo User',
@@ -54,16 +43,10 @@ async function initializeDatabase() {
       });
 
       await demoUser.save();
-      console.log('✓ Demo user created (demo@fulqrom.com.au)');
-    } else {
-      console.log('✓ Demo user already exists');
     }
 
-    console.log('✅ Database initialization complete\n');
-
   } catch (error) {
-    console.error('❌ Database initialization error:', error);
-    // Don't throw - let the server continue even if initialization fails
+    // Continue on error - don't block server startup
   }
 }
 

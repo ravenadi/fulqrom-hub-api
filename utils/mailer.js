@@ -52,19 +52,13 @@ const sendEmail = async (options) => {
 
     const info = await transporter.sendMail(mailOptions);
 
-    console.log('Email sent successfully:', {
-      messageId: info.messageId,
-      to: mailOptions.to,
-      subject: mailOptions.subject,
-    });
-
     return {
       success: true,
       messageId: info.messageId,
       response: info.response,
     };
   } catch (error) {
-    console.error('Email sending failed:', error);
+
     throw new Error(`Failed to send email: ${error.message}`);
   }
 };
@@ -77,10 +71,9 @@ const verifyConnection = async () => {
   try {
     const transporter = createTransporter();
     await transporter.verify();
-    console.log('SMTP connection verified successfully');
     return true;
   } catch (error) {
-    console.error('SMTP connection verification failed:', error);
+
     throw new Error(`SMTP connection failed: ${error.message}`);
   }
 };

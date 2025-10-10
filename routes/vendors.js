@@ -149,7 +149,7 @@ router.get('/', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching vendors:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching vendors',
@@ -226,7 +226,7 @@ router.get('/stats', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching vendor statistics:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching vendor statistics',
@@ -262,7 +262,7 @@ router.get('/:id', async (req, res) => {
       data: vendor
     });
   } catch (error) {
-    console.error('Error fetching vendor:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching vendor',
@@ -353,7 +353,6 @@ router.post('/', async (req, res) => {
       data: vendor
     });
   } catch (error) {
-    console.error('Error creating vendor:', error);
 
     // Handle validation errors
     if (error.name === 'ValidationError') {
@@ -429,7 +428,6 @@ router.put('/:id', async (req, res) => {
       data: vendor
     });
   } catch (error) {
-    console.error('Error updating vendor:', error);
 
     // Handle validation errors
     if (error.name === 'ValidationError') {
@@ -489,7 +487,7 @@ router.delete('/:id', async (req, res) => {
       data: vendor
     });
   } catch (error) {
-    console.error('Error deleting vendor:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error deleting vendor',
@@ -541,7 +539,7 @@ router.patch('/:id/status', async (req, res) => {
       data: vendor
     });
   } catch (error) {
-    console.error('Error updating vendor status:', error);
+
     res.status(400).json({
       success: false,
       message: 'Error updating vendor status',

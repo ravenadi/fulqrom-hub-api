@@ -277,7 +277,7 @@ router.get('/', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching buildings:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching buildings',

@@ -52,7 +52,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching roles:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching roles',
@@ -95,7 +95,7 @@ router.get('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching role:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching role',
@@ -143,7 +143,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating role:', error);
+
     res.status(400).json({
       success: false,
       message: 'Error creating role',
@@ -202,7 +202,7 @@ router.put('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error updating role:', error);
+
     res.status(400).json({
       success: false,
       message: 'Error updating role',
@@ -258,7 +258,7 @@ router.delete('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error deleting role:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error deleting role',
@@ -321,7 +321,7 @@ router.get('/:id/users', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching users by role:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching users by role',

@@ -11,7 +11,13 @@
       "Bash(pkill:*)",
       "Bash(git add:*)",
       "Bash(node:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(cat:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(npm audit:*)"
     ],
     "deny": [],
     "ask": []

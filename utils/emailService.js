@@ -26,9 +26,7 @@ class EmailService {
       try {
         const { createTransporter } = require('./mailer');
         this.client = createTransporter();
-        console.log('✓ SMTP email provider initialized');
       } catch (error) {
-        console.warn('⚠ SMTP not available, falling back to console logging');
         this.provider = 'console';
       }
     } else if (this.provider === 'sendgrid') {
@@ -36,24 +34,18 @@ class EmailService {
         const sgMail = require('@sendgrid/mail');
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
         this.client = sgMail;
-        console.log('✓ SendGrid email provider initialized');
       } catch (error) {
-        console.warn('⚠ SendGrid not available, falling back to console logging');
         this.provider = 'console';
       }
     } else if (this.provider === 'ses') {
       try {
         const { SESClient } = require('@aws-sdk/client-ses');
         this.client = new SESClient({
-          region: process.env.AWS_REGION || 'ap-southeast-2' // Sydney
+          region: process.env.AWS_REGION || 'ap-southeast-2'
         });
-        console.log('✓ AWS SES email provider initialized');
       } catch (error) {
-        console.warn('⚠ AWS SES not available, falling back to console logging');
         this.provider = 'console';
       }
-    } else {
-      console.log('ℹ Email provider set to console logging (development mode)');
     }
   }
 
@@ -120,7 +112,7 @@ class EmailService {
 
       return { subject, html };
     } catch (error) {
-      console.error('Error rendering email template:', error);
+
       throw new Error(`Failed to render email template: ${error.message}`);
     }
   }
@@ -169,8 +161,6 @@ class EmailService {
       // Mark as sent
       await notification.markAsSent(result.messageId);
 
-      console.log(`✓ Email sent to ${to}: ${subject}`);
-
       return {
         success: true,
         messageId: result.messageId,
@@ -180,8 +170,6 @@ class EmailService {
     } catch (error) {
       // Mark as failed
       await notification.markAsFailed(error.message);
-
-      console.error(`✗ Failed to send email to ${to}:`, error);
 
       // Don't throw - email failures should not break app flow
       return {
@@ -266,15 +254,6 @@ class EmailService {
    * Log email to console (development mode)
    */
   async sendViaConsole({ to, subject, html }) {
-    console.log('\n' + '='.repeat(80));
-    console.log('📧 EMAIL (CONSOLE MODE - DEVELOPMENT ONLY)');
-    console.log('='.repeat(80));
-    console.log(`To: ${to}`);
-    console.log(`From: ${this.fromName} <${this.fromAddress}>`);
-    console.log(`Subject: ${subject}`);
-    console.log('-'.repeat(80));
-    console.log(html.substring(0, 500) + '...');
-    console.log('='.repeat(80) + '\n');
 
     return {
       messageId: 'console-' + Date.now()
@@ -387,7 +366,7 @@ class EmailService {
         }
       } catch (error) {
         failedCount++;
-        console.error(`Retry failed for email ${notification._id}:`, error);
+
       }
     }
 

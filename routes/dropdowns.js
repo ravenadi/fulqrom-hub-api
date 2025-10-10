@@ -450,7 +450,7 @@ router.get('/', async (req, res) => {
 
     // If no database setting exists, create one with default values
     if (!dropdownSetting) {
-      console.log('No dropdown settings found in database, creating default...');
+      // Creating default dropdown settings from constants
       dropdownSetting = await Settings.create({
         setting_key: 'dropdown_values',
         category: 'system',
@@ -475,7 +475,6 @@ router.get('/', async (req, res) => {
       last_updated: dropdownSetting.updated_at
     });
   } catch (error) {
-    console.error('Error fetching dropdown values:', error);
 
     // Fallback to constants if database fails
     const flattened = flattenDropdowns(DROPDOWN_CONSTANTS);
@@ -535,7 +534,7 @@ router.post('/', async (req, res) => {
       last_updated: dropdownSetting.updated_at
     });
   } catch (error) {
-    console.error('Error updating dropdown values:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error updating dropdown values',

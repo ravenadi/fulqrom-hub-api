@@ -7,7 +7,6 @@ const Asset = require('../models/Asset');
 
 const router = express.Router();
 
-
 // Function to generate floor levels based on actual asset levels
 function generateFloors(building, assets) {
   // Helper function to normalize level values
@@ -117,7 +116,6 @@ function generateFloors(building, assets) {
       seenFloorIds.add(floor.id);
       uniqueFloors.push(floor);
     } else {
-      console.warn(`Duplicate floor detected and removed: ${floor.name} (ID: ${floor.id})`);
     }
   }
 
@@ -440,7 +438,6 @@ router.get('/:customer_id', async (req, res) => {
       });
     }
 
-
     // Transform sites into hierarchy structure (full hierarchy)
     const hierarchyData = sites.map(site => {
       totalSites++;
@@ -574,7 +571,7 @@ router.get('/:customer_id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Hierarchy API Error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching hierarchy data',
@@ -833,7 +830,7 @@ router.get('/site/:site_id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Site Hierarchy API Error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching site hierarchy data',
@@ -992,7 +989,7 @@ router.get('/building/:building_id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Building Hierarchy API Error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching building hierarchy data',
@@ -1066,7 +1063,7 @@ router.get('/:customer_id/stats', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Hierarchy Stats API Error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Error fetching hierarchy statistics',

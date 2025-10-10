@@ -204,7 +204,7 @@ async function uploadFileToS3(file, customerId, customPath = null) {
     };
 
   } catch (error) {
-    console.error('S3 Upload Error:', error);
+
     return {
       success: false,
       error: error.message
@@ -232,7 +232,7 @@ async function deleteFileFromS3(s3Key) {
     };
 
   } catch (error) {
-    console.error('S3 Delete Error:', error);
+
     return {
       success: false,
       error: error.message
@@ -261,7 +261,7 @@ async function generatePresignedUrl(s3Key, expiresIn = 3600) {
     };
 
   } catch (error) {
-    console.error('S3 Presigned URL Error:', error);
+
     return {
       success: false,
       error: error.message
@@ -294,7 +294,7 @@ async function generatePreviewUrl(s3Key, fileName, contentType, expiresIn = 3600
     };
 
   } catch (error) {
-    console.error('S3 Preview URL Error:', error);
+
     return {
       success: false,
       error: error.message
@@ -320,7 +320,7 @@ async function checkS3Health() {
     };
 
   } catch (error) {
-    console.error('S3 Health Check Error:', error);
+
     return {
       success: false,
       error: error.message

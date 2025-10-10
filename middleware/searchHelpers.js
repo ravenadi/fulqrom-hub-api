@@ -179,11 +179,6 @@ function buildApiResponse(success, data, message = null, pagination = null) {
  * @param {string} operation - Operation being performed
  */
 function handleError(error, res, operation = 'operation') {
-  console.error(`Error in ${operation}:`, {
-    message: error.message,
-    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    timestamp: new Date().toISOString()
-  });
 
   const statusCode = error.statusCode || 500;
   const message = `Error ${operation.replace(/([A-Z])/g, ' $1').toLowerCase()}`;
