@@ -127,7 +127,7 @@ mongoose.connect(MONGODB_URI)
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n✓ Shutting down gracefully...');
+
   await mongoose.connection.close();
   console.log('✓ Database connection closed');
   process.exit(0);
