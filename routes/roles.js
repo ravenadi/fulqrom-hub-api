@@ -1,6 +1,13 @@
 const express = require('express');
 const Role = require('../models/Role');
 const User = require('../models/User');
+const {
+  isAuth0Enabled,
+  createAuth0Role,
+  updateAuth0Role,
+  deleteAuth0Role,
+  getAuth0RoleByName
+} = require('../services/auth0Service');
 
 const router = express.Router();
 
@@ -136,10 +143,31 @@ router.post('/', async (req, res) => {
 
     await role.save();
 
+    // Create role in Auth0 (if enabled)
+    let auth0Role = null;
+    if (isAuth0Enabled()) {
+      try {
+        auth0Role = await createAuth0Role({
+          name: role.name,
+          description: role.description
+        });
+
+        // Store Auth0 role ID in MongoDB
+        if (auth0Role) {
+          role.auth0_id = auth0Role.id;
+          await role.save();
+        }
+      } catch (auth0Error) {
+        console.error('Auth0 role creation failed:', auth0Error.message);
+        // Continue even if Auth0 creation fails - role exists in MongoDB
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Role created successfully',
-      data: role
+      data: role,
+      auth0_synced: !!auth0Role
     });
 
   } catch (error) {
@@ -186,6 +214,11 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // Prepare update data for Auth0
+    const updateData = {};
+    if (name) updateData.name = name.trim();
+    if (description !== undefined) updateData.description = description?.trim();
+
     // Update fields
     if (name) role.name = name.trim();
     if (description !== undefined) role.description = description?.trim();
@@ -195,10 +228,23 @@ router.put('/:id', async (req, res) => {
     role.updated_at = new Date();
     await role.save();
 
+    // Update role in Auth0 (if enabled and auth0_id exists)
+    let auth0Updated = false;
+    if (isAuth0Enabled() && role.auth0_id) {
+      try {
+        await updateAuth0Role(role.auth0_id, updateData);
+        auth0Updated = true;
+      } catch (auth0Error) {
+        console.error('Auth0 role update failed:', auth0Error.message);
+        // Continue even if Auth0 update fails - role updated in MongoDB
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: 'Role updated successfully',
-      data: role
+      data: role,
+      auth0_synced: auth0Updated
     });
 
   } catch (error) {
@@ -250,11 +296,28 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
+    const roleName = role.name;
+    const auth0Id = role.auth0_id;
+
+    // Delete from MongoDB
     await Role.findByIdAndDelete(id);
+
+    // Delete from Auth0 (if enabled and auth0_id exists)
+    let auth0Deleted = false;
+    if (isAuth0Enabled() && auth0Id) {
+      try {
+        await deleteAuth0Role(auth0Id);
+        auth0Deleted = true;
+      } catch (auth0Error) {
+        console.error('Auth0 role deletion failed:', auth0Error.message);
+        // Continue even if Auth0 deletion fails - role deleted from MongoDB
+      }
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Role deleted successfully'
+      message: 'Role deleted successfully',
+      auth0_synced: auth0Deleted
     });
 
   } catch (error) {

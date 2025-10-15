@@ -44,6 +44,13 @@ const RoleSchema = new mongoose.Schema({
   },
   permissions: [RolePermissionSchema],
 
+  // Auth0 integration
+  auth0_id: {
+    type: String,
+    sparse: true,
+    index: true
+  },
+
   // Audit fields
   created_at: {
     type: Date,

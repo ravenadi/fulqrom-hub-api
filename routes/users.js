@@ -2,6 +2,13 @@ const express = require('express');
 const User = require('../models/User');
 const Role = require('../models/Role');
 const AuditLog = require('../models/AuditLog');
+const {
+  isAuth0Enabled,
+  createAuth0User,
+  updateAuth0User,
+  deleteAuth0User,
+  getAuth0UserByEmail
+} = require('../services/auth0Service');
 
 const router = express.Router();
 
@@ -193,13 +200,41 @@ router.post('/', async (req, res) => {
 
     await user.save();
 
+    // Create user in Auth0 (if enabled)
+    let auth0User = null;
+    if (isAuth0Enabled()) {
+      try {
+        auth0User = await createAuth0User({
+          _id: user._id,
+          email: user.email,
+          full_name: user.full_name,
+          phone: user.phone,
+          is_active: user.is_active,
+          role_ids: user.role_ids
+        });
+
+        // Store Auth0 user ID in MongoDB
+        if (auth0User) {
+          user.auth0_id = auth0User.user_id;
+          await user.save();
+        }
+      } catch (auth0Error) {
+        console.error('Auth0 user creation failed:', auth0Error.message);
+        // Continue even if Auth0 creation fails - user exists in MongoDB
+      }
+    }
+
     // Log audit
     await logAudit({
       action: 'create',
       resource_type: 'user',
       resource_id: user._id.toString(),
       resource_name: user.full_name,
-      status: 'success'
+      status: 'success',
+      details: {
+        auth0_synced: !!auth0User,
+        auth0_id: auth0User?.user_id
+      }
     }, req);
 
     // Populate roles before returning
@@ -208,7 +243,8 @@ router.post('/', async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'User created successfully',
-      data: user
+      data: user,
+      auth0_synced: !!auth0User
     });
 
   } catch (error) {
@@ -302,7 +338,15 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // Update fields (only if provided)
+    // Prepare update data
+    const updateData = {};
+    if (email) updateData.email = email.toLowerCase().trim();
+    if (full_name) updateData.full_name = full_name.trim();
+    if (phone !== undefined) updateData.phone = phone?.trim();
+    if (role_ids !== undefined) updateData.role_ids = role_ids;
+    if (is_active !== undefined) updateData.is_active = is_active;
+
+    // Update MongoDB user
     if (email) user.email = email.toLowerCase().trim();
     if (full_name) user.full_name = full_name.trim();
     if (phone !== undefined) user.phone = phone?.trim();
@@ -312,13 +356,29 @@ router.put('/:id', async (req, res) => {
     user.updated_at = new Date();
     await user.save();
 
+    // Update user in Auth0 (if enabled and auth0_id exists)
+    let auth0Updated = false;
+    if (isAuth0Enabled() && user.auth0_id) {
+      try {
+        await updateAuth0User(user.auth0_id, updateData);
+        auth0Updated = true;
+      } catch (auth0Error) {
+        console.error('Auth0 user update failed:', auth0Error.message);
+        // Continue even if Auth0 update fails - user updated in MongoDB
+      }
+    }
+
     // Log audit
     await logAudit({
       action: 'update',
       resource_type: 'user',
       resource_id: user._id.toString(),
       resource_name: user.full_name,
-      status: 'success'
+      status: 'success',
+      details: {
+        auth0_synced: auth0Updated,
+        auth0_id: user.auth0_id
+      }
     }, req);
 
     // Populate roles before returning
@@ -327,7 +387,8 @@ router.put('/:id', async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'User updated successfully',
-      data: user
+      data: user,
+      auth0_synced: auth0Updated
     });
 
   } catch (error) {
@@ -380,7 +441,22 @@ router.delete('/:id', async (req, res) => {
     }
 
     const userName = user.full_name;
+    const auth0Id = user.auth0_id;
+
+    // Delete from MongoDB
     await User.findByIdAndDelete(id);
+
+    // Delete from Auth0 (if enabled and auth0_id exists)
+    let auth0Deleted = false;
+    if (isAuth0Enabled() && auth0Id) {
+      try {
+        await deleteAuth0User(auth0Id);
+        auth0Deleted = true;
+      } catch (auth0Error) {
+        console.error('Auth0 user deletion failed:', auth0Error.message);
+        // Continue even if Auth0 deletion fails - user deleted from MongoDB
+      }
+    }
 
     // Log audit
     await logAudit({
@@ -388,12 +464,17 @@ router.delete('/:id', async (req, res) => {
       resource_type: 'user',
       resource_id: id,
       resource_name: userName,
-      status: 'success'
+      status: 'success',
+      details: {
+        auth0_synced: auth0Deleted,
+        auth0_id: auth0Id
+      }
     }, req);
 
     res.status(200).json({
       success: true,
-      message: 'User deleted successfully'
+      message: 'User deleted successfully',
+      auth0_synced: auth0Deleted
     });
 
   } catch (error) {
@@ -461,6 +542,18 @@ router.post('/:id/deactivate', async (req, res) => {
     user.updated_at = new Date();
     await user.save();
 
+    // Block user in Auth0 (if enabled and auth0_id exists)
+    let auth0Updated = false;
+    if (isAuth0Enabled() && user.auth0_id) {
+      try {
+        await updateAuth0User(user.auth0_id, { is_active: false });
+        auth0Updated = true;
+      } catch (auth0Error) {
+        console.error('Auth0 user block failed:', auth0Error.message);
+        // Continue even if Auth0 update fails - user deactivated in MongoDB
+      }
+    }
+
     // Log audit
     await logAudit({
       action: 'deactivate',
@@ -468,13 +561,18 @@ router.post('/:id/deactivate', async (req, res) => {
       resource_id: user._id.toString(),
       resource_name: user.full_name,
       user_id: deactivated_by,
-      status: 'success'
+      status: 'success',
+      details: {
+        auth0_synced: auth0Updated,
+        auth0_id: user.auth0_id
+      }
     }, req);
 
     res.status(200).json({
       success: true,
       message: 'User deactivated successfully',
-      data: user
+      data: user,
+      auth0_synced: auth0Updated
     });
 
   } catch (error) {
