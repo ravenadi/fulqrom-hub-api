@@ -46,6 +46,11 @@ const UserSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  auth0_id: {
+    type: String,
+    trim: true,
+    sparse: true
+  },
   is_active: {
     type: Boolean,
     default: true
@@ -90,6 +95,7 @@ UserSchema.pre('save', function(next) {
 
 // Indexes
 UserSchema.index({ email: 1 });
+UserSchema.index({ auth0_id: 1 }, { sparse: true });
 UserSchema.index({ is_active: 1 });
 UserSchema.index({ role_ids: 1 });
 UserSchema.index({ created_at: -1 });
