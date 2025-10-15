@@ -1,7 +1,7 @@
 # Auth0 Integration Guide
 
 ## Overview
-The Fulqrom Hub API now synchronizes user management operations with Auth0. When users are created, updated, or deleted in the MongoDB database, corresponding operations are performed in Auth0.
+The Fulqrom Hub API synchronizes both user and role management operations with Auth0. When users or roles are created, updated, or deleted in the MongoDB database, corresponding operations are performed in Auth0.
 
 ## Setup Instructions
 
@@ -14,10 +14,16 @@ The Fulqrom Hub API now synchronizes user management operations with Auth0. When
 4. Name it "Fulqrom Hub API" and select **Machine to Machine Applications**
 5. Authorize it to access the **Auth0 Management API**
 6. Grant the following permissions:
-   - `read:users`
-   - `create:users`
-   - `update:users`
-   - `delete:users`
+   - **User Management:**
+     - `read:users`
+     - `create:users`
+     - `update:users`
+     - `delete:users`
+   - **Role Management:**
+     - `read:roles`
+     - `create:roles`
+     - `update:roles`
+     - `delete:roles`
 
 #### Database Connection
 1. Navigate to **Authentication** → **Database**
@@ -114,7 +120,59 @@ AUTH0_CONNECTION=Username-Password-Authentication
 }
 ```
 
-## User Model Changes
+## Role Management
+
+### Role Creation (`POST /api/roles`)
+- Creates role in MongoDB
+- Creates corresponding role in Auth0 with:
+  - Role name
+  - Role description
+- Stores Auth0 role ID in MongoDB for future operations
+
+**Response includes:**
+```json
+{
+  "success": true,
+  "message": "Role created successfully",
+  "data": { /* role object with auth0_id */ },
+  "auth0_synced": true
+}
+```
+
+### Role Update (`PUT /api/roles/:id`)
+- Updates role in MongoDB
+- Syncs changes to Auth0:
+  - Role name updates
+  - Description updates
+
+**Response includes:**
+```json
+{
+  "success": true,
+  "message": "Role updated successfully",
+  "data": { /* role object */ },
+  "auth0_synced": true
+}
+```
+
+### Role Deletion (`DELETE /api/roles/:id`)
+- Deletes role from MongoDB
+- Deletes role from Auth0
+- Protected: Cannot delete "Site Manager" role
+- Protected: Cannot delete roles assigned to users
+
+**Response includes:**
+```json
+{
+  "success": true,
+  "message": "Role deleted successfully",
+  "auth0_synced": true
+}
+```
+
+## Data Model Changes
+
+### User Model Changes
 
 The User model now includes an `auth0_id` field:
 
@@ -127,6 +185,22 @@ The User model now includes an `auth0_id` field:
   is_active: Boolean,
   role_ids: [ObjectId],
   resource_access: [...],
+  created_at: Date,
+  updated_at: Date
+}
+```
+
+### Role Model Changes
+
+The Role model now includes an `auth0_id` field:
+
+```javascript
+{
+  name: String,
+  description: String,
+  is_active: Boolean,
+  permissions: [...],
+  auth0_id: String,  // NEW: Stores Auth0 role ID
   created_at: Date,
   updated_at: Date
 }
@@ -190,6 +264,31 @@ curl -X POST http://localhost:30001/api/users \
 2. Find the newly created user
 3. Verify metadata is populated correctly
 
+### Test Role Creation
+```bash
+curl -X POST http://localhost:30001/api/roles \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Project Manager",
+    "description": "Manages projects and teams",
+    "is_active": true,
+    "permissions": [
+      {
+        "module_name": "customers",
+        "can_view": true,
+        "can_create": true,
+        "can_edit": true,
+        "can_delete": false
+      }
+    ]
+  }'
+```
+
+### Check Auth0 Roles
+1. Navigate to **User Management** → **Roles**
+2. Find the newly created role
+3. Verify name and description are correct
+
 ## Security Considerations
 
 1. **Environment Variables**: Never commit `.env` file to version control
@@ -200,22 +299,36 @@ curl -X POST http://localhost:30001/api/users \
 
 ## Troubleshooting
 
-### "Failed to create user in Auth0"
+### "Failed to create user/role in Auth0"
 - Check Auth0 credentials in `.env`
-- Verify M2M app has correct permissions
+- Verify M2M app has correct permissions (users AND roles)
 - Check Auth0 logs in dashboard
+- Ensure the Auth0 Management API scopes include both user and role permissions
 
 ### "auth0_synced: false" in response
 - Check console logs for detailed error
-- Verify Auth0 connection name matches
+- Verify Auth0 connection name matches (for users)
+- Verify the M2M application has role management permissions (for roles)
 - Check internet connectivity to Auth0
+- Check Auth0 rate limits haven't been exceeded
 
-### User exists in MongoDB but not Auth0
-- Run a sync script to create missing Auth0 users
+### User/Role exists in MongoDB but not Auth0
+- Run a sync script to create missing Auth0 users/roles
 - Or manually create in Auth0 dashboard
 - Future updates will sync if `auth0_id` is set
 
-## Advanced: Bulk Sync Script
+### Role update/delete fails but user operations work
+- Check that your Auth0 M2M application has been granted role permissions
+- Navigate to **Applications** → **[Your M2M App]** → **APIs** → **Auth0 Management API**
+- Ensure these scopes are enabled:
+  - `read:roles`
+  - `create:roles`
+  - `update:roles`
+  - `delete:roles`
+
+## Advanced: Bulk Sync Scripts
+
+### Sync Users to Auth0
 
 If you need to sync existing MongoDB users to Auth0:
 
@@ -242,6 +355,34 @@ async function syncUsersToAuth0() {
       console.log(`Synced user: ${user.email}`);
     } catch (error) {
       console.error(`Failed to sync ${user.email}:`, error.message);
+    }
+  }
+}
+```
+
+### Sync Roles to Auth0
+
+If you need to sync existing MongoDB roles to Auth0:
+
+```javascript
+const Role = require('./models/Role');
+const { createAuth0Role } = require('./services/auth0Service');
+
+async function syncRolesToAuth0() {
+  const roles = await Role.find({ auth0_id: { $exists: false } });
+
+  for (const role of roles) {
+    try {
+      const auth0Role = await createAuth0Role({
+        name: role.name,
+        description: role.description
+      });
+
+      role.auth0_id = auth0Role.id;
+      await role.save();
+      console.log(`Synced role: ${role.name}`);
+    } catch (error) {
+      console.error(`Failed to sync ${role.name}:`, error.message);
     }
   }
 }
