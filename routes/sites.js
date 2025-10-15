@@ -4,11 +4,12 @@ const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Asset = require('../models/Asset');
 const Tenant = require('../models/Tenant');
+const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
 
 // GET /api/sites - List all sites with filters, pagination, and sorting
-router.get('/', async (req, res) => {
+router.get('/', checkModulePermission('sites', 'view'), async (req, res) => {
   try {
     const {
       customer_id,
@@ -257,7 +258,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/sites/:id - Get single site with full details
-router.get('/:id', async (req, res) => {
+router.get('/:id', checkResourcePermission('site', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const siteId = req.params.id;
 
@@ -425,7 +426,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/sites - Create new site
-router.post('/', async (req, res) => {
+router.post('/', checkModulePermission('sites', 'create'), async (req, res) => {
   try {
     // Validate required fields
     if (!req.body.customer_id) {
@@ -466,7 +467,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/sites/:id - Update site
-router.put('/:id', async (req, res) => {
+router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.id), async (req, res) => {
   try {
     // Validate land_area if provided
     if (req.body.land_area !== undefined && req.body.land_area < 0) {
@@ -505,7 +506,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/sites/:id - Soft delete site
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     const site = await Site.findByIdAndUpdate(
       req.params.id,

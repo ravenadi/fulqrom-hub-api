@@ -535,10 +535,10 @@ router.get('/:id/resource-access', async (req, res) => {
   }
 });
 
-// POST /api/users/resource-access - Assign resource access
+// POST /api/users/resource-access - Assign resource access with permissions
 router.post('/resource-access', async (req, res) => {
   try {
-    const { user_id, resource_type, resource_id, resource_name, granted_by } = req.body;
+    const { user_id, resource_type, resource_id, resource_name, granted_by, permissions } = req.body;
 
     // Validate required fields
     if (!user_id) {
@@ -559,6 +559,15 @@ router.post('/resource-access', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'resource_id is required'
+      });
+    }
+
+    // Validate resource_type
+    const validResourceTypes = ['customer', 'site', 'building', 'floor', 'asset', 'tenant', 'vendor'];
+    if (!validResourceTypes.includes(resource_type)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid resource_type. Must be one of: ${validResourceTypes.join(', ')}`
       });
     }
 
@@ -587,16 +596,25 @@ router.post('/resource-access', async (req, res) => {
     if (existingAccess) {
       return res.status(400).json({
         success: false,
-        message: 'Resource access already granted'
+        message: 'Resource access already granted. Use PUT to update permissions.'
       });
     }
 
-    // Add resource access
+    // Default permissions if not provided (view-only by default)
+    const resourcePermissions = permissions || {
+      can_view: true,
+      can_create: false,
+      can_edit: false,
+      can_delete: false
+    };
+
+    // Add resource access with permissions
     user.resource_access = user.resource_access || [];
     user.resource_access.push({
       resource_type,
       resource_id,
       resource_name: resource_name || '',
+      permissions: resourcePermissions,
       granted_at: new Date(),
       granted_by: granted_by || 'system'
     });

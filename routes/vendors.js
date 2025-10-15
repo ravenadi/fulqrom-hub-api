@@ -1,11 +1,12 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Vendor = require('../models/Vendor');
+const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
 
 // GET /api/vendors - List all vendors with filters and pagination
-router.get('/', async (req, res) => {
+router.get('/', checkModulePermission('vendors', 'view'), async (req, res) => {
   try {
     const {
       search,
@@ -236,7 +237,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // GET /api/vendors/:id - Get single vendor by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', checkResourcePermission('vendor', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const vendorId = req.params.id;
 
@@ -272,7 +273,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/vendors - Create new vendor
-router.post('/', async (req, res) => {
+router.post('/', checkModulePermission('vendors', 'create'), async (req, res) => {
   try {
     const errors = [];
 
@@ -377,7 +378,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/vendors/:id - Update vendor
-router.put('/:id', async (req, res) => {
+router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params.id), async (req, res) => {
   try {
     const vendorId = req.params.id;
 
@@ -452,7 +453,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/vendors/:id - Soft delete vendor
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     const vendorId = req.params.id;
 

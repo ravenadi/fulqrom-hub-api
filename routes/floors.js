@@ -1,11 +1,12 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Floor = require('../models/Floor');
+const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
 
 // GET /api/floors - List all floors with pagination and search
-router.get('/', async (req, res) => {
+router.get('/', checkModulePermission('floors', 'view'), async (req, res) => {
   try {
     const {
       page = 1,
@@ -119,7 +120,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/floors/:id - Get single floor
-router.get('/:id', async (req, res) => {
+router.get('/:id', checkResourcePermission('floor', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const floor = await Floor.findById(req.params.id)
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
@@ -147,7 +148,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/floors - Create new floor
-router.post('/', async (req, res) => {
+router.post('/', checkModulePermission('floors', 'create'), async (req, res) => {
   try {
     // Validation for new fields
     const errors = [];
@@ -229,7 +230,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/floors/:id - Update floor
-router.put('/:id', async (req, res) => {
+router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.id), async (req, res) => {
   try {
     // Validation for new fields
     const errors = [];
@@ -319,7 +320,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/floors/:id - Delete floor
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkResourcePermission('floor', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     const floor = await Floor.findByIdAndDelete(req.params.id);
 

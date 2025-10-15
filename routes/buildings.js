@@ -4,11 +4,12 @@ const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
 const Tenant = require('../models/Tenant');
+const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
 
 // GET /api/buildings - List all buildings with pagination and search
-router.get('/', async (req, res) => {
+router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => {
   try {
     const {
       page = 1,
@@ -287,7 +288,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/buildings/:id - Get single building
-router.get('/:id', async (req, res) => {
+router.get('/:id', checkResourcePermission('building', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const building = await Building.findById(req.params.id)
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
@@ -314,7 +315,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/buildings - Create new building
-router.post('/', async (req, res) => {
+router.post('/', checkModulePermission('buildings', 'create'), async (req, res) => {
   try {
     // Validation for new fields
     const errors = [];
@@ -381,7 +382,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/buildings/:id - Update building
-router.put('/:id', async (req, res) => {
+router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.params.id), async (req, res) => {
   try {
     // Validation for new fields
     const errors = [];
@@ -451,7 +452,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/buildings/:id - Delete building
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkResourcePermission('building', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     const building = await Building.findByIdAndDelete(req.params.id);
 
