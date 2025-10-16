@@ -3,11 +3,12 @@ const mongoose = require('mongoose');
 const Asset = require('../models/Asset');
 const Document = require('../models/Document');
 const { validateCreateAsset, validateUpdateAsset } = require('../middleware/assetValidation');
+const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
 
 // GET /api/assets - List all assets
-router.get('/', async (req, res) => {
+router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
     const {
       customer_id,
@@ -390,7 +391,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/assets/:id - Get single asset
-router.get('/:id', async (req, res) => {
+router.get('/:id', checkResourcePermission('asset', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const asset = await Asset.findById(req.params.id)
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
@@ -429,7 +430,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/assets - Create new asset
-router.post('/', validateCreateAsset, async (req, res) => {
+router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset, async (req, res) => {
   try {
     const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
@@ -512,7 +513,7 @@ router.post('/', validateCreateAsset, async (req, res) => {
 });
 
 // PUT /api/assets/:id - Update asset
-router.put('/:id', validateUpdateAsset, async (req, res) => {
+router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.id), validateUpdateAsset, async (req, res) => {
   try {
     const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
@@ -599,7 +600,7 @@ router.put('/:id', validateUpdateAsset, async (req, res) => {
 
 
 // DELETE /api/assets/:id - Delete asset
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     const asset = await Asset.findById(req.params.id);
 

@@ -4,11 +4,12 @@ const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Asset = require('../models/Asset');
 const Document = require('../models/Document');
+const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
 
-// GET /api/customers - List all customers
-router.get('/', async (req, res) => {
+// GET /api/customers - List all customers (requires module-level view permission)
+router.get('/', checkModulePermission('customers', 'view'), async (req, res) => {
   try {
     const { search, limit } = req.query;
 
@@ -52,8 +53,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/customers/:id - Get single customer
-router.get('/:id', async (req, res) => {
+// GET /api/customers/:id - Get single customer (requires view permission for this customer)
+router.get('/:id', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const customer = await Customer.findById(req.params.id);
 
@@ -77,8 +78,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /api/customers/:id/stats - Get customer statistics
-router.get('/:id/stats', async (req, res) => {
+// GET /api/customers/:id/stats - Get customer statistics (requires view permission)
+router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const customerId = req.params.id;
 
@@ -123,8 +124,8 @@ router.get('/:id/stats', async (req, res) => {
   }
 });
 
-// GET /api/customers/:id/contacts/primary - Get primary contact
-router.get('/:id/contacts/primary', async (req, res) => {
+// GET /api/customers/:id/contacts/primary - Get primary contact (requires view permission)
+router.get('/:id/contacts/primary', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const customer = await Customer.findById(req.params.id);
 
@@ -158,8 +159,8 @@ router.get('/:id/contacts/primary', async (req, res) => {
   }
 });
 
-// POST /api/customers - Create new customer
-router.post('/', async (req, res) => {
+// POST /api/customers - Create new customer (requires module-level create permission)
+router.post('/', checkModulePermission('customers', 'create'), async (req, res) => {
   try {
     const customer = new Customer(req.body);
     await customer.save();
@@ -178,8 +179,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/customers/:id - Update customer
-router.put('/:id', async (req, res) => {
+// PUT /api/customers/:id - Update customer (requires edit permission for this customer)
+router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.params.id), async (req, res) => {
   try {
     const customer = await Customer.findByIdAndUpdate(
       req.params.id,
@@ -211,8 +212,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/customers/:id - Delete customer
-router.delete('/:id', async (req, res) => {
+// DELETE /api/customers/:id - Delete customer (requires delete permission for this customer)
+router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     const customer = await Customer.findByIdAndDelete(req.params.id);
 

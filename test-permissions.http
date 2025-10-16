@@ -1,0 +1,512 @@
+###
+# Fine-Grained Permission System - Test Scenarios
+# Use this file with REST Client extension in VS Code
+# Or import into Postman/Insomnia
+###
+
+@baseUrl = http://localhost:3000
+@apiUrl = {{baseUrl}}/api
+
+# Replace these with actual IDs from your database
+@adminUserId = YOUR_ADMIN_USER_ID
+@testUserId = YOUR_TEST_USER_ID
+@customerId = YOUR_CUSTOMER_ID
+@siteId = YOUR_SITE_ID
+@buildingId = YOUR_BUILDING_ID
+
+###############################################################################
+# SCENARIO 1: Site Manager with Limited Customer Access
+###############################################################################
+
+### Step 1.1: Create "Site Manager" Role
+POST {{apiUrl}}/roles
+Content-Type: application/json
+
+{
+  "name": "Site Manager",
+  "description": "Manages sites and buildings, limited customer access",
+  "permissions": [
+    {
+      "module_name": "sites",
+      "can_view": true,
+      "can_create": true,
+      "can_edit": true,
+      "can_delete": true
+    },
+    {
+      "module_name": "buildings",
+      "can_view": true,
+      "can_create": true,
+      "can_edit": true,
+      "can_delete": true
+    },
+    {
+      "module_name": "customers",
+      "can_view": false,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    }
+  ]
+}
+
+### Step 1.2: Create Test User (Sarah - Site Manager)
+POST {{apiUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Sarah Johnson",
+  "email": "sarah.johnson@test.com",
+  "password": "Test123!",
+  "role_ids": ["ROLE_ID_FROM_STEP_1.1"],
+  "is_active": true
+}
+
+### Step 1.3: Try to access customer (Should FAIL - No permission)
+GET {{apiUrl}}/customers/{{customerId}}
+x-user-id: {{testUserId}}
+
+### Step 1.4: Grant resource-specific access to one customer
+POST {{apiUrl}}/users/resource-access
+Content-Type: application/json
+
+{
+  "user_id": "{{testUserId}}",
+  "resource_type": "customer",
+  "resource_id": "{{customerId}}",
+  "resource_name": "Acme Corporation",
+  "granted_by": "admin@test.com",
+  "permissions": {
+    "can_view": true,
+    "can_edit": false,
+    "can_create": false,
+    "can_delete": false
+  }
+}
+
+### Step 1.5: Try to access customer again (Should SUCCEED - Resource permission)
+GET {{apiUrl}}/customers/{{customerId}}
+x-user-id: {{testUserId}}
+
+### Step 1.6: Try to list all customers (Should FAIL - No module permission)
+GET {{apiUrl}}/customers
+x-user-id: {{testUserId}}
+
+### Step 1.7: Access sites (Should SUCCEED - Role grants access)
+GET {{apiUrl}}/sites
+x-user-id: {{testUserId}}
+
+### Step 1.8: View Sarah's resource access
+GET {{apiUrl}}/users/{{testUserId}}/resource-access
+
+###############################################################################
+# SCENARIO 2: Contractor with Building-Specific Access
+###############################################################################
+
+### Step 2.1: Create "Contractor" Role (No default access)
+POST {{apiUrl}}/roles
+Content-Type: application/json
+
+{
+  "name": "Contractor",
+  "description": "External contractor with no default access",
+  "permissions": [
+    {
+      "module_name": "sites",
+      "can_view": false,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    },
+    {
+      "module_name": "buildings",
+      "can_view": false,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    },
+    {
+      "module_name": "assets",
+      "can_view": false,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    }
+  ]
+}
+
+### Step 2.2: Create Test User (Mike - Contractor)
+POST {{apiUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Mike Smith",
+  "email": "mike.smith@contractor.com",
+  "password": "Test123!",
+  "role_ids": ["ROLE_ID_FROM_STEP_2.1"],
+  "is_active": true
+}
+
+### Step 2.3: Try to list buildings (Should FAIL - No module permission)
+GET {{apiUrl}}/buildings
+x-user-id: MIKE_USER_ID
+
+### Step 2.4: Try to access specific building (Should FAIL - No permission)
+GET {{apiUrl}}/buildings/{{buildingId}}
+x-user-id: MIKE_USER_ID
+
+### Step 2.5: Grant access to specific building
+POST {{apiUrl}}/users/resource-access
+Content-Type: application/json
+
+{
+  "user_id": "MIKE_USER_ID",
+  "resource_type": "building",
+  "resource_id": "{{buildingId}}",
+  "resource_name": "Building 5 - Metro Site",
+  "granted_by": "admin@test.com",
+  "permissions": {
+    "can_view": true,
+    "can_edit": true,
+    "can_create": false,
+    "can_delete": false
+  }
+}
+
+### Step 2.6: Try to access specific building (Should SUCCEED - Resource permission)
+GET {{apiUrl}}/buildings/{{buildingId}}
+x-user-id: MIKE_USER_ID
+
+### Step 2.7: Try to edit building (Should SUCCEED - Resource permission)
+PUT {{apiUrl}}/buildings/{{buildingId}}
+Content-Type: application/json
+x-user-id: MIKE_USER_ID
+
+{
+  "name": "Building 5 - Metro Site (Updated)",
+  "notes": "Contractor access granted for Q1 renovation"
+}
+
+### Step 2.8: Try to list buildings (Should STILL FAIL - No module permission)
+GET {{apiUrl}}/buildings
+x-user-id: MIKE_USER_ID
+
+###############################################################################
+# SCENARIO 3: Finance Team with Read-Only Access
+###############################################################################
+
+### Step 3.1: Create "Finance" Role
+POST {{apiUrl}}/roles
+Content-Type: application/json
+
+{
+  "name": "Finance",
+  "description": "Finance team with read-only access",
+  "permissions": [
+    {
+      "module_name": "customers",
+      "can_view": true,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    },
+    {
+      "module_name": "sites",
+      "can_view": true,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    },
+    {
+      "module_name": "buildings",
+      "can_view": true,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    }
+  ]
+}
+
+### Step 3.2: Create Test User (Lisa - Finance)
+POST {{apiUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Lisa Chen",
+  "email": "lisa.chen@test.com",
+  "password": "Test123!",
+  "role_ids": ["ROLE_ID_FROM_STEP_3.1"],
+  "is_active": true
+}
+
+### Step 3.3: List all customers (Should SUCCEED - Role grants view)
+GET {{apiUrl}}/customers
+x-user-id: LISA_USER_ID
+
+### Step 3.4: View specific customer (Should SUCCEED - Role grants view)
+GET {{apiUrl}}/customers/{{customerId}}
+x-user-id: LISA_USER_ID
+
+### Step 3.5: Try to edit customer (Should FAIL - Role denies edit)
+PUT {{apiUrl}}/customers/{{customerId}}
+Content-Type: application/json
+x-user-id: LISA_USER_ID
+
+{
+  "name": "Updated Customer Name"
+}
+
+### Step 3.6: Try to delete customer (Should FAIL - Role denies delete)
+DELETE {{apiUrl}}/customers/{{customerId}}
+x-user-id: LISA_USER_ID
+
+###############################################################################
+# SCENARIO 4: Account Manager with Customer-Specific Full Access
+###############################################################################
+
+### Step 4.1: Create "Account Manager" Role (No default customer access)
+POST {{apiUrl}}/roles
+Content-Type: application/json
+
+{
+  "name": "Account Manager",
+  "description": "Manages specific customer accounts",
+  "permissions": [
+    {
+      "module_name": "customers",
+      "can_view": false,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    },
+    {
+      "module_name": "sites",
+      "can_view": false,
+      "can_create": false,
+      "can_edit": false,
+      "can_delete": false
+    }
+  ]
+}
+
+### Step 4.2: Create Test User (Jane - Account Manager)
+POST {{apiUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Jane Williams",
+  "email": "jane.williams@test.com",
+  "password": "Test123!",
+  "role_ids": ["ROLE_ID_FROM_STEP_4.1"],
+  "is_active": true
+}
+
+### Step 4.3: Try to list customers (Should FAIL - No module permission)
+GET {{apiUrl}}/customers
+x-user-id: JANE_USER_ID
+
+### Step 4.4: Grant full access to Customer 1
+POST {{apiUrl}}/users/resource-access
+Content-Type: application/json
+
+{
+  "user_id": "JANE_USER_ID",
+  "resource_type": "customer",
+  "resource_id": "{{customerId}}",
+  "resource_name": "Tech Solutions Inc",
+  "granted_by": "admin@test.com",
+  "permissions": {
+    "can_view": true,
+    "can_edit": true,
+    "can_create": true,
+    "can_delete": true
+  }
+}
+
+### Step 4.5: Access Customer 1 (Should SUCCEED - Resource permission)
+GET {{apiUrl}}/customers/{{customerId}}
+x-user-id: JANE_USER_ID
+
+### Step 4.6: Edit Customer 1 (Should SUCCEED - Resource permission)
+PUT {{apiUrl}}/customers/{{customerId}}
+Content-Type: application/json
+x-user-id: JANE_USER_ID
+
+{
+  "name": "Tech Solutions Inc (Updated by Account Manager)"
+}
+
+### Step 4.7: Try to delete Customer 1 (Should SUCCEED - Resource permission)
+# WARNING: This will actually delete the customer!
+# DELETE {{apiUrl}}/customers/{{customerId}}
+# x-user-id: JANE_USER_ID
+
+### Step 4.8: Try to access different customer (Should FAIL - No permission)
+GET {{apiUrl}}/customers/DIFFERENT_CUSTOMER_ID
+x-user-id: JANE_USER_ID
+
+### Step 4.9: View Jane's resource access list
+GET {{apiUrl}}/users/JANE_USER_ID/resource-access
+
+###############################################################################
+# SCENARIO 5: Testing Permission Override (Resource > Role)
+###############################################################################
+
+### Step 5.1: User with role that ALLOWS customer edit
+# Using Lisa (Finance role) - can view but NOT edit
+
+### Step 5.2: Grant resource-specific EDIT permission (overrides role denial)
+POST {{apiUrl}}/users/resource-access
+Content-Type: application/json
+
+{
+  "user_id": "LISA_USER_ID",
+  "resource_type": "customer",
+  "resource_id": "{{customerId}}",
+  "resource_name": "Exception Customer",
+  "granted_by": "admin@test.com",
+  "permissions": {
+    "can_view": true,
+    "can_edit": true,
+    "can_create": false,
+    "can_delete": false
+  }
+}
+
+### Step 5.3: Edit customer (Should SUCCEED - Resource permission overrides role)
+PUT {{apiUrl}}/customers/{{customerId}}
+Content-Type: application/json
+x-user-id: LISA_USER_ID
+
+{
+  "name": "Exception Customer (Finance can edit this one!)"
+}
+
+###############################################################################
+# SCENARIO 6: Revoking Access
+###############################################################################
+
+### Step 6.1: View user's current resource access
+GET {{apiUrl}}/users/{{testUserId}}/resource-access
+
+### Step 6.2: Revoke specific resource access
+# Copy the _id from Step 6.1 response
+DELETE {{apiUrl}}/users/resource-access/RESOURCE_ACCESS_ID?user_id={{testUserId}}
+
+### Step 6.3: Verify access is revoked (Should FAIL now)
+GET {{apiUrl}}/customers/{{customerId}}
+x-user-id: {{testUserId}}
+
+###############################################################################
+# SCENARIO 7: Testing Inactive User/Role
+###############################################################################
+
+### Step 7.1: Deactivate user
+PUT {{apiUrl}}/users/{{testUserId}}
+Content-Type: application/json
+
+{
+  "is_active": false
+}
+
+### Step 7.2: Try to access resource (Should FAIL - User inactive)
+GET {{apiUrl}}/customers/{{customerId}}
+x-user-id: {{testUserId}}
+
+### Step 7.3: Reactivate user
+PUT {{apiUrl}}/users/{{testUserId}}
+Content-Type: application/json
+
+{
+  "is_active": true
+}
+
+### Step 7.4: Try to access resource (Should SUCCEED - User active again)
+GET {{apiUrl}}/customers/{{customerId}}
+x-user-id: {{testUserId}}
+
+###############################################################################
+# UTILITY ENDPOINTS
+###############################################################################
+
+### List all roles
+GET {{apiUrl}}/roles
+
+### List all users
+GET {{apiUrl}}/users
+
+### Get specific user details
+GET {{apiUrl}}/users/{{testUserId}}
+
+### List all customers
+GET {{apiUrl}}/customers
+x-user-id: {{adminUserId}}
+
+### List all sites
+GET {{apiUrl}}/sites
+x-user-id: {{adminUserId}}
+
+### List all buildings
+GET {{apiUrl}}/buildings
+x-user-id: {{adminUserId}}
+
+### Filter user's resource access by type
+GET {{apiUrl}}/users/{{testUserId}}/resource-access?resource_type=customer
+
+###############################################################################
+# DEBUGGING HELPERS
+###############################################################################
+
+### Check if user exists and is active
+GET {{apiUrl}}/users/{{testUserId}}
+
+### Check user's roles and permissions
+GET {{apiUrl}}/users/{{testUserId}}
+# Response includes populated role_ids with full permission details
+
+### Check all resource access for a user
+GET {{apiUrl}}/users/{{testUserId}}/resource-access
+
+### Verify resource exists
+GET {{apiUrl}}/customers/{{customerId}}
+x-user-id: {{adminUserId}}
+
+###############################################################################
+# EXPECTED RESULTS SUMMARY
+###############################################################################
+
+# SCENARIO 1 - Site Manager:
+#   ✅ Can access specific customer via resource permission
+#   ❌ Cannot list all customers (no module permission)
+#   ✅ Can access all sites (role grants module access)
+
+# SCENARIO 2 - Contractor:
+#   ✅ Can access specific building via resource permission
+#   ✅ Can edit specific building via resource permission
+#   ❌ Cannot list buildings (no module permission)
+#   ❌ Cannot access other buildings (no permission)
+
+# SCENARIO 3 - Finance:
+#   ✅ Can view all customers (role grants module view)
+#   ✅ Can view specific customers (role grants module view)
+#   ❌ Cannot edit customers (role denies edit)
+#   ❌ Cannot delete customers (role denies delete)
+
+# SCENARIO 4 - Account Manager:
+#   ✅ Can fully manage assigned customers (resource permission)
+#   ❌ Cannot list all customers (no module permission)
+#   ❌ Cannot access non-assigned customers (no permission)
+
+# SCENARIO 5 - Permission Override:
+#   ✅ Resource permission overrides role denial
+#   ✅ Finance user can edit specific customer despite role denial
+
+# SCENARIO 6 - Revoke Access:
+#   ✅ Access revoked successfully
+#   ❌ User cannot access resource after revocation
+
+# SCENARIO 7 - Inactive User:
+#   ❌ Inactive user denied access
+#   ✅ Reactivated user can access again
+
+###############################################################################

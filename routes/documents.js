@@ -28,6 +28,7 @@ const {
   sanitizeQuery
 } = require('../middleware/searchHelpers');
 const emailService = require('../utils/emailService');
+const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -142,7 +143,7 @@ async function fetchEntityNames(documentData) {
 }
 
 // GET /api/documents - List all documents with advanced search and filtering
-router.get('/', validateQueryParams, async (req, res) => {
+router.get('/', checkModulePermission('documents', 'view'), validateQueryParams, async (req, res) => {
   try {
     const sanitizedQuery = sanitizeQuery(req.query);
     const {
@@ -502,7 +503,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // GET /api/documents/:id - Get single document
-router.get('/:id', validateObjectId, async (req, res) => {
+router.get('/:id', checkModulePermission('documents', 'view'), validateObjectId, async (req, res) => {
   try {
     const document = await Document.findById(req.params.id).lean();
 
@@ -669,7 +670,7 @@ router.get('/:id/preview', validateObjectId, async (req, res) => {
 });
 
 // POST /api/documents - Create new document with file upload
-router.post('/', upload.single('file'), validateCreateDocument, async (req, res) => {
+router.post('/', checkModulePermission('documents', 'create'), upload.single('file'), validateCreateDocument, async (req, res) => {
   try {
     // Check if file was uploaded
     if (!req.file) {
@@ -1029,7 +1030,7 @@ router.put('/bulk-update', async (req, res) => {
 });
 
 // PUT /api/documents/:id - Update document
-router.put('/:id', validateObjectId, async (req, res) => {
+router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId, async (req, res) => {
   try {
     const updateData = { ...req.body };
     updateData.updated_at = new Date().toISOString();
@@ -1139,7 +1140,7 @@ router.put('/:id', validateObjectId, async (req, res) => {
 });
 
 // DELETE /api/documents/:id - Delete document
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, res) => {
   try {
     const document = await Document.findById(req.params.id);
 

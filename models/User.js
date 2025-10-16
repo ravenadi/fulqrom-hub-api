@@ -17,6 +17,25 @@ const ResourceAccessSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Fine-grained permissions for this specific resource
+  permissions: {
+    can_view: {
+      type: Boolean,
+      default: true
+    },
+    can_create: {
+      type: Boolean,
+      default: false
+    },
+    can_edit: {
+      type: Boolean,
+      default: false
+    },
+    can_delete: {
+      type: Boolean,
+      default: false
+    }
+  },
   granted_at: {
     type: Date,
     default: Date.now

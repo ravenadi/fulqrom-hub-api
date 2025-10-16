@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Tenant = require('../models/Tenant');
+const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
 
@@ -130,7 +131,7 @@ const validateTenantData = (req, res, next) => {
 };
 
 // GET /api/tenants - List all tenants
-router.get('/', async (req, res) => {
+router.get('/', checkModulePermission('tenants', 'view'), async (req, res) => {
   try {
     const {
       customer_id,
@@ -241,7 +242,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/tenants/:id - Get single tenant
-router.get('/:id', async (req, res) => {
+router.get('/:id', checkResourcePermission('tenant', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const tenant = await Tenant.findById(req.params.id)
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
@@ -270,7 +271,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/tenants - Create new tenant
-router.post('/', validateTenantData, async (req, res) => {
+router.post('/', checkModulePermission('tenants', 'create'), validateTenantData, async (req, res) => {
   try {
     const tenant = new Tenant(req.body);
     await tenant.save();
@@ -296,7 +297,7 @@ router.post('/', validateTenantData, async (req, res) => {
 });
 
 // PUT /api/tenants/:id - Update tenant
-router.put('/:id', validateTenantData, async (req, res) => {
+router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params.id), validateTenantData, async (req, res) => {
   try {
     const tenant = await Tenant.findByIdAndUpdate(
       req.params.id,
@@ -423,7 +424,7 @@ router.get('/summary/stats', async (req, res) => {
 });
 
 // DELETE /api/tenants/:id - Delete tenant
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkResourcePermission('tenant', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     const tenant = await Tenant.findByIdAndDelete(req.params.id);
 
