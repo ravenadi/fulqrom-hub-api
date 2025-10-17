@@ -19,7 +19,8 @@ const hierarchyRouter = require('./routes/hierarchy');
 const dropdownsRouter = require('./routes/dropdowns');
 const vendorsRouter = require('./routes/vendors');
 const usersRouter = require('./routes/users');
-const rolesRouter = require('./routes/roles');
+const rolesRouter = require('./routes/roles'); //legacy roles api
+const rolesV2Router = require('./routes/v2/roles'); //new roles api
 const authRouter = require('./routes/auth');
 
 const app = express();
@@ -61,9 +62,10 @@ app.get('/health', (req, res) => {
 // Apply authentication to all API routes (except auth routes)
 // This middleware will check for user_id when USE_AUTH0=false or JWT token when USE_AUTH0=true
 app.use('/api', (req, res, next) => {
-  // Skip authentication for auth and health endpoints
+  // Skip authentication for auth, health, and dropdowns endpoints
   // Important: Auth endpoints must be public for login/signup flow
-  if (req.path.startsWith('/auth') || req.path === '/health') {
+  // Dropdowns are public to support forms that need dropdown data before authentication
+  if (req.path.startsWith('/auth') || req.path === '/health' || req.path.startsWith('/dropdowns')) {
     console.log(`✓ Bypassing auth for public endpoint: ${req.method} ${req.path}`);
     return next();
   }
@@ -87,6 +89,7 @@ app.use('/api/dropdowns', dropdownsRouter);
 app.use('/api/vendors', vendorsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/roles', rolesRouter);
+app.use('/api/v2/roles', rolesV2Router);
 
 // Handle 404 for API routes
 app.use('/api/*', (req, res) => {
@@ -119,7 +122,8 @@ app.get('/', (req, res) => {
       document_tags: '/api/dropdowns/document-tags',
       vendors: '/api/vendors',
       users: '/api/users',
-      roles: '/api/roles'
+      roles: '/api/roles',
+      roles_v2: '/api/v2/roles'
     }
   });
 });

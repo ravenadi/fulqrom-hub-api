@@ -11,6 +11,14 @@ const {
 
 const router = express.Router();
 
+// ===========================================
+// LEGACY ROLES API - TO BE REMOVED IN FUTURE
+// ===========================================
+// This is the old roles API implementation.
+// It will be replaced by the new roles API in routes/v2/roles.js
+// TODO: Remove this file once migration to new roles API is complete
+// ===========================================
+
 // GET /api/roles - Get all roles with user counts
 router.get('/', async (req, res) => {
   try {
