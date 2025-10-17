@@ -18,8 +18,14 @@ const checkJwt = auth({
  */
 const attachUser = async (req, res, next) => {
   try {
-    // The JWT payload is available in req.auth after checkJwt middleware
-    if (!req.auth || !req.auth.sub) {
+    // Debug: Log what we received from JWT validation
+    console.log('📋 attachUser: req.auth =', JSON.stringify(req.auth, null, 2));
+
+    // The JWT payload is available in req.auth.payload (express-oauth2-jwt-bearer wraps it)
+    const payload = req.auth?.payload || req.auth;
+
+    if (!payload || !payload.sub) {
+      console.log('❌ attachUser: Missing payload or sub claim');
       return res.status(401).json({
         success: false,
         message: 'Authentication required. No user information in token.'
@@ -27,7 +33,8 @@ const attachUser = async (req, res, next) => {
     }
 
     // Auth0 user ID is in the 'sub' claim (e.g., "auth0|abc123")
-    const auth0UserId = req.auth.sub;
+    const auth0UserId = payload.sub;
+    console.log('✅ Found auth0UserId:', auth0UserId);
 
     // Find user in MongoDB by auth0_id
     const user = await User.findOne({ auth0_id: auth0UserId })
@@ -148,8 +155,18 @@ const conditionalAuth = async (req, res, next) => {
   }
 
   // Auth0 enabled - require JWT authentication
+  console.log('🔐 Auth0 enabled - validating JWT token');
+  console.log('Expected audience:', process.env.AUTH0_AUDIENCE);
+  console.log('Expected issuer:', `https://${process.env.AUTH0_DOMAIN}/`);
+  console.log('Authorization header:', req.headers.authorization ? 'Present' : 'Missing');
+
   return requireAuth[0](req, res, (err) => {
-    if (err) return next(err);
+    if (err) {
+      console.log('❌ JWT validation failed:', err.message);
+      console.log('Error details:', JSON.stringify(err, null, 2));
+      return next(err);
+    }
+    console.log('✅ JWT validation succeeded, attaching user...');
     requireAuth[1](req, res, next);
   });
 };
