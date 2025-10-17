@@ -8,7 +8,9 @@ const User = require('../models/User');
 const checkJwt = auth({
   audience: process.env.AUTH0_AUDIENCE || process.env.AUTH0_CLIENT_ID,
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
-  tokenSigningAlg: 'RS256'
+  tokenSigningAlg: 'RS256',
+  // Allow tokens with multiple audiences (e.g., API + userinfo endpoint)
+  strictAudience: false
 });
 
 /**
