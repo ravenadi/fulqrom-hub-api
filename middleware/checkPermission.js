@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Role = require('../models/Role');
+const mongoose = require('mongoose');
 
 /**
  * Check if user has permission for a specific resource
@@ -44,11 +45,32 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
       }
 
       // Fetch user with roles and permissions populated
-      const user = await User.findById(userId).populate('role_ids');
+      // Try different lookup strategies based on userId format
+      let user = null;
+
+      // Strategy 1: If userId is a valid MongoDB ObjectId (24 hex chars), try finding by _id
+      const isValidObjectId = mongoose.Types.ObjectId.isValid(userId) &&
+                              /^[0-9a-fA-F]{24}$/.test(userId);
+
+      if (isValidObjectId) {
+        user = await User.findById(userId).populate('role_ids').catch(() => null);
+      }
+
+      // Strategy 2: If not found, try finding by auth0_id (e.g., "auth0|...")
+      if (!user) {
+        user = await User.findOne({ auth0_id: userId }).populate('role_ids');
+      }
+
+      // Strategy 3: If still not found, try finding by custom_id field (for demo users)
+      if (!user) {
+        user = await User.findOne({ custom_id: userId }).populate('role_ids');
+      }
+
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: 'User not found',
+          hint: 'The user_id does not match any user in the database'
         });
       }
 
@@ -172,11 +194,32 @@ const checkModulePermission = (moduleName, action) => {
       }
 
       // Fetch user with roles populated
-      const user = await User.findById(userId).populate('role_ids');
+      // Try different lookup strategies based on userId format
+      let user = null;
+
+      // Strategy 1: If userId is a valid MongoDB ObjectId (24 hex chars), try finding by _id
+      const isValidObjectId = mongoose.Types.ObjectId.isValid(userId) &&
+                              /^[0-9a-fA-F]{24}$/.test(userId);
+
+      if (isValidObjectId) {
+        user = await User.findById(userId).populate('role_ids').catch(() => null);
+      }
+
+      // Strategy 2: If not found, try finding by auth0_id (e.g., "auth0|...")
+      if (!user) {
+        user = await User.findOne({ auth0_id: userId }).populate('role_ids');
+      }
+
+      // Strategy 3: If still not found, try finding by custom_id field (for demo users)
+      if (!user) {
+        user = await User.findOne({ custom_id: userId }).populate('role_ids');
+      }
+
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: 'User not found'
+          message: 'User not found',
+          hint: 'The user_id does not match any user in the database'
         });
       }
 

@@ -6,6 +6,7 @@ const compression = require('compression');
 require('dotenv').config();
 
 const errorHandler = require('./middleware/errorHandler');
+const { conditionalAuth } = require('./middleware/auth0');
 const customersRouter = require('./routes/customers');
 const contactsRouter = require('./routes/contacts');
 const sitesRouter = require('./routes/sites');
@@ -19,6 +20,7 @@ const dropdownsRouter = require('./routes/dropdowns');
 const vendorsRouter = require('./routes/vendors');
 const usersRouter = require('./routes/users');
 const rolesRouter = require('./routes/roles');
+const authRouter = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 30001;
@@ -39,14 +41,14 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-user-id']
 }));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
+// Health check endpoint (no authentication required)
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
@@ -56,7 +58,19 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Apply authentication to all API routes (except auth routes)
+// This middleware will check for user_id when USE_AUTH0=false or JWT token when USE_AUTH0=true
+app.use('/api', (req, res, next) => {
+  // Skip authentication for auth and health endpoints
+  if (req.path.startsWith('/auth') || req.path === '/health') {
+    return next();
+  }
+  // Apply conditional authentication
+  conditionalAuth(req, res, next);
+});
+
 // API routes
+app.use('/api/auth', authRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/customers/:customerId/contacts', contactsRouter);
 app.use('/api/sites', sitesRouter);

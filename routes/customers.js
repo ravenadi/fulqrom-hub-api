@@ -8,6 +8,9 @@ const { checkResourcePermission, checkModulePermission } = require('../middlewar
 
 const router = express.Router();
 
+// Note: Authentication is applied globally in server.js
+// No need to apply conditionalAuth here
+
 // GET /api/customers - List all customers (requires module-level view permission)
 router.get('/', checkModulePermission('customers', 'view'), async (req, res) => {
   try {
