@@ -62,9 +62,12 @@ app.get('/health', (req, res) => {
 // This middleware will check for user_id when USE_AUTH0=false or JWT token when USE_AUTH0=true
 app.use('/api', (req, res, next) => {
   // Skip authentication for auth and health endpoints
+  // Important: Auth endpoints must be public for login/signup flow
   if (req.path.startsWith('/auth') || req.path === '/health') {
+    console.log(`✓ Bypassing auth for public endpoint: ${req.method} ${req.path}`);
     return next();
   }
+  console.log(`🔒 Applying auth for protected endpoint: ${req.method} ${req.path}`);
   // Apply conditional authentication
   conditionalAuth(req, res, next);
 });
