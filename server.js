@@ -22,6 +22,7 @@ const usersRouter = require('./routes/users');
 const rolesRouter = require('./routes/roles'); //legacy roles api
 const rolesV2Router = require('./routes/v2/roles'); //new roles api
 const authRouter = require('./routes/auth');
+const notificationsRouter = require('./routes/notifications');
 
 const app = express();
 const PORT = process.env.PORT || 30001;
@@ -90,6 +91,7 @@ app.use('/api/vendors', vendorsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/roles', rolesRouter);
 app.use('/api/v2/roles', rolesV2Router);
+app.use('/api/notifications', notificationsRouter);
 
 // Handle 404 for API routes
 app.use('/api/*', (req, res) => {
@@ -123,7 +125,8 @@ app.get('/', (req, res) => {
       vendors: '/api/vendors',
       users: '/api/users',
       roles: '/api/roles',
-      roles_v2: '/api/v2/roles'
+      roles_v2: '/api/v2/roles',
+      notifications: '/api/notifications'
     }
   });
 });

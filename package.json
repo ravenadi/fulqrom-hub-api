@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "scheduler": "node scripts/notificationScheduler.js --daemon",
+    "check-reminders": "node scripts/notificationScheduler.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "echo \"No linter configured\" && exit 0"
   },
@@ -32,6 +34,7 @@
     "joi-objectid": "^4.0.2",
     "mongoose": "^7.5.0",
     "multer": "^2.0.2",
+    "node-cron": "^3.0.3",
     "nodemailer": "^7.0.7",
     "uuid": "^13.0.0"
   },

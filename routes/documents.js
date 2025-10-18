@@ -17,6 +17,8 @@ const {
   validateQueryParams,
   validateObjectId
 } = require('../middleware/documentValidation');
+
+// TODO: Refactor to use centralized authHelper.getUserId() instead of req.user?.userId || req.user?.sub
 const {
   escapeRegex,
   buildSearchQuery,
@@ -28,6 +30,7 @@ const {
   sanitizeQuery
 } = require('../middleware/searchHelpers');
 const emailService = require('../utils/emailService');
+const notificationService = require('../utils/notificationService');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 // Configure multer for memory storage
@@ -731,7 +734,13 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
         ...(documentData.compliance_status && documentData.compliance_status !== 'none' && { compliance_status: documentData.compliance_status }),
         ...(documentData.issue_date && documentData.issue_date !== 'none' && { issue_date: documentData.issue_date }),
         ...(documentData.expiry_date && documentData.expiry_date !== 'none' && { expiry_date: documentData.expiry_date }),
-        ...(documentData.review_date && documentData.review_date !== 'none' && { review_date: documentData.review_date }),
+        // Auto-populate review_date to today if category contains "report" and not provided
+        ...((documentData.review_date && documentData.review_date !== 'none')
+          ? { review_date: documentData.review_date }
+          : (documentData.category && documentData.category.toLowerCase().includes('report'))
+            ? { review_date: new Date().toISOString().split('T')[0] }
+            : {}
+        ),
         ...(documentData.frequency && documentData.frequency !== 'none' && { frequency: documentData.frequency })
       },
 
@@ -1032,8 +1041,22 @@ router.put('/bulk-update', async (req, res) => {
 // PUT /api/documents/:id - Update document
 router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId, async (req, res) => {
   try {
+    // Get old document to compare changes
+    const oldDocument = await Document.findById(req.params.id).lean();
+
     const updateData = { ...req.body };
     updateData.updated_at = new Date().toISOString();
+
+    // Auto-populate review_date if category contains "report" and review_date not provided
+    if (updateData.category && updateData.category.toLowerCase().includes('report')) {
+      if (!updateData.metadata) {
+        updateData.metadata = {};
+      }
+      // Only set review_date if it's not already set in the update
+      if (!updateData.metadata.review_date && !oldDocument?.metadata?.review_date) {
+        updateData.metadata.review_date = new Date().toISOString().split('T')[0];
+      }
+    }
 
     // Clean metadata: remove "none" values and empty fields
     if (updateData.metadata) {
@@ -1124,6 +1147,84 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
         } : undefined
       }
     };
+
+    // Send notifications for status change or approver assignment (async, don't block response)
+    setImmediate(async () => {
+      try {
+        const userId = req.user?.userId || req.user?.sub || 'unknown';
+        const userName = req.user?.name || req.user?.email || 'Unknown User';
+
+        // Check if status changed
+        if (oldDocument && document.status && oldDocument.status !== document.status) {
+          const recipients = [];
+
+          // Add document creator
+          if (document.created_by) {
+            recipients.push({
+              user_id: document.created_by,
+              user_email: document.created_by
+            });
+          }
+
+          // Add approvers
+          if (document.approval_config && document.approval_config.approvers) {
+            document.approval_config.approvers.forEach(approver => {
+              if (approver.user_email && approver.user_email !== userId) {
+                recipients.push({
+                  user_id: approver.user_id,
+                  user_email: approver.user_email
+                });
+              }
+            });
+          }
+
+          // Remove duplicates
+          const uniqueRecipients = recipients.filter((recipient, index, self) =>
+            index === self.findIndex(r => r.user_email === recipient.user_email)
+          );
+
+          if (uniqueRecipients.length > 0) {
+            await notificationService.notifyDocumentStatusChanged(
+              document,
+              oldDocument.status,
+              document.status,
+              uniqueRecipients,
+              {
+                user_id: userId,
+                user_name: userName,
+                user_email: req.user?.email || userId
+              }
+            );
+          }
+        }
+
+        // Check if approvers changed
+        const oldApprovers = oldDocument?.approval_config?.approvers || [];
+        const newApprovers = document?.approval_config?.approvers || [];
+
+        // Find new approvers (those in new but not in old)
+        const addedApprovers = newApprovers.filter(newApprover =>
+          !oldApprovers.some(oldApprover => oldApprover.user_email === newApprover.user_email)
+        );
+
+        if (addedApprovers.length > 0) {
+          await notificationService.notifyDocumentApproversAssigned(
+            document,
+            addedApprovers.map(approver => ({
+              user_id: approver.user_id,
+              user_email: approver.user_email
+            })),
+            {
+              user_id: userId,
+              user_name: userName,
+              user_email: req.user?.email || userId
+            }
+          );
+        }
+      } catch (notifError) {
+        console.error('Failed to send document update notifications:', notifError);
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -1699,6 +1800,54 @@ router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) =
 
     await approvalHistory.save();
 
+    // Send notifications (async, don't block response)
+    setImmediate(async () => {
+      try {
+        const recipients = [];
+
+        // Add document creator if available
+        if (document.created_by) {
+          recipients.push({
+            user_id: document.created_by,
+            user_email: document.created_by // Assuming email, might need to fetch from User model
+          });
+        }
+
+        // Add all approvers from approval_config
+        if (document.approval_config && document.approval_config.approvers) {
+          document.approval_config.approvers.forEach(approver => {
+            if (approver.user_email) {
+              recipients.push({
+                user_id: approver.user_id,
+                user_email: approver.user_email
+              });
+            }
+          });
+        }
+
+        // Remove duplicates and the approver who just approved
+        const uniqueRecipients = recipients.filter((recipient, index, self) =>
+          recipient.user_email !== (approved_by_name || approved_by) &&
+          index === self.findIndex(r => r.user_email === recipient.user_email)
+        );
+
+        if (uniqueRecipients.length > 0) {
+          await notificationService.notifyDocumentApprovalStatusChanged(
+            document,
+            'Approved',
+            uniqueRecipients,
+            {
+              user_id: approved_by,
+              user_name: approved_by_name || approved_by,
+              user_email: approved_by_name || approved_by
+            }
+          );
+        }
+      } catch (notifError) {
+        console.error('Failed to send approval notifications:', notifError);
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: 'Document approved successfully',
@@ -1785,6 +1934,54 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
     });
 
     await approvalHistory.save();
+
+    // Send notifications (async, don't block response)
+    setImmediate(async () => {
+      try {
+        const recipients = [];
+
+        // Add document creator if available
+        if (document.created_by) {
+          recipients.push({
+            user_id: document.created_by,
+            user_email: document.created_by // Assuming email, might need to fetch from User model
+          });
+        }
+
+        // Add all approvers from approval_config
+        if (document.approval_config && document.approval_config.approvers) {
+          document.approval_config.approvers.forEach(approver => {
+            if (approver.user_email) {
+              recipients.push({
+                user_id: approver.user_id,
+                user_email: approver.user_email
+              });
+            }
+          });
+        }
+
+        // Remove duplicates and the rejecter
+        const uniqueRecipients = recipients.filter((recipient, index, self) =>
+          recipient.user_email !== (rejected_by_name || rejected_by) &&
+          index === self.findIndex(r => r.user_email === recipient.user_email)
+        );
+
+        if (uniqueRecipients.length > 0) {
+          await notificationService.notifyDocumentApprovalStatusChanged(
+            document,
+            'Rejected',
+            uniqueRecipients,
+            {
+              user_id: rejected_by,
+              user_name: rejected_by_name || rejected_by,
+              user_email: rejected_by_name || rejected_by
+            }
+          );
+        }
+      } catch (notifError) {
+        console.error('Failed to send rejection notifications:', notifError);
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -2193,7 +2390,7 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       }
     );
 
-    // Send notification emails to all approvers (async, don't block response)
+    // Send notification emails and in-app notifications to all approvers (async, don't block response)
     if (currentDocument.approval_config?.enabled && currentDocument.approval_config.approvers?.length > 0) {
       setImmediate(async () => {
         const documentDetails = {
@@ -2210,7 +2407,7 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
           comment: `New version ${newVersionNumber} uploaded. ${req.body.change_notes || ''}`
         };
 
-        // Send to all approvers
+        // Send email to all approvers
         for (const approver of currentDocument.approval_config.approvers) {
           if (approver.user_email) {
             try {
@@ -2225,6 +2422,31 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
               // Email notification failed - continue
             }
           }
+        }
+
+        // Send in-app notifications to all approvers
+        try {
+          const recipients = currentDocument.approval_config.approvers
+            .filter(approver => approver.user_email)
+            .map(approver => ({
+              user_id: approver.user_id,
+              user_email: approver.user_email
+            }));
+
+          if (recipients.length > 0) {
+            await notificationService.notifyDocumentVersionUploaded(
+              currentDocument,
+              newVersionNumber,
+              recipients,
+              {
+                user_id: uploadedBy.user_id,
+                user_name: uploadedBy.user_name || uploadedBy.email || 'Unknown',
+                user_email: uploadedBy.email
+              }
+            );
+          }
+        } catch (notifError) {
+          console.error('Failed to send version upload notifications:', notifError);
         }
       });
     }
@@ -2583,7 +2805,7 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
       await document.save();
     }
 
-    // Send notification emails (async, don't block response)
+    // Send notification emails and in-app notifications (async, don't block response)
     if (send_notification && notify_recipients && Array.isArray(notify_recipients) && notify_recipients.length > 0) {
       setImmediate(async () => {
         const documentDetails = {
@@ -2600,7 +2822,7 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
           comment: comment
         };
 
-        // Send to all specified recipients
+        // Send email to all specified recipients
         for (const recipient of notify_recipients) {
           try {
             await emailService.sendDocumentUpdate({
@@ -2613,6 +2835,28 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
           } catch (emailError) {
             // Email notification failed - continue
           }
+        }
+
+        // Send in-app notifications
+        try {
+          const recipients = notify_recipients.map(email => ({
+            user_id: email, // Use email as user_id for now
+            user_email: email
+          }));
+
+          await notificationService.notifyDocumentCommentAdded(
+            document,
+            {
+              _id: documentComment._id,
+              user_id: user_id || 'unknown',
+              user_name: user_name || user_email,
+              user_email: user_email,
+              comment: comment
+            },
+            recipients
+          );
+        } catch (notifError) {
+          console.error('Failed to send comment notifications:', notifError);
         }
       });
     }
