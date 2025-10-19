@@ -10,7 +10,10 @@ const checkJwt = auth({
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
   tokenSigningAlg: 'RS256',
   // Allow tokens with multiple audiences (e.g., API + userinfo endpoint)
-  strictAudience: false
+  strictAudience: false,
+  // Don't require Authorization header to be present in request body parsing
+  // This fixes issues with multipart/form-data uploads
+  credentialsRequired: true
 });
 
 /**

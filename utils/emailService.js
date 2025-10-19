@@ -1,6 +1,5 @@
 const fs = require('fs').promises;
 const path = require('path');
-const EmailNotification = require('../models/EmailNotification');
 const { formatAustralianDate, formatAustralianDateTime } = require('./dateFormatter');
 
 /**
@@ -73,8 +72,12 @@ class EmailService {
       const subjects = {
         document_assignment: `Document Approval Request - ${variables.document_name}`,
         documentAssignment: `Document Approval Request - ${variables.document_name}`,
-        document_update: `New comment on the document - ${variables.document_name}`,
-        documentUpdate: `New comment on the document - ${variables.document_name}`
+        document_update: variables.new_status
+          ? `Document Status Update: ${variables.new_status} - ${variables.document_name}`
+          : `New comment on the document - ${variables.document_name}`,
+        documentUpdate: variables.new_status
+          ? `Document Status Update: ${variables.new_status} - ${variables.document_name}`
+          : `New comment on the document - ${variables.document_name}`
       };
 
       const subject = subjects[templateName] || 'Fulqrom Hub Notification';
@@ -127,23 +130,9 @@ class EmailService {
    * @returns {Promise<Object>}
    */
   async sendEmail({ template, to, variables, documentId }) {
-    // Create email notification record (pending)
-    const notification = new EmailNotification({
-      template,
-      to: to.toLowerCase().trim(),
-      subject: '', // Will be updated after rendering
-      variables,
-      document_id: documentId,
-      status: 'pending',
-      email_provider: this.provider
-    });
-
     try {
       // Render template
       const { subject, html } = await this.renderTemplate(template, variables);
-
-      // Update notification with subject
-      notification.subject = subject;
 
       // Send email based on provider
       let result;
@@ -158,24 +147,18 @@ class EmailService {
         result = await this.sendViaConsole({ to, subject, html });
       }
 
-      // Mark as sent
-      await notification.markAsSent(result.messageId);
-
       return {
         success: true,
-        messageId: result.messageId,
-        notificationId: notification._id
+        messageId: result.messageId
       };
 
     } catch (error) {
-      // Mark as failed
-      await notification.markAsFailed(error.message);
+      console.error('Email send error:', error);
 
       // Don't throw - email failures should not break app flow
       return {
         success: false,
-        error: error.message,
-        notificationId: notification._id
+        error: error.message
       };
     }
   }
@@ -281,7 +264,7 @@ class EmailService {
       uploaded_by_name: documentDetails.uploadedBy || 'Unknown',
       uploaded_date_formatted: formatAustralianDate(documentDetails.uploadedDate),
       document_description: documentDetails.description || '',
-      document_review_url: `${this.appBaseUrl}/documents/${documentId}/review`
+      document_review_url: `${this.appBaseUrl}/document/${documentId}/review`
     };
 
     return this.sendEmail({
@@ -328,7 +311,7 @@ class EmailService {
       review_date_formatted: formatAustralianDateTime(statusUpdate.reviewDate),
       comment: statusUpdate.comment || '',
       mentioned_users_list: mentionedUsersList,
-      document_url: `${this.appBaseUrl}/documents/${documentId}/overview`
+      document_url: `${this.appBaseUrl}/document/${documentId}/review`
     };
 
     return this.sendEmail({
@@ -339,43 +322,6 @@ class EmailService {
     });
   }
 
-  /**
-   * Retry failed emails (for background job)
-   * @param {number} maxRetries - Maximum retry count
-   * @returns {Promise<Object>}
-   */
-  async retryFailedEmails(maxRetries = 3) {
-    const failedEmails = await EmailNotification.getFailedEmailsForRetry(maxRetries);
-
-    let successCount = 0;
-    let failedCount = 0;
-
-    for (const notification of failedEmails) {
-      try {
-        const result = await this.sendEmail({
-          template: notification.template,
-          to: notification.to,
-          variables: notification.variables,
-          documentId: notification.document_id
-        });
-
-        if (result.success) {
-          successCount++;
-        } else {
-          failedCount++;
-        }
-      } catch (error) {
-        failedCount++;
-
-      }
-    }
-
-    return {
-      totalProcessed: failedEmails.length,
-      successCount,
-      failedCount
-    };
-  }
 }
 
 // Export singleton instance

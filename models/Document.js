@@ -399,8 +399,19 @@ const DocumentSchema = new mongoose.Schema({
 
   // Audit Fields
   created_by: {
-    type: String,
-    trim: true
+    user_id: {
+      type: String,
+      trim: true
+    },
+    user_name: {
+      type: String,
+      trim: true
+    },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true
+    }
   },
   created_at: {
     type: String,

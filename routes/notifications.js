@@ -64,6 +64,69 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * POST /api/notifications/fix-user-ids
+ * Fix existing notifications with email as user_id
+ */
+router.post('/fix-user-ids', async (req, res) => {
+  try {
+    const { email, correct_user_id } = req.body;
+
+    if (!email || !correct_user_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and correct_user_id are required'
+      });
+    }
+
+    const Notification = require('../models/Notification');
+
+    // Update all notifications where user_id is the email
+    const result = await Notification.updateMany(
+      { user_id: email },
+      { $set: { user_id: correct_user_id } }
+    );
+
+    res.json({
+      success: true,
+      message: `Updated ${result.modifiedCount} notifications`,
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/notifications/debug-user
+ * Debug endpoint to see what user info we have
+ */
+router.get('/debug-user', async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id?.toString() || req.user?.email;
+
+    // Get sample notifications
+    const Notification = require('../models/Notification');
+    const allNotifs = await Notification.find({}).limit(3).lean();
+
+    res.json({
+      success: true,
+      debug: {
+        req_user: req.user,
+        extracted_userId: userId,
+        sample_notifications: allNotifs.map(n => ({
+          user_id: n.user_id,
+          user_email: n.user_email,
+          title: n.title,
+          is_read: n.is_read
+        }))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/notifications/unread-count
  * Get unread notification count for the current user
  */

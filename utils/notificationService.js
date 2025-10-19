@@ -70,14 +70,32 @@ class NotificationService {
       // Send email notification if requested
       if (sendEmail && emailTemplate && userEmail) {
         try {
-          await emailService.sendEmail({
+          notification.email_status = 'pending';
+          await notification.save();
+
+          const emailResult = await emailService.sendEmail({
             template: emailTemplate,
             to: userEmail,
             variables: emailVariables,
             documentId
           });
+
+          // Update notification with email status
+          if (emailResult.success) {
+            notification.email_sent = true;
+            notification.email_status = 'sent';
+            notification.email_provider_id = emailResult.messageId;
+            notification.email_sent_at = new Date();
+          } else {
+            notification.email_status = 'failed';
+            notification.email_error = emailResult.error;
+          }
+          await notification.save();
         } catch (emailError) {
           console.error('Failed to send email notification:', emailError);
+          notification.email_status = 'failed';
+          notification.email_error = emailError.message;
+          await notification.save();
           // Continue even if email fails - in-app notification is created
         }
       }
@@ -100,10 +118,13 @@ class NotificationService {
 
     for (const user of users) {
       try {
+        const userId = user.userId || user.user_id;
+        const userEmail = user.userEmail || user.user_email;
+
         const notification = await this.sendNotification({
           ...notificationData,
-          userId: user.userId || user.user_id,
-          userEmail: user.userEmail || user.user_email
+          userId: userId,
+          userEmail: userEmail
         });
         notifications.push(notification);
       } catch (error) {

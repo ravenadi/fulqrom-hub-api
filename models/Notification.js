@@ -121,6 +121,32 @@ const NotificationSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Email tracking fields
+  email_sent: {
+    type: Boolean,
+    default: false
+  },
+
+  email_status: {
+    type: String,
+    enum: ['sent', 'failed', 'pending', 'not_sent'],
+    default: 'not_sent'
+  },
+
+  email_provider_id: {
+    type: String,
+    trim: true
+  },
+
+  email_error: {
+    type: String,
+    trim: true
+  },
+
+  email_sent_at: {
+    type: Date
+  },
+
   // Timestamps
   created_at: {
     type: Date,
@@ -183,14 +209,19 @@ NotificationSchema.methods.markAsUnread = function() {
 };
 
 // Static method to get unread count for a user
-NotificationSchema.statics.getUnreadCount = function(userId) {
-  return this.countDocuments({
+NotificationSchema.statics.getUnreadCount = async function(userId) {
+  // Normalize userId to lowercase if it's an email
+  const normalizedUserId = userId.includes('@') ? userId.toLowerCase() : userId;
+
+  const count = await this.countDocuments({
     $or: [
-      { user_id: userId },
-      { user_email: userId }
+      { user_id: normalizedUserId },
+      { user_email: normalizedUserId }
     ],
     is_read: false
   });
+
+  return count;
 };
 
 // Static method to get notifications for a user
@@ -204,11 +235,14 @@ NotificationSchema.statics.getUserNotifications = function(userId, options = {})
     endDate = null
   } = options;
 
+  // Normalize userId to lowercase if it's an email
+  const normalizedUserId = userId.includes('@') ? userId.toLowerCase() : userId;
+
   // Query by both user_id and user_email to support different authentication modes
   const query = {
     $or: [
-      { user_id: userId },
-      { user_email: userId }
+      { user_id: normalizedUserId },
+      { user_email: normalizedUserId }
     ]
   };
 

@@ -572,51 +572,7 @@ router.get('/:id', checkModulePermission('documents', 'view'), validateObjectId,
   }
 });
 
-// GET /api/documents/:id/download - Generate presigned URL for file download
-router.get('/:id/download', async (req, res) => {
-  try {
-    const document = await Document.findById(req.params.id);
-
-    if (!document) {
-      return res.status(404).json({
-        success: false,
-        message: 'Document not found'
-      });
-    }
-
-    if (!document.file || !document.file.file_meta || !document.file.file_meta.file_key) {
-      return res.status(404).json({
-        success: false,
-        message: 'Document file not found'
-      });
-    }
-
-    // Generate presigned URL
-    const urlResult = await generatePresignedUrl(document.file.file_meta.file_key, 3600); // 1 hour expiry
-
-    if (!urlResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to generate download URL',
-        error: urlResult.error
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      download_url: urlResult.url,
-      expires_in: 3600,
-      file_name: document.file.file_meta.file_name
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error generating download URL',
-      error: error.message
-    });
-  }
-});
+// Duplicate route removed - see line 2980 for the primary download endpoint with proper validation
 
 // GET /api/documents/:id/preview - Generate presigned URL for document preview
 router.get('/:id/preview', validateObjectId, async (req, res) => {
@@ -903,7 +859,7 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
         category: document.category,
         type: document.type,
         status: documentData.approval_config.status || 'Pending Approval',
-        uploadedBy: documentData.created_by || 'Unknown',
+        uploadedBy: documentData.created_by?.user_name || documentData.created_by?.email || 'Unknown',
         uploadedDate: new Date(),
         description: document.description
       };
@@ -2870,6 +2826,10 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
       });
     }
 
+    // Track previous status to check if it changed
+    const previousStatus = document.approval_config?.status || 'Unknown';
+    const statusChanged = previousStatus !== status;
+
     // Create comment
     const documentComment = new DocumentComment({
       document_id: id,
@@ -2904,61 +2864,132 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
       await document.save();
     }
 
-    // Send notification emails and in-app notifications (async, don't block response)
-    if (send_notification && notify_recipients && Array.isArray(notify_recipients) && notify_recipients.length > 0) {
-      setImmediate(async () => {
-        const documentDetails = {
-          name: document.name || document.file?.file_meta?.file_name || 'Unnamed Document',
-          category: document.category,
-          type: document.type
-        };
+    // Always send in-app notification to document creator (async, don't block response)
+    setImmediate(async () => {
+      const documentDetails = {
+        name: document.name || document.file?.file_meta?.file_name || 'Unnamed Document',
+        category: document.category,
+        type: document.type
+      };
 
-        const statusUpdate = {
-          newStatus: status,
-          oldStatus: null,
-          reviewerName: user_name || user_email,
-          reviewDate: new Date(),
-          comment: comment
-        };
+      const statusUpdate = {
+        newStatus: status,
+        oldStatus: null,
+        reviewerName: user_name || user_email,
+        reviewDate: new Date(),
+        comment: comment
+      };
 
+      // Build list of recipients for in-app notifications (always include creator)
+      const inAppRecipients = [];
+
+      // Add document creator if exists and not the reviewer
+      // If created_by doesn't exist, try to find the creator from uploaded_by or other fields
+      if (!document.created_by && document.uploaded_by) {
+        // Try to get user info from uploaded_by field
+        const User = require('../models/User');
+        try {
+          // If uploaded_by is an email, find the user
+          if (typeof document.uploaded_by === 'string' && document.uploaded_by.includes('@')) {
+            const creator = await User.findOne({ email: document.uploaded_by }).lean();
+            if (creator && creator.email !== user_email) {
+              inAppRecipients.push({
+                user_id: creator._id.toString(),
+                user_email: creator.email.toLowerCase()
+              });
+            }
+          }
+        } catch (err) {
+          console.error('Error finding creator from uploaded_by:', err);
+        }
+      } else if (document.created_by?.email && document.created_by.email.toLowerCase() !== user_email.toLowerCase()) {
+        // Use user_id if available, otherwise use email as fallback
+        const creatorUserId = document.created_by.user_id || document.created_by.email.toLowerCase();
+
+        inAppRecipients.push({
+          user_id: creatorUserId,
+          user_email: document.created_by.email.toLowerCase()
+        });
+      }
+
+      // Send email notifications only if enabled and recipients are selected
+      if (send_notification && notify_recipients && Array.isArray(notify_recipients) && notify_recipients.length > 0) {
         // Send email to all specified recipients
-        for (const recipient of notify_recipients) {
+        for (const recipientEmail of notify_recipients) {
           try {
+            // Find recipient name from approvers list or created_by
+            let recipientName = recipientEmail;
+
+            if (document.approval_config?.approvers) {
+              const approver = document.approval_config.approvers.find(a => a.user_email === recipientEmail);
+              if (approver && approver.user_name) {
+                recipientName = approver.user_name;
+              }
+            }
+
+            // Check if it's the document creator
+            if (document.created_by?.email === recipientEmail && document.created_by?.user_name) {
+              recipientName = document.created_by.user_name;
+            }
+
             await emailService.sendDocumentUpdate({
-              to: recipient,
+              to: recipientEmail,
               documentId: id,
-              creatorName: recipient,
+              creatorName: recipientName,
               documentDetails,
               statusUpdate
             });
           } catch (emailError) {
+            console.error('Failed to send email notification:', emailError);
             // Email notification failed - continue
           }
         }
 
-        // Send in-app notifications
-        try {
-          const recipients = notify_recipients.map(email => ({
-            user_id: email, // Use email as user_id for now
-            user_email: email
-          }));
-
-          await notificationService.notifyDocumentCommentAdded(
-            document,
-            {
-              _id: documentComment._id,
-              user_id: user_id || 'unknown',
-              user_name: user_name || user_email,
-              user_email: user_email,
-              comment: comment
-            },
-            recipients
-          );
-        } catch (notifError) {
-          console.error('Failed to send comment notifications:', notifError);
+        // Add email recipients to in-app notification list (avoid duplicates)
+        for (const recipientEmail of notify_recipients) {
+          if (!inAppRecipients.find(r => r.user_email === recipientEmail)) {
+            inAppRecipients.push({
+              user_id: recipientEmail,
+              user_email: recipientEmail
+            });
+          }
         }
-      });
-    }
+      }
+
+      // Send in-app notifications (always, even if email is disabled)
+      if (inAppRecipients.length > 0) {
+        try {
+          // If status was changed, notify about status change. Otherwise, notify about comment
+          if (statusChanged) {
+            await notificationService.notifyDocumentStatusChanged(
+              document,
+              previousStatus,
+              status,
+              inAppRecipients,
+              {
+                user_id: user_id || 'unknown',
+                user_name: user_name || user_email,
+                user_email: user_email
+              }
+            );
+          } else {
+            await notificationService.notifyDocumentCommentAdded(
+              document,
+              {
+                _id: documentComment._id,
+                user_id: user_id || 'unknown',
+                user_name: user_name || user_email,
+                user_email: user_email,
+                comment: comment
+              },
+              inAppRecipients
+            );
+          }
+        } catch (notifError) {
+          console.error('Failed to send in-app notifications:', notifError);
+        }
+      }
+    });
 
     res.status(201).json({
       success: true,

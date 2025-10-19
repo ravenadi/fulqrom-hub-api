@@ -48,6 +48,7 @@ app.use(cors({
 }));
 
 // Body parsing middleware
+// Important: Do NOT parse multipart/form-data here - let multer handle it in routes
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
