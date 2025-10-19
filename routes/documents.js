@@ -2345,20 +2345,57 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     const day = String(now.getDate()).padStart(2, '0');
 
     const versionedFileName = `v${newVersionNumber}_${req.file.originalname}`;
-    const uploadResult = await uploadFileToS3(
-      { ...req.file, originalname: versionedFileName },
-      currentDocument.customer.customer_id,
-      `documents/${documentGroupId}/${year}/${month}/${day}`
-    );
 
-    if (!uploadResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to upload file to S3',
-        code: 'S3_UPLOAD_ERROR',
-        error: uploadResult.error
-      });
-    }
+    // Extract customer_id from different possible locations
+    const customerId = currentDocument.customer?.customer_id || currentDocument.customer_id || 'unknown';
+
+    // Generate S3 key and file metadata immediately (without uploading)
+    const s3Key = `documents/${documentGroupId}/${year}/${month}/${day}/${Date.now()}-${versionedFileName}`;
+    const fileUrl = `${process.env.AWS_URL}/${s3Key}`;
+    const fileExtension = require('path').extname(req.file.originalname).toLowerCase().replace('.', '');
+
+    const uploadResult = {
+      success: true,
+      data: {
+        file_meta: {
+          file_name: req.file.originalname,
+          file_size: req.file.size,
+          file_type: req.file.mimetype,
+          file_extension: fileExtension,
+          file_url: fileUrl,
+          file_path: s3Key,
+          file_key: s3Key,
+          version: newVersionNumber,
+          file_mime_type: req.file.mimetype,
+          upload_status: 'pending' // Mark as pending upload
+        }
+      }
+    };
+
+    // Upload to S3 asynchronously in background (non-blocking)
+    // Clone file buffer to prevent garbage collection before async upload completes
+    const fileBufferCopy = Buffer.from(req.file.buffer);
+    const fileForUpload = {
+      ...req.file,
+      buffer: fileBufferCopy,
+      originalname: versionedFileName
+    };
+
+    setImmediate(async () => {
+      try {
+        const asyncUploadResult = await uploadFileToS3(
+          fileForUpload,
+          customerId,
+          `documents/${documentGroupId}/${year}/${month}/${day}`
+        );
+
+        if (!asyncUploadResult.success) {
+          console.error(`Failed to upload file to S3 for version ${newVersionNumber}:`, asyncUploadResult.error);
+        }
+      } catch (error) {
+        console.error(`Error uploading file to S3 for version ${newVersionNumber}:`, error.message);
+      }
+    });
 
     // Mark current version as not current
     await Document.updateOne(
@@ -2515,7 +2552,6 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     });
 
   } catch (error) {
-
     res.status(500).json({
       success: false,
       message: 'Error uploading new version',
