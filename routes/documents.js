@@ -852,7 +852,7 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
       }
     };
 
-    // Send approval emails if approval is enabled and approvers are assigned
+    // Send approval emails asynchronously (don't wait for completion)
     if (documentData.approval_config?.enabled && documentData.approval_config.approvers?.length > 0) {
       const documentDetails = {
         name: document.name || document.file?.file_meta?.file_name || 'Unnamed Document',
@@ -864,21 +864,23 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
         description: document.description
       };
 
-      // Send emails to all approvers
-      for (const approver of documentData.approval_config.approvers) {
-        if (approver.user_email) {
-          try {
-            await emailService.sendDocumentAssignment({
-              to: approver.user_email,
-              documentId: document._id.toString(),
-              approverName: approver.user_name || approver.user_email,
-              documentDetails
-            });
-          } catch (emailError) {
-            // Continue with other approvers
+      // Send emails to all approvers asynchronously (fire and forget)
+      setImmediate(() => {
+        documentData.approval_config.approvers.forEach(async (approver) => {
+          if (approver.user_email) {
+            try {
+              await emailService.sendDocumentAssignment({
+                to: approver.user_email,
+                documentId: document._id.toString(),
+                approverName: approver.user_name || approver.user_email,
+                documentDetails
+              });
+            } catch (emailError) {
+              console.error(`Failed to send approval email to ${approver.user_email}:`, emailError);
+            }
           }
-        }
-      }
+        });
+      });
     }
 
     res.status(201).json({

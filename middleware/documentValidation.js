@@ -93,8 +93,15 @@ const createDocumentSchema = Joi.object({
   vendor_id: Joi.string().optional(),
   vendor_name: Joi.string().optional(),
 
-  // Audit fields
-  created_by: Joi.string().optional().trim()
+  // Audit fields - accept both string (legacy) and object (new format)
+  created_by: Joi.alternatives().try(
+    Joi.string().trim(),
+    Joi.object({
+      user_id: Joi.string().required().trim(),
+      user_name: Joi.string().required().trim(),
+      email: Joi.string().email().required().trim()
+    })
+  ).optional()
 });
 
 // Document update validation schema
@@ -169,8 +176,15 @@ const updateDocumentSchema = Joi.object({
     frequency: Joi.string().optional().trim().valid('weekly', 'monthly', 'quarterly', 'annual').allow('', null)
   }).optional(),
 
-  // Audit fields
-  created_by: Joi.string().optional().trim()
+  // Audit fields - accept both string (legacy) and object (new format)
+  created_by: Joi.alternatives().try(
+    Joi.string().trim(),
+    Joi.object({
+      user_id: Joi.string().required().trim(),
+      user_name: Joi.string().required().trim(),
+      email: Joi.string().email().required().trim()
+    })
+  ).optional()
 }).min(1); // At least one field must be provided for update
 
 // Query parameters validation for GET requests
