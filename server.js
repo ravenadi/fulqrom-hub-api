@@ -92,7 +92,7 @@ app.use('/api/vendors', vendorsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/roles', rolesRouter);
 app.use('/api/v2/roles', rolesV2Router);
-// app.use('/api/notifications', notificationsRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use('/api/admin', adminRouter); //super admin routes
 
 // Handle 404 for API routes
