@@ -23,6 +23,7 @@ const rolesRouter = require('./routes/roles'); //legacy roles api
 const rolesV2Router = require('./routes/v2/roles'); //new roles api
 const authRouter = require('./routes/auth');
 const notificationsRouter = require('./routes/notifications');
+const adminRouter = require('./routes/admin'); //super admin routes
 
 const app = express();
 const PORT = process.env.PORT || 30001;
@@ -66,7 +67,7 @@ app.use('/api', (req, res, next) => {
   // Skip authentication for auth, health, and dropdowns endpoints
   // Important: Auth endpoints must be public for login/signup flow
   // Dropdowns are public to support forms that need dropdown data before authentication
-  if (req.path.startsWith('/auth') || req.path === '/health' || req.path.startsWith('/dropdowns')) {
+  if (req.path.startsWith('/auth') || req.path === '/health' || req.path.startsWith('/dropdowns') || req.path.startsWith('/admin')) {
     console.log(`✓ Bypassing auth for public endpoint: ${req.method} ${req.path}`);
     return next();
   }
@@ -91,7 +92,8 @@ app.use('/api/vendors', vendorsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/roles', rolesRouter);
 app.use('/api/v2/roles', rolesV2Router);
-app.use('/api/notifications', notificationsRouter);
+// app.use('/api/notifications', notificationsRouter);
+app.use('/api/admin', adminRouter); //super admin routes
 
 // Handle 404 for API routes
 app.use('/api/*', (req, res) => {
@@ -126,7 +128,8 @@ app.get('/', (req, res) => {
       users: '/api/users',
       roles: '/api/roles',
       roles_v2: '/api/v2/roles',
-      notifications: '/api/notifications'
+      notifications: '/api/notifications',
+      admin: '/api/admin'
     }
   });
 });
