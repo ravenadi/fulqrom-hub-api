@@ -11,6 +11,7 @@ const Asset = require('../models/Asset');
 const Tenant = require('../models/Tenant');
 const Vendor = require('../models/Vendor');
 const { uploadFileToS3, generatePresignedUrl, generatePreviewUrl, deleteFileFromS3 } = require('../utils/s3Upload');
+const TenantS3Service = require('../services/tenantS3Service');
 const {
   validateCreateDocument,
   validateUpdateDocument,
@@ -686,8 +687,29 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
     // Use validated data from middleware
     const documentData = req.validatedData;
 
-    // Upload file to S3
-    const uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+    // Get tenant information for S3 bucket
+    const customer = await Customer.findById(documentData.customer_id);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    // Upload file to tenant-specific S3 bucket
+    let uploadResult;
+    try {
+      const tenantS3Service = new TenantS3Service();
+      uploadResult = await tenantS3Service.uploadFileToTenantBucket(
+        req.file,
+        documentData.customer_id,
+        customer.organisation.organisation_name
+      );
+    } catch (s3Error) {
+      console.error('Tenant S3 upload failed, falling back to shared bucket:', s3Error);
+      // Fallback to original S3 upload method
+      uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+    }
 
     if (!uploadResult.success) {
       return res.status(400).json({
