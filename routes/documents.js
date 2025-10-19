@@ -1047,28 +1047,19 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
     const updateData = { ...req.body };
     updateData.updated_at = new Date().toISOString();
 
-    // Auto-populate review_date if category contains "report" and review_date not provided
-    if (updateData.category && updateData.category.toLowerCase().includes('report')) {
-      if (!updateData.metadata) {
-        updateData.metadata = {};
-      }
-      // Only set review_date if it's not already set in the update
-      if (!updateData.metadata.review_date && !oldDocument?.metadata?.review_date) {
-        updateData.metadata.review_date = new Date().toISOString().split('T')[0];
-      }
-    }
+    // Remove metadata wrapper - fields are now at root level
+    delete updateData.metadata;
 
-    // Clean metadata: remove "none" values and empty fields
-    if (updateData.metadata) {
-      const cleanedMetadata = {};
-      Object.keys(updateData.metadata).forEach(key => {
-        const value = updateData.metadata[key];
-        if (value && value !== 'none' && value !== '') {
-          cleanedMetadata[key] = value;
-        }
-      });
-      updateData.metadata = Object.keys(cleanedMetadata).length > 0 ? cleanedMetadata : {};
-    }
+    // Clean root-level compliance fields: remove "none" values and empty fields
+    const rootFieldsToClean = [
+      'engineering_discipline', 'regulatory_framework', 'certification_number',
+      'compliance_framework', 'compliance_status', 'issue_date', 'expiry_date', 'frequency'
+    ];
+    rootFieldsToClean.forEach(field => {
+      if (updateData[field] === 'none' || updateData[field] === '') {
+        delete updateData[field];
+      }
+    });
 
     // Clean drawing_info: remove "none" values and empty fields
     if (updateData.drawing_info) {
@@ -1235,6 +1226,92 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
     res.status(400).json({
       success: false,
       message: 'Error updating document',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/documents/bulk - Bulk delete documents
+router.delete('/bulk', checkModulePermission('documents', 'delete'), async (req, res) => {
+  try {
+    const { document_ids } = req.body;
+
+    if (!document_ids || !Array.isArray(document_ids) || document_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'document_ids array is required and must not be empty'
+      });
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+      s3_deletions: {
+        success: [],
+        failed: []
+      }
+    };
+
+    // Process each document
+    for (const docId of document_ids) {
+      try {
+        const document = await Document.findById(docId);
+
+        if (!document) {
+          results.failed.push({
+            id: docId,
+            reason: 'Document not found'
+          });
+          continue;
+        }
+
+        // Delete file from S3 if exists
+        if (document.file && document.file.file_meta && document.file.file_meta.file_key) {
+          const deleteResult = await deleteFileFromS3(document.file.file_meta.file_key);
+          if (deleteResult.success) {
+            results.s3_deletions.success.push(document.file.file_meta.file_key);
+          } else {
+            results.s3_deletions.failed.push({
+              key: document.file.file_meta.file_key,
+              reason: deleteResult.message || 'S3 deletion failed'
+            });
+          }
+        }
+
+        // Delete document from database
+        await Document.findByIdAndDelete(docId);
+        results.success.push({
+          id: docId,
+          name: document.name
+        });
+
+      } catch (error) {
+        results.failed.push({
+          id: docId,
+          reason: error.message
+        });
+      }
+    }
+
+    const totalRequested = document_ids.length;
+    const totalDeleted = results.success.length;
+    const totalFailed = results.failed.length;
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk delete completed: ${totalDeleted} of ${totalRequested} documents deleted`,
+      data: {
+        total_requested: totalRequested,
+        deleted: totalDeleted,
+        failed: totalFailed,
+        results: results
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error performing bulk delete',
       error: error.message
     });
   }

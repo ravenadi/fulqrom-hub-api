@@ -122,47 +122,9 @@ const CustomerSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
-// Compliance and regulatory metadata schema
-// NOTE: Enum validation removed - values loaded from GET /api/dropdowns
-const MetadataSchema = new mongoose.Schema({
-  engineering_discipline: {
-    type: String,
-    trim: true
-  },
-  regulatory_framework: {
-    type: String,
-    trim: true
-  },
-  certification_number: {
-    type: String,
-    trim: true
-  },
-  compliance_framework: {
-    type: String,
-    trim: true
-  },
-  compliance_status: {
-    type: String,
-    trim: true
-  },
-  issue_date: {
-    type: String,
-    trim: true
-  },
-  expiry_date: {
-    type: String,
-    trim: true
-  },
-  review_date: {
-    type: String,
-    trim: true
-  },
-  frequency: {
-    type: String,
-    enum: ['weekly', 'monthly', 'quarterly', 'annual', null],
-    trim: true
-  }
-}, { _id: false });
+// DEPRECATED: Metadata wrapper removed - fields moved to root level
+// Kept for backward compatibility during migration
+const MetadataSchema = new mongoose.Schema({}, { _id: false, strict: false });
 
 // Related drawings schema for cross-references
 const RelatedDrawingSchema = new mongoose.Schema({
@@ -303,6 +265,37 @@ const DocumentSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Compliance and Regulatory Fields (flattened from metadata)
+  regulatory_framework: {
+    type: String,
+    trim: true
+  },
+  certification_number: {
+    type: String,
+    trim: true
+  },
+  compliance_framework: {
+    type: String,
+    trim: true
+  },
+  compliance_status: {
+    type: String,
+    trim: true
+  },
+  issue_date: {
+    type: String,
+    trim: true
+  },
+  expiry_date: {
+    type: String,
+    trim: true
+  },
+  frequency: {
+    type: String,
+    enum: ['weekly', 'monthly', 'quarterly', 'annual', null],
+    trim: true
+  },
+
   // File Information
   file: FileSchema,
 
@@ -315,7 +308,7 @@ const DocumentSchema = new mongoose.Schema({
   // Customer Information
   customer: CustomerSchema,
 
-  // Compliance & Regulatory Metadata
+  // DEPRECATED: Metadata wrapper - kept for backward compatibility only
   metadata: MetadataSchema,
 
   // Drawing Register Information (for category === 'Drawing Register' or similar drawing categories)
@@ -467,8 +460,12 @@ DocumentSchema.index({ 'location.asset.asset_id': 1 });
 DocumentSchema.index({ 'location.tenant.tenant_id': 1 });
 DocumentSchema.index({ 'location.vendor.vendor_id': 1 });
 DocumentSchema.index({ created_at: -1 });
-DocumentSchema.index({ 'metadata.regulatory_framework': 1 });
-DocumentSchema.index({ 'metadata.compliance_status': 1 });
+// Compliance field indexes (flattened from metadata)
+DocumentSchema.index({ regulatory_framework: 1 });
+DocumentSchema.index({ compliance_status: 1 });
+DocumentSchema.index({ expiry_date: 1 });
+DocumentSchema.index({ issue_date: 1 });
+DocumentSchema.index({ frequency: 1 });
 
 // Drawing Register indexes
 DocumentSchema.index({ 'drawing_info.drawing_status': 1 });
