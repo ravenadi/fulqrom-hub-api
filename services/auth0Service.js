@@ -1,16 +1,7 @@
 const { ManagementClient } = require('auth0');
 
-// Check if Auth0 is enabled
-const isAuth0Enabled = () => {
-  return process.env.USE_AUTH0 === 'true';
-};
-
 // Initialize Auth0 Management Client
 const getAuth0Client = () => {
-  if (!isAuth0Enabled()) {
-    throw new Error('Auth0 integration is disabled');
-  }
-
   return new ManagementClient({
     domain: process.env.AUTH0_DOMAIN,
     clientId: process.env.AUTH0_CLIENT_ID,
@@ -29,10 +20,6 @@ const getAuth0Client = () => {
  * @returns {Promise<Object>} Auth0 user object
  */
 const createAuth0User = async (userData) => {
-  if (!isAuth0Enabled()) {
-    return null;
-  }
-
   try {
     const management = getAuth0Client();
 
@@ -73,10 +60,6 @@ const createAuth0User = async (userData) => {
  * @returns {Promise<Object>} Updated Auth0 user object
  */
 const updateAuth0User = async (auth0UserId, updateData) => {
-  if (!isAuth0Enabled()) {
-    return null;
-  }
-
   try {
     const management = getAuth0Client();
 
@@ -137,10 +120,6 @@ const updateAuth0User = async (auth0UserId, updateData) => {
  * @returns {Promise<void>}
  */
 const deleteAuth0User = async (auth0UserId) => {
-  if (!isAuth0Enabled()) {
-    return;
-  }
-
   try {
     const management = getAuth0Client();
     await management.users.delete({ id: auth0UserId });
@@ -156,10 +135,6 @@ const deleteAuth0User = async (auth0UserId) => {
  * @returns {Promise<Object|null>} Auth0 user object or null
  */
 const getAuth0UserByEmail = async (email) => {
-  if (!isAuth0Enabled()) {
-    return null;
-  }
-
   try {
     const management = getAuth0Client();
     // Auth0 SDK v5 API - list with email query
@@ -181,10 +156,6 @@ const getAuth0UserByEmail = async (email) => {
  * @returns {Promise<string>} Ticket URL
  */
 const sendPasswordResetEmail = async (email) => {
-  if (!isAuth0Enabled()) {
-    throw new Error('Auth0 integration is disabled. Cannot send password reset email.');
-  }
-
   try {
     const management = getAuth0Client();
     // Auth0 SDK v5 API - response is the ticket object directly
@@ -209,10 +180,6 @@ const sendPasswordResetEmail = async (email) => {
  * @returns {Promise<Object>} Auth0 role object
  */
 const createAuth0Role = async (roleData) => {
-  if (!isAuth0Enabled()) {
-    return null;
-  }
-
   try {
     const management = getAuth0Client();
 
@@ -236,10 +203,6 @@ const createAuth0Role = async (roleData) => {
  * @returns {Promise<Object>} Updated Auth0 role object
  */
 const updateAuth0Role = async (auth0RoleId, updateData) => {
-  if (!isAuth0Enabled()) {
-    return null;
-  }
-
   try {
     const management = getAuth0Client();
 
@@ -272,10 +235,6 @@ const updateAuth0Role = async (auth0RoleId, updateData) => {
  * @returns {Promise<void>}
  */
 const deleteAuth0Role = async (auth0RoleId) => {
-  if (!isAuth0Enabled()) {
-    return;
-  }
-
   try {
     const management = getAuth0Client();
     await management.roles.delete({ id: auth0RoleId });
@@ -291,10 +250,6 @@ const deleteAuth0Role = async (auth0RoleId) => {
  * @returns {Promise<Object|null>} Auth0 role object or null
  */
 const getAuth0RoleByName = async (name) => {
-  if (!isAuth0Enabled()) {
-    return null;
-  }
-
   try {
     const management = getAuth0Client();
     // Auth0 SDK v5 API - list roles with name filter
@@ -310,7 +265,6 @@ const getAuth0RoleByName = async (name) => {
 };
 
 module.exports = {
-  isAuth0Enabled,
   createAuth0User,
   updateAuth0User,
   deleteAuth0User,

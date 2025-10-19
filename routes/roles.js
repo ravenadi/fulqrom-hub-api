@@ -2,7 +2,6 @@ const express = require('express');
 const Role = require('../models/Role');
 const User = require('../models/User');
 const {
-  isAuth0Enabled,
   createAuth0Role,
   updateAuth0Role,
   deleteAuth0Role,
@@ -151,24 +150,22 @@ router.post('/', async (req, res) => {
 
     await role.save();
 
-    // Create role in Auth0 (if enabled)
+    // Create role in Auth0
     let auth0Role = null;
-    if (isAuth0Enabled()) {
-      try {
-        auth0Role = await createAuth0Role({
-          name: role.name,
-          description: role.description
-        });
+    try {
+      auth0Role = await createAuth0Role({
+        name: role.name,
+        description: role.description
+      });
 
-        // Store Auth0 role ID in MongoDB
-        if (auth0Role) {
-          role.auth0_id = auth0Role.id;
-          await role.save();
-        }
-      } catch (auth0Error) {
-        console.error('Auth0 role creation failed:', auth0Error.message);
-        // Continue even if Auth0 creation fails - role exists in MongoDB
+      // Store Auth0 role ID in MongoDB
+      if (auth0Role) {
+        role.auth0_id = auth0Role.id;
+        await role.save();
       }
+    } catch (auth0Error) {
+      console.error('Auth0 role creation failed:', auth0Error.message);
+      // Continue even if Auth0 creation fails - role exists in MongoDB
     }
 
     res.status(201).json({
@@ -236,9 +233,9 @@ router.put('/:id', async (req, res) => {
     role.updated_at = new Date();
     await role.save();
 
-    // Update role in Auth0 (if enabled and auth0_id exists)
+    // Update role in Auth0 (if auth0_id exists)
     let auth0Updated = false;
-    if (isAuth0Enabled() && role.auth0_id) {
+    if (role.auth0_id) {
       try {
         await updateAuth0Role(role.auth0_id, updateData);
         auth0Updated = true;
@@ -310,9 +307,9 @@ router.delete('/:id', async (req, res) => {
     // Delete from MongoDB
     await Role.findByIdAndDelete(id);
 
-    // Delete from Auth0 (if enabled and auth0_id exists)
+    // Delete from Auth0 (if auth0_id exists)
     let auth0Deleted = false;
-    if (isAuth0Enabled() && auth0Id) {
+    if (auth0Id) {
       try {
         await deleteAuth0Role(auth0Id);
         auth0Deleted = true;

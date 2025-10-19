@@ -6,7 +6,7 @@ const compression = require('compression');
 require('dotenv').config();
 
 const errorHandler = require('./middleware/errorHandler');
-const { conditionalAuth } = require('./middleware/auth0');
+const { requireAuth } = require('./middleware/auth0');
 const customersRouter = require('./routes/customers');
 const contactsRouter = require('./routes/contacts');
 const sitesRouter = require('./routes/sites');
@@ -61,8 +61,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Apply authentication to all API routes (except auth routes)
-// This middleware will check for user_id when USE_AUTH0=false or JWT token when USE_AUTH0=true
+// Apply authentication to all API routes (except public routes)
+// This middleware validates JWT tokens from Auth0
 app.use('/api', (req, res, next) => {
   // Skip authentication for auth, health, and dropdowns endpoints
   // Important: Auth endpoints must be public for login/signup flow
@@ -72,8 +72,15 @@ app.use('/api', (req, res, next) => {
     return next();
   }
   console.log(`🔒 Applying auth for protected endpoint: ${req.method} ${req.path}`);
-  // Apply conditional authentication
-  conditionalAuth(req, res, next);
+  // Apply Auth0 JWT authentication
+  requireAuth[0](req, res, (err) => {
+    if (err) {
+      console.log('❌ JWT validation failed:', err.message);
+      return next(err);
+    }
+    console.log('✅ JWT validation succeeded, attaching user...');
+    requireAuth[1](req, res, next);
+  });
 });
 
 // API routes

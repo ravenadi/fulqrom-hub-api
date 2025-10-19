@@ -3,7 +3,6 @@ const User = require('../models/User');
 const Role = require('../models/Role');
 const AuditLog = require('../models/AuditLog');
 const {
-  isAuth0Enabled,
   createAuth0User,
   updateAuth0User,
   deleteAuth0User,
@@ -200,28 +199,26 @@ router.post('/', async (req, res) => {
 
     await user.save();
 
-    // Create user in Auth0 (if enabled)
+    // Create user in Auth0
     let auth0User = null;
-    if (isAuth0Enabled()) {
-      try {
-        auth0User = await createAuth0User({
-          _id: user._id,
-          email: user.email,
-          full_name: user.full_name,
-          phone: user.phone,
-          is_active: user.is_active,
-          role_ids: user.role_ids
-        });
+    try {
+      auth0User = await createAuth0User({
+        _id: user._id,
+        email: user.email,
+        full_name: user.full_name,
+        phone: user.phone,
+        is_active: user.is_active,
+        role_ids: user.role_ids
+      });
 
-        // Store Auth0 user ID in MongoDB
-        if (auth0User) {
-          user.auth0_id = auth0User.user_id;
-          await user.save();
-        }
-      } catch (auth0Error) {
-        console.error('Auth0 user creation failed:', auth0Error.message);
-        // Continue even if Auth0 creation fails - user exists in MongoDB
+      // Store Auth0 user ID in MongoDB
+      if (auth0User) {
+        user.auth0_id = auth0User.user_id;
+        await user.save();
       }
+    } catch (auth0Error) {
+      console.error('Auth0 user creation failed:', auth0Error.message);
+      // Continue even if Auth0 creation fails - user exists in MongoDB
     }
 
     // Log audit
@@ -356,9 +353,9 @@ router.put('/:id', async (req, res) => {
     user.updated_at = new Date();
     await user.save();
 
-    // Update user in Auth0 (if enabled and auth0_id exists)
+    // Update user in Auth0 (if auth0_id exists)
     let auth0Updated = false;
-    if (isAuth0Enabled() && user.auth0_id) {
+    if (user.auth0_id) {
       try {
         await updateAuth0User(user.auth0_id, updateData);
         auth0Updated = true;
@@ -446,9 +443,9 @@ router.delete('/:id', async (req, res) => {
     // Delete from MongoDB
     await User.findByIdAndDelete(id);
 
-    // Delete from Auth0 (if enabled and auth0_id exists)
+    // Delete from Auth0 (if auth0_id exists)
     let auth0Deleted = false;
-    if (isAuth0Enabled() && auth0Id) {
+    if (auth0Id) {
       try {
         await deleteAuth0User(auth0Id);
         auth0Deleted = true;
@@ -542,9 +539,9 @@ router.post('/:id/deactivate', async (req, res) => {
     user.updated_at = new Date();
     await user.save();
 
-    // Block user in Auth0 (if enabled and auth0_id exists)
+    // Block user in Auth0 (if auth0_id exists)
     let auth0Updated = false;
-    if (isAuth0Enabled() && user.auth0_id) {
+    if (user.auth0_id) {
       try {
         await updateAuth0User(user.auth0_id, { is_active: false });
         auth0Updated = true;
