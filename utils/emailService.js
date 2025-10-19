@@ -264,7 +264,7 @@ class EmailService {
       uploaded_by_name: documentDetails.uploadedBy || 'Unknown',
       uploaded_date_formatted: formatAustralianDate(documentDetails.uploadedDate),
       document_description: documentDetails.description || '',
-      document_review_url: `${this.appBaseUrl}/document/${documentId}/review`
+      document_review_url: `${this.appBaseUrl}/hub/document/${documentId}/review`
     };
 
     return this.sendEmail({
@@ -311,7 +311,7 @@ class EmailService {
       review_date_formatted: formatAustralianDateTime(statusUpdate.reviewDate),
       comment: statusUpdate.comment || '',
       mentioned_users_list: mentionedUsersList,
-      document_url: `${this.appBaseUrl}/document/${documentId}/review`
+      document_url: `${this.appBaseUrl}/hub/document/${documentId}/review`
     };
 
     return this.sendEmail({
