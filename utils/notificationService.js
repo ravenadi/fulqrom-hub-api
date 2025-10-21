@@ -174,30 +174,61 @@ class NotificationService {
     const documentName = document.name || 'Unnamed Document';
     const actionUrl = `/hub/document/${documentId}/review`;
 
-    const notificationData = {
-      title: 'Document Approval Request',
-      message: `You have been assigned to approve the document "${documentName}"`,
-      type: 'document_approver_assigned',
-      priority: 'high',
-      documentId,
-      documentName,
-      actor: {
-        user_id: actor.userId || actor.user_id,
-        user_name: actor.userName || actor.user_name,
-        user_email: actor.userEmail || actor.user_email
-      },
-      actionUrl,
-      sendEmail: true,
-      emailTemplate: 'document_assignment',
-      emailVariables: {
-        document_name: documentName,
-        document_id: documentId,
-        assigned_by: actor.userName || actor.user_name,
-        action_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}`
-      }
+    // Format date in Australian format
+    const formatDate = (date) => {
+      if (!date) return new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      return new Date(date).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
-    return this.sendBulkNotifications(approvers, notificationData);
+    // Send individual email to each approver
+    const notifications = [];
+    for (const approver of approvers) {
+      const approverEmail = approver.userEmail || approver.user_email || approver.email;
+      const approverId = approver.userId || approver.user_id || approver.id;
+      const approverName = approver.userName || approver.user_name || approverEmail.split('@')[0];
+
+      const notificationData = {
+        title: 'Document Approval Request',
+        message: `You have been assigned to approve the document "${documentName}"`,
+        type: 'document_approver_assigned',
+        priority: 'high',
+        documentId,
+        documentName,
+        actor: {
+          user_id: actor.userId || actor.user_id,
+          user_name: actor.userName || actor.user_name,
+          user_email: actor.userEmail || actor.user_email
+        },
+        actionUrl,
+        sendEmail: true,
+        emailTemplate: 'document_assignment',
+        emailVariables: {
+          approver_name: approverName,
+          document_name: documentName,
+          document_id: documentId,
+          document_category: document.category || 'N/A',
+          document_type: document.type || 'N/A',
+          approval_status: document.approval_config?.status || document.status || 'Pending Approval',
+          uploaded_by_name: document.created_by?.user_name || actor.userName || actor.user_name || 'Unknown',
+          uploaded_date_formatted: formatDate(document.created_at || document.createdAt),
+          document_description: document.description || '',
+          document_review_url: `${process.env.CLIENT_URL || 'http://localhost:8080'}${actionUrl}`,
+          assigned_by: actor.userName || actor.user_name,
+          action_url: `${process.env.CLIENT_URL || 'http://localhost:8080'}${actionUrl}`
+        },
+        userId: approverId,
+        userEmail: approverEmail
+      };
+
+      try {
+        const notification = await this.sendNotification(notificationData);
+        notifications.push(notification);
+      } catch (error) {
+        console.error(`Failed to send notification to approver ${approverEmail}:`, error);
+      }
+    }
+
+    return notifications;
   }
 
   /**
