@@ -321,13 +321,22 @@ class TenantS3Service {
    */
   async uploadFileToTenantBucket(file, tenantId, organisationName, customPath = null) {
     try {
+      console.log('[tenantS3Service.js] uploadFileToTenantBucket called');
+      console.log('[tenantS3Service.js] Parameters:', {
+        tenant_id: tenantId,
+        organisation: organisationName
+      });
+
       const bucketName = this.generateBucketName(organisationName, tenantId);
-      
+      console.log('[tenantS3Service.js] Generated bucket name:', bucketName);
+
       // Ensure bucket exists
+      console.log('[tenantS3Service.js] Checking/creating tenant bucket...');
       await this.createTenantBucketIfNotExists(organisationName, tenantId);
 
       // Generate S3 key
       const s3Key = this.generateS3Key(file.originalname, customPath);
+      console.log('[tenantS3Service.js] Generated S3 key:', s3Key);
 
       // Upload command
       const uploadCommand = new PutObjectCommand({
@@ -345,7 +354,12 @@ class TenantS3Service {
         }
       });
 
+      console.log('[tenantS3Service.js] Sending upload command to tenant bucket...');
       const uploadResult = await s3Client.send(uploadCommand);
+      console.log('[tenantS3Service.js] Tenant S3 upload successful!', {
+        ETag: uploadResult.ETag,
+        VersionId: uploadResult.VersionId
+      });
 
       // Generate file URL
       const fileUrl = `https://${bucketName}.s3.${this.region}.amazonaws.com/${s3Key}`;

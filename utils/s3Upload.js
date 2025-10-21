@@ -150,14 +150,25 @@ function generateS3Key(customerId, originalname, customPath = null) {
  */
 async function uploadFileToS3(file, customerId, customPath = null) {
   try {
+    console.log('[s3Upload.js] uploadFileToS3 called');
+    console.log('[s3Upload.js] AWS Credentials check:', {
+      has_access_key: !!process.env.AWS_ACCESS_KEY_ID,
+      has_secret_key: !!process.env.AWS_SECRET_ACCESS_KEY,
+      region: process.env.AWS_DEFAULT_REGION,
+      bucket: process.env.AWS_BUCKET
+    });
+
     // Validate file
     const validation = validateFile(file);
     if (!validation.isValid) {
+      console.error('[s3Upload.js] File validation failed:', validation.errors);
       throw new Error(`File validation failed: ${validation.errors.join(', ')}`);
     }
+    console.log('[s3Upload.js] File validation passed');
 
     // Generate S3 key
     const s3Key = generateS3Key(customerId, file.originalname, customPath);
+    console.log('[s3Upload.js] Generated S3 key:', s3Key);
 
     // S3 upload command
     const uploadCommand = new PutObjectCommand({
@@ -174,8 +185,13 @@ async function uploadFileToS3(file, customerId, customPath = null) {
       }
     });
 
+    console.log('[s3Upload.js] Sending upload command to S3...');
     // Upload to S3
     const uploadResult = await s3Client.send(uploadCommand);
+    console.log('[s3Upload.js] S3 upload successful!', {
+      ETag: uploadResult.ETag,
+      VersionId: uploadResult.VersionId
+    });
 
     // Generate file URL
     const fileUrl = `${process.env.AWS_URL}/${s3Key}`;
