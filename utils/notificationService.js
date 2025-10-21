@@ -118,17 +118,43 @@ class NotificationService {
 
     for (const user of users) {
       try {
-        const userId = user.userId || user.user_id;
-        const userEmail = user.userEmail || user.user_email;
+        // Extract user ID and email with fallbacks for different property names
+        const userId = user.userId || user.user_id || user.id;
+        const userEmail = user.userEmail || user.user_email || user.email;
+
+        // Validate that we have both required fields
+        if (!userId || !userEmail) {
+          console.warn(`Skipping notification - missing required fields:`, {
+            userId,
+            userEmail,
+            receivedUser: user
+          });
+          continue;
+        }
+
+        // Validate that extracted values are strings, not objects
+        if (typeof userId !== 'string' || typeof userEmail !== 'string') {
+          console.warn(`Skipping notification - userId or userEmail is not a string:`, {
+            userId: typeof userId,
+            userEmail: typeof userEmail,
+            userIdValue: userId,
+            userEmailValue: userEmail,
+            receivedUser: user
+          });
+          continue;
+        }
+
+        // Create a clean copy of notificationData without userId/userEmail to avoid conflicts
+        const { userId: _ignoredUserId, userEmail: _ignoredUserEmail, ...cleanNotificationData } = notificationData;
 
         const notification = await this.sendNotification({
-          ...notificationData,
+          ...cleanNotificationData,
           userId: userId,
           userEmail: userEmail
         });
         notifications.push(notification);
       } catch (error) {
-        console.error(`Failed to send notification to user ${user.userId || user.user_id}:`, error);
+        console.error(`Failed to send notification to user ${user.userId || user.user_id || user.email}:`, error);
         // Continue with other users even if one fails
       }
     }
