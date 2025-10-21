@@ -6,24 +6,9 @@ const compression = require('compression');
 require('dotenv').config();
 
 const errorHandler = require('./middleware/errorHandler');
-const { requireAuth } = require('./middleware/auth0');
-const customersRouter = require('./routes/customers');
-const contactsRouter = require('./routes/contacts');
-const sitesRouter = require('./routes/sites');
-const buildingsRouter = require('./routes/buildings');
-const floorsRouter = require('./routes/floors');
-const assetsRouter = require('./routes/assets');
-const buildingTenantsRouter = require('./routes/tenants');
-const documentsRouter = require('./routes/documents');
-const hierarchyRouter = require('./routes/hierarchy');
-const dropdownsRouter = require('./routes/dropdowns');
-const vendorsRouter = require('./routes/vendors');
-const usersRouter = require('./routes/users');
-// const rolesRouter = require('./routes/roles'); //legacy roles api - DEPRECATED
-const rolesV2Router = require('./routes/v2/roles'); //new roles api
-const authRouter = require('./routes/auth');
-const notificationsRouter = require('./routes/notifications');
-const adminRouter = require('./routes/admin'); //super admin routes
+const authenticate = require('./middleware/authMiddleware');
+const authorize = require('./middleware/authorizationMiddleware');
+const { registerRoutes, getEndpointDocs } = require('./config/routes.config');
 
 const app = express();
 const PORT = process.env.PORT || 30001;
@@ -62,46 +47,13 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Apply authentication to all API routes (except public routes)
-// This middleware validates JWT tokens from Auth0
-app.use('/api', (req, res, next) => {
-  // Skip authentication for auth, health, and dropdowns endpoints
-  // Important: Auth endpoints must be public for login/signup flow
-  // Dropdowns are public to support forms that need dropdown data before authentication
-  if (req.path.startsWith('/auth') || req.path === '/health' || req.path.startsWith('/dropdowns') || req.path.startsWith('/admin')) {
-    console.log(`✓ Bypassing auth for public endpoint: ${req.method} ${req.path}`);
-    return next();
-  }
-  console.log(`🔒 Applying auth for protected endpoint: ${req.method} ${req.path}`);
-  // Apply Auth0 JWT authentication
-  requireAuth[0](req, res, (err) => {
-    if (err) {
-      console.log('❌ JWT validation failed:', err.message);
-      return next(err);
-    }
-    console.log('✅ JWT validation succeeded, attaching user...');
-    requireAuth[1](req, res, next);
-  });
-});
+// Apply authentication and authorization middleware to all API routes
+// These middlewares validate JWT tokens and check permissions
+app.use('/api', authenticate);
+app.use('/api', authorize);
 
-// API routes
-app.use('/api/auth', authRouter);
-app.use('/api/customers', customersRouter);
-app.use('/api/customers/:customerId/contacts', contactsRouter);
-app.use('/api/sites', sitesRouter);
-app.use('/api/buildings', buildingsRouter);
-app.use('/api/floors', floorsRouter);
-app.use('/api/assets', assetsRouter);
-app.use('/api/building-tenants', buildingTenantsRouter);
-app.use('/api/documents', documentsRouter);
-app.use('/api/hierarchy', hierarchyRouter);
-app.use('/api/dropdowns', dropdownsRouter);
-app.use('/api/vendors', vendorsRouter);
-app.use('/api/users', usersRouter);
-// app.use('/api/roles', rolesRouter); // DEPRECATED - legacy roles api
-app.use('/api/roles', rolesV2Router); // Main roles API (formerly V2)
-app.use('/api/notifications', notificationsRouter);
-app.use('/api/admin', adminRouter); //super admin routes
+// Register all API routes
+registerRoutes(app);
 
 // Handle 404 for API routes
 app.use('/api/*', (req, res) => {
@@ -112,33 +64,13 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-// Root endpoint
+// Root endpoint with dynamically generated documentation
 app.get('/', (req, res) => {
   res.json({
     message: 'Fulqrom Hub REST API',
     description: 'Australian Commercial Real Estate & HVAC Building Management System',
     version: '1.0.0',
-    endpoints: {
-      health: '/health',
-      customers: '/api/customers',
-      contacts: '/api/customers/:customerId/contacts',
-      sites: '/api/sites',
-      buildings: '/api/buildings',
-      floors: '/api/floors',
-      assets: '/api/assets',
-      building_tenants: '/api/building-tenants',
-      documents: '/api/documents',
-      hierarchy: '/api/hierarchy/:customer_id',
-      dropdowns: '/api/dropdowns',
-      dropdown_entities: '/api/dropdowns/entities/:entity',
-      document_tags: '/api/dropdowns/document-tags',
-      vendors: '/api/vendors',
-      users: '/api/users',
-      roles: '/api/roles',
-      roles_v2: '/api/v2/roles',
-      notifications: '/api/notifications',
-      admin: '/api/admin'
-    }
+    endpoints: getEndpointDocs()
   });
 });
 

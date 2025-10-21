@@ -5,7 +5,7 @@ const PermissionSchema = new mongoose.Schema({
   entity: {
     type: String,
     required: true,
-    enum: ['org', 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'analytics'],
+    enum: ['sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'analytics'],
     trim: true
   },
   view: {
@@ -90,7 +90,6 @@ RoleSchema.statics.getPredefinedRoles = function() {
       name: 'Admin',
       description: 'Full system access with all permissions',
       permissions: [
-        { entity: 'org', view: true, create: true, edit: true, delete: true },
         { entity: 'sites', view: true, create: true, edit: true, delete: true },
         { entity: 'buildings', view: true, create: true, edit: true, delete: true },
         { entity: 'floors', view: true, create: true, edit: true, delete: true },
@@ -121,34 +120,50 @@ RoleSchema.statics.getPredefinedRoles = function() {
     },
     {
       name: 'Building Manager',
-      description: 'Building management with limited permissions - can view, create, edit sites, buildings, floors, tenants; can delete documents, assets, vendors, users, analytics',
+      description: 'Building management with limited permissions - can view, create, edit buildings, floors, tenants; can delete documents, assets, vendors, users; limited analytics',
       permissions: [
-        { entity: 'sites', view: true, create: true, edit: true, delete: false },
+        { entity: 'sites', view: false, create: false, edit: false, delete: false },
         { entity: 'buildings', view: true, create: true, edit: true, delete: false },
         { entity: 'floors', view: true, create: true, edit: true, delete: false },
         { entity: 'tenants', view: true, create: true, edit: true, delete: false },
         { entity: 'documents', view: true, create: true, edit: true, delete: true },
         { entity: 'assets', view: true, create: true, edit: true, delete: true },
         { entity: 'vendors', view: true, create: true, edit: true, delete: true },
+        { entity: 'customers', view: false, create: false, edit: false, delete: false },
         { entity: 'users', view: true, create: true, edit: true, delete: true },
-        { entity: 'analytics', view: true, create: true, edit: true, delete: true }
+        { entity: 'analytics', view: true, create: true, edit: false, delete: false }
       ]
     },
     {
       name: 'Contractor',
       description: 'Contractor access with limited permissions - can view buildings, floors, assets; can create documents',
       permissions: [
+        { entity: 'sites', view: false, create: false, edit: false, delete: false },
         { entity: 'buildings', view: true, create: false, edit: false, delete: false },
         { entity: 'floors', view: true, create: false, edit: false, delete: false },
+        { entity: 'tenants', view: false, create: false, edit: false, delete: false },
         { entity: 'documents', view: true, create: true, edit: false, delete: false },
-        { entity: 'assets', view: true, create: false, edit: false, delete: false }
+        { entity: 'assets', view: true, create: false, edit: false, delete: false },
+        { entity: 'vendors', view: false, create: false, edit: false, delete: false },
+        { entity: 'customers', view: false, create: false, edit: false, delete: false },
+        { entity: 'users', view: false, create: false, edit: false, delete: false },
+        { entity: 'analytics', view: false, create: false, edit: false, delete: false }
       ]
     },
     {
       name: 'Tenants',
       description: 'Building tenants with minimal access - can only view floors',
       permissions: [
-        { entity: 'floors', view: true, create: false, edit: false, delete: false }
+        { entity: 'sites', view: false, create: false, edit: false, delete: false },
+        { entity: 'buildings', view: false, create: false, edit: false, delete: false },
+        { entity: 'floors', view: true, create: false, edit: false, delete: false },
+        { entity: 'tenants', view: false, create: false, edit: false, delete: false },
+        { entity: 'documents', view: false, create: false, edit: false, delete: false },
+        { entity: 'assets', view: false, create: false, edit: false, delete: false },
+        { entity: 'vendors', view: false, create: false, edit: false, delete: false },
+        { entity: 'customers', view: false, create: false, edit: false, delete: false },
+        { entity: 'users', view: false, create: false, edit: false, delete: false },
+        { entity: 'analytics', view: false, create: false, edit: false, delete: false }
       ]
     }
   ];

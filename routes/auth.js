@@ -47,6 +47,7 @@ router.post('/sync-user', async (req, res) => {
             auth0_id: user.auth0_id,
             is_active: user.is_active,
             role_ids: user.role_ids,
+            role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
             resource_access: user.resource_access
           }
         });
@@ -80,6 +81,7 @@ router.post('/sync-user', async (req, res) => {
           auth0_id: user.auth0_id,
           is_active: user.is_active,
           role_ids: user.role_ids,
+          role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
           resource_access: user.resource_access
         }
       });
@@ -98,6 +100,7 @@ router.post('/sync-user', async (req, res) => {
         auth0_id: user.auth0_id,
         is_active: user.is_active,
         role_ids: user.role_ids,
+        role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
         resource_access: user.resource_access
       }
     });
@@ -140,6 +143,7 @@ router.get('/user/:auth0_id', async (req, res) => {
         auth0_id: user.auth0_id,
         is_active: user.is_active,
         role_ids: user.role_ids,
+        role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
         resource_access: user.resource_access
       }
     });

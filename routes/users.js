@@ -1,6 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
-const RoleV2 = require('../models/v2/Role');
+const Role = require('../models/Role');
 const AuditLog = require('../models/AuditLog');
 const {
   createAuth0User,
@@ -10,6 +10,7 @@ const {
   ensureAuth0User,
   syncUserRoles
 } = require('../services/auth0Service');
+const { validateUserCreation, validateUserElevation, getAccessibleResources } = require('../middleware/authorizationRules');
 
 const router = express.Router();
 
@@ -26,6 +27,36 @@ async function logAudit(logData, req) {
 
   }
 }
+
+// GET /api/users/:id/accessible-resources - Get resources accessible to user for assignment (Rule 1)
+router.get('/:id/accessible-resources', async (req, res) => {
+  try {
+    const { id: userId } = req.params;
+    const { resource_type } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
+    const accessibleResources = await getAccessibleResources(userId, resource_type);
+
+    res.json({
+      success: true,
+      data: accessibleResources
+    });
+
+  } catch (error) {
+    console.error('Error getting accessible resources:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting accessible resources',
+      error: error.message
+    });
+  }
+});
 
 // GET /api/users - Get all users with roles
 router.get('/', async (req, res) => {
@@ -112,7 +143,10 @@ router.get('/:id', async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: user
+      data: {
+        ...user.toObject(),
+        role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User'
+      }
     });
 
   } catch (error) {
@@ -126,7 +160,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/users - Create user
-router.post('/', async (req, res) => {
+router.post('/', validateUserCreation, async (req, res) => {
   try {
     let {
       email,
@@ -197,7 +231,7 @@ router.post('/', async (req, res) => {
 
     // Validate role IDs if provided
     if (role_ids && role_ids.length > 0) {
-      const validRoles = await RoleV2.find({ _id: { $in: role_ids } });
+      const validRoles = await Role.find({ _id: { $in: role_ids } });
       if (validRoles.length !== role_ids.length) {
         return res.status(400).json({
           success: false,
@@ -282,7 +316,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/users/:id - Update user
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateUserElevation, async (req, res) => {
   const { id } = req.params;
   try {
     let {
@@ -345,7 +379,7 @@ router.put('/:id', async (req, res) => {
 
     // Validate role IDs if provided
     if (role_ids && role_ids.length > 0) {
-      const validRoles = await RoleV2.find({ _id: { $in: role_ids } });
+      const validRoles = await Role.find({ _id: { $in: role_ids } });
       if (validRoles.length !== role_ids.length) {
         return res.status(400).json({
           success: false,

@@ -22,16 +22,12 @@ const mongoose = require('mongoose');
 const checkResourcePermission = (resourceType, action, getResourceId) => {
   return async (req, res, next) => {
     try {
-      // Get authenticated user ID
-      // TODO: Replace this with your actual authentication middleware that sets req.user
-      // For now, we'll accept user_id from body, query, or params
-      const userId = req.user?.id || req.user?._id || req.body?.user_id || req.query?.user_id || req.headers?.['x-user-id'];
-
-      if (!userId) {
+      // req.user is already populated by auth0.js middleware with MongoDB user data
+      // If req.user exists, it means authentication succeeded
+      if (!req.user) {
         return res.status(401).json({
           success: false,
-          message: 'Authentication required. Please provide user_id in request.',
-          hint: 'Add x-user-id header or user_id query parameter'
+          message: 'Authentication required.'
         });
       }
 
@@ -44,33 +40,14 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         });
       }
 
-      // Fetch user with roles and permissions populated
-      // Try different lookup strategies based on userId format
-      let user = null;
-
-      // Strategy 1: If userId is a valid MongoDB ObjectId (24 hex chars), try finding by _id
-      const isValidObjectId = mongoose.Types.ObjectId.isValid(userId) &&
-                              /^[0-9a-fA-F]{24}$/.test(userId);
-
-      if (isValidObjectId) {
-        user = await User.findById(userId).populate('role_ids').catch(() => null);
-      }
-
-      // Strategy 2: If not found, try finding by auth0_id (e.g., "auth0|...")
-      if (!user) {
-        user = await User.findOne({ auth0_id: userId }).populate('role_ids');
-      }
-
-      // Strategy 3: If still not found, try finding by custom_id field (for demo users)
-      if (!user) {
-        user = await User.findOne({ custom_id: userId }).populate('role_ids');
-      }
+      // req.user already has the user data from MongoDB with populated roles
+      // We need to re-fetch to ensure role_ids are populated with full role objects
+      const user = await User.findById(req.user._id).populate('role_ids');
 
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: 'User not found',
-          hint: 'The user_id does not match any user in the database'
+          message: 'User not found in system.'
         });
       }
 
@@ -82,16 +59,29 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         });
       }
 
-      // Map action to permission field
+      // CHECK 0: Bypass permission checks for Admin role
+      if (user.role_ids && user.role_ids.length > 0) {
+        const hasAdminRole = user.role_ids.some(role =>
+          role.is_active && (role.name === 'Admin' || role.name === 'admin' || role.name === 'ADMIN')
+        );
+
+        if (hasAdminRole) {
+          console.log(`✅ Admin bypass: ${user.email} has Admin role - granting access`);
+          req.permissionSource = 'admin_role';
+          return next();
+        }
+      }
+
+      // Map action to permission field (using v2 schema: view, create, edit, delete)
       const permissionMap = {
-        'view': 'can_view',
-        'read': 'can_view',
-        'create': 'can_create',
-        'add': 'can_create',
-        'edit': 'can_edit',
-        'update': 'can_edit',
-        'delete': 'can_delete',
-        'remove': 'can_delete'
+        'view': 'view',
+        'read': 'view',
+        'create': 'create',
+        'add': 'create',
+        'edit': 'edit',
+        'update': 'edit',
+        'delete': 'delete',
+        'remove': 'delete'
       };
       const permissionField = permissionMap[action.toLowerCase()];
 
@@ -127,13 +117,27 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
       // CHECK 2: Role-based module permissions (fallback)
       // This allows users with module-level permissions to access all resources
       if (user.role_ids && user.role_ids.length > 0) {
-        const moduleName = `${resourceType}s`; // 'customer' -> 'customers'
+        // Map resource types to module names
+        const moduleNameMap = {
+          'org': 'org',
+          'site': 'sites',
+          'building': 'buildings', 
+          'floor': 'floors',
+          'tenant': 'tenants',
+          'document': 'documents',
+          'asset': 'assets',
+          'vendor': 'vendors',
+          'customer': 'customers',
+          'user': 'users',
+          'analytics': 'analytics'
+        };
+        const moduleName = moduleNameMap[resourceType] || `${resourceType}s`;
 
         for (const role of user.role_ids) {
           if (!role.is_active) continue; // Skip inactive roles
 
           const modulePermission = role.permissions?.find(
-            p => p.module_name === moduleName
+            p => p.entity === moduleName
           );
 
           if (modulePermission && modulePermission[permissionField]) {
@@ -182,44 +186,23 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
 const checkModulePermission = (moduleName, action) => {
   return async (req, res, next) => {
     try {
-      // Get authenticated user ID
-      const userId = req.user?.id || req.user?._id || req.body?.user_id || req.query?.user_id || req.headers?.['x-user-id'];
-
-      if (!userId) {
+      // req.user is already populated by auth0.js middleware with MongoDB user data
+      // If req.user exists, it means authentication succeeded
+      if (!req.user) {
         return res.status(401).json({
           success: false,
-          message: 'Authentication required. Please provide user_id in request.',
-          hint: 'Add x-user-id header or user_id query parameter'
+          message: 'Authentication required.'
         });
       }
 
-      // Fetch user with roles populated
-      // Try different lookup strategies based on userId format
-      let user = null;
-
-      // Strategy 1: If userId is a valid MongoDB ObjectId (24 hex chars), try finding by _id
-      const isValidObjectId = mongoose.Types.ObjectId.isValid(userId) &&
-                              /^[0-9a-fA-F]{24}$/.test(userId);
-
-      if (isValidObjectId) {
-        user = await User.findById(userId).populate('role_ids').catch(() => null);
-      }
-
-      // Strategy 2: If not found, try finding by auth0_id (e.g., "auth0|...")
-      if (!user) {
-        user = await User.findOne({ auth0_id: userId }).populate('role_ids');
-      }
-
-      // Strategy 3: If still not found, try finding by custom_id field (for demo users)
-      if (!user) {
-        user = await User.findOne({ custom_id: userId }).populate('role_ids');
-      }
+      // req.user already has the user data from MongoDB with populated roles
+      // We need to re-fetch to ensure role_ids are populated with full role objects
+      const user = await User.findById(req.user._id).populate('role_ids');
 
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: 'User not found',
-          hint: 'The user_id does not match any user in the database'
+          message: 'User not found in system.'
         });
       }
 
@@ -231,16 +214,29 @@ const checkModulePermission = (moduleName, action) => {
         });
       }
 
-      // Map action to permission field
+      // CHECK 0: Bypass permission checks for Admin role
+      if (user.role_ids && user.role_ids.length > 0) {
+        const hasAdminRole = user.role_ids.some(role =>
+          role.is_active && (role.name === 'Admin' || role.name === 'admin' || role.name === 'ADMIN')
+        );
+
+        if (hasAdminRole) {
+          console.log(`✅ Admin bypass: ${user.email} has Admin role - granting access to ${moduleName}`);
+          req.permissionSource = 'admin_role';
+          return next();
+        }
+      }
+
+      // Map action to permission field (using v2 schema: view, create, edit, delete)
       const permissionMap = {
-        'view': 'can_view',
-        'read': 'can_view',
-        'create': 'can_create',
-        'add': 'can_create',
-        'edit': 'can_edit',
-        'update': 'can_edit',
-        'delete': 'can_delete',
-        'remove': 'can_delete'
+        'view': 'view',
+        'read': 'view',
+        'create': 'create',
+        'add': 'create',
+        'edit': 'edit',
+        'update': 'edit',
+        'delete': 'delete',
+        'remove': 'delete'
       };
       const permissionField = permissionMap[action.toLowerCase()];
 
@@ -250,7 +246,7 @@ const checkModulePermission = (moduleName, action) => {
           if (!role.is_active) continue;
 
           const modulePermission = role.permissions?.find(
-            p => p.module_name === moduleName
+            p => p.entity === moduleName
           );
 
           if (modulePermission && modulePermission[permissionField]) {

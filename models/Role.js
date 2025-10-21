@@ -1,38 +1,39 @@
 const mongoose = require('mongoose');
 
-// Role Permission schema (embedded in Role)
-const RolePermissionSchema = new mongoose.Schema({
-  module_name: {
+// Permission schema for each entity/module
+const PermissionSchema = new mongoose.Schema({
+  entity: {
     type: String,
     required: true,
-    enum: ['customers', 'sites', 'buildings', 'floors', 'assets', 'tenants', 'documents', 'vendors', 'users', 'roles'],
+    enum: [ 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'analytics'],
     trim: true
   },
-  can_view: {
+  view: {
     type: Boolean,
     default: false
   },
-  can_create: {
+  create: {
     type: Boolean,
     default: false
   },
-  can_edit: {
+  edit: {
     type: Boolean,
     default: false
   },
-  can_delete: {
+  delete: {
     type: Boolean,
     default: false
   }
 }, { _id: false });
 
-// Main Role schema
+// Main Role schema for v2 API
 const RoleSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
     unique: true,
-    trim: true
+    trim: true,
+    enum: ['Admin', 'Property Manager', 'Building Manager', 'Contractor', 'Tenants']
   },
   description: {
     type: String,
@@ -42,15 +43,8 @@ const RoleSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  permissions: [RolePermissionSchema],
-
-  // Auth0 integration
-  auth0_id: {
-    type: String,
-    sparse: true,
-    index: true
-  },
-
+  permissions: [PermissionSchema],
+  
   // Audit fields
   created_at: {
     type: Date,
@@ -89,4 +83,104 @@ RoleSchema.virtual('user_count', {
 RoleSchema.set('toJSON', { virtuals: true });
 RoleSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('LegacyRole', RoleSchema);
+// Static method to get predefined roles with their permissions
+RoleSchema.statics.getPredefinedRoles = function() {
+  return [
+    {
+      name: 'Admin',
+      description: 'Full system access with all permissions',
+      permissions: [
+        { entity: 'sites', view: true, create: true, edit: true, delete: true },
+        { entity: 'buildings', view: true, create: true, edit: true, delete: true },
+        { entity: 'floors', view: true, create: true, edit: true, delete: true },
+        { entity: 'tenants', view: true, create: true, edit: true, delete: true },
+        { entity: 'documents', view: true, create: true, edit: true, delete: true },
+        { entity: 'assets', view: true, create: true, edit: true, delete: true },
+        { entity: 'vendors', view: true, create: true, edit: true, delete: true },
+        { entity: 'customers', view: true, create: true, edit: true, delete: true },
+        { entity: 'users', view: true, create: true, edit: true, delete: true },
+        { entity: 'analytics', view: true, create: true, edit: true, delete: true }
+      ]
+    },
+    {
+      name: 'Property Manager',
+      description: 'Property management with access to sites, buildings, floors, tenants, documents, assets, vendors, customers, users, and analytics',
+      permissions: [
+        { entity: 'sites', view: true, create: true, edit: true, delete: true },
+        { entity: 'buildings', view: true, create: true, edit: true, delete: true },
+        { entity: 'floors', view: true, create: true, edit: true, delete: true },
+        { entity: 'tenants', view: true, create: true, edit: true, delete: true },
+        { entity: 'documents', view: true, create: true, edit: true, delete: true },
+        { entity: 'assets', view: true, create: true, edit: true, delete: true },
+        { entity: 'vendors', view: true, create: true, edit: true, delete: true },
+        { entity: 'customers', view: true, create: true, edit: true, delete: true },
+        { entity: 'users', view: true, create: true, edit: true, delete: true },
+        { entity: 'analytics', view: true, create: true, edit: true, delete: true }
+      ]
+    },
+    {
+      name: 'Building Manager',
+      description: 'Building management with limited permissions - can view, create, edit buildings, floors, tenants; can delete documents, assets, vendors, users; limited analytics',
+      permissions: [
+        { entity: 'sites', view: false, create: false, edit: false, delete: false },
+        { entity: 'buildings', view: true, create: true, edit: true, delete: false },
+        { entity: 'floors', view: true, create: true, edit: true, delete: false },
+        { entity: 'tenants', view: true, create: true, edit: true, delete: false },
+        { entity: 'documents', view: true, create: true, edit: true, delete: true },
+        { entity: 'assets', view: true, create: true, edit: true, delete: true },
+        { entity: 'vendors', view: true, create: true, edit: true, delete: true },
+        { entity: 'customers', view: false, create: false, edit: false, delete: false },
+        { entity: 'users', view: true, create: true, edit: true, delete: true },
+        { entity: 'analytics', view: true, create: true, edit: false, delete: false }
+      ]
+    },
+    {
+      name: 'Contractor',
+      description: 'Contractor access with limited permissions - can view buildings, floors, assets; can create documents',
+      permissions: [
+        { entity: 'sites', view: false, create: false, edit: false, delete: false },
+        { entity: 'buildings', view: true, create: false, edit: false, delete: false },
+        { entity: 'floors', view: true, create: false, edit: false, delete: false },
+        { entity: 'tenants', view: false, create: false, edit: false, delete: false },
+        { entity: 'documents', view: true, create: true, edit: false, delete: false },
+        { entity: 'assets', view: true, create: false, edit: false, delete: false },
+        { entity: 'vendors', view: false, create: false, edit: false, delete: false },
+        { entity: 'customers', view: false, create: false, edit: false, delete: false },
+        { entity: 'users', view: false, create: false, edit: false, delete: false },
+        { entity: 'analytics', view: false, create: false, edit: false, delete: false }
+      ]
+    },
+    {
+      name: 'Tenants',
+      description: 'Building tenants with minimal access - can only view floors',
+      permissions: [
+        { entity: 'sites', view: false, create: false, edit: false, delete: false },
+        { entity: 'buildings', view: false, create: false, edit: false, delete: false },
+        { entity: 'floors', view: true, create: false, edit: false, delete: false },
+        { entity: 'tenants', view: false, create: false, edit: false, delete: false },
+        { entity: 'documents', view: false, create: false, edit: false, delete: false },
+        { entity: 'assets', view: false, create: false, edit: false, delete: false },
+        { entity: 'vendors', view: false, create: false, edit: false, delete: false },
+        { entity: 'customers', view: false, create: false, edit: false, delete: false },
+        { entity: 'users', view: false, create: false, edit: false, delete: false },
+        { entity: 'analytics', view: false, create: false, edit: false, delete: false }
+      ]
+    }
+  ];
+};
+
+// Static method to initialize predefined roles
+RoleSchema.statics.initializePredefinedRoles = async function() {
+  const predefinedRoles = this.getPredefinedRoles();
+  
+  for (const roleData of predefinedRoles) {
+    const existingRole = await this.findOne({ name: roleData.name });
+    if (!existingRole) {
+      const role = new this(roleData);
+      await role.save();
+      console.log(`Created predefined role: ${roleData.name}`);
+    }
+  }
+};
+
+module.exports = mongoose.model('Role', RoleSchema);

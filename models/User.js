@@ -5,7 +5,7 @@ const ResourceAccessSchema = new mongoose.Schema({
   resource_type: {
     type: String,
     required: true,
-    enum: ['customer', 'site', 'building', 'floor', 'asset', 'tenant', 'vendor'],
+    enum: ['org', 'site', 'building', 'floor', 'tenant', 'document', 'asset', 'vendor', 'customer', 'user', 'analytics'],
     trim: true
   },
   resource_id: {
@@ -83,7 +83,7 @@ const UserSchema = new mongoose.Schema({
   // Roles (many-to-many using array of role IDs)
   role_ids: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'RoleV2'
+    ref: 'Role'
   }],
 
   // Resource access assignments

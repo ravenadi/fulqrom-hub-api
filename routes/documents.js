@@ -17,6 +17,7 @@ const {
   validateQueryParams,
   validateObjectId
 } = require('../middleware/documentValidation');
+const { applyScopeFiltering } = require('../middleware/authorizationRules');
 
 // TODO: Refactor to use centralized authHelper.getUserId() instead of req.user?.userId || req.user?.sub
 const {
@@ -146,7 +147,7 @@ async function fetchEntityNames(documentData) {
 }
 
 // GET /api/documents - List all documents with advanced search and filtering
-router.get('/', checkModulePermission('documents', 'view'), validateQueryParams, async (req, res) => {
+router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering('document'), validateQueryParams, async (req, res) => {
   try {
     const sanitizedQuery = sanitizeQuery(req.query);
     const {

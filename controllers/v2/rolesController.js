@@ -1,4 +1,4 @@
-const RoleV2 = require('../../models/v2/Role');
+const Role = require('../../models/Role');
 const User = require('../../models/User');
 
 /**
@@ -23,12 +23,12 @@ const getAllRoles = async (req, res) => {
 
     // Fetch roles
     const [roles, totalRoles] = await Promise.all([
-      RoleV2.find(filterQuery)
+      Role.find(filterQuery)
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      RoleV2.countDocuments(filterQuery)
+      Role.countDocuments(filterQuery)
     ]);
 
     // Get user counts for each role
@@ -79,7 +79,7 @@ const getRoleById = async (req, res) => {
       });
     }
 
-    const role = await RoleV2.findById(id);
+    const role = await Role.findById(id);
 
     if (!role) {
       return res.status(404).json({
@@ -119,7 +119,7 @@ const getRoleByName = async (req, res) => {
   try {
     const { name } = req.params;
 
-    const role = await RoleV2.findOne({ name: name });
+    const role = await Role.findOne({ name: name });
 
     if (!role) {
       return res.status(404).json({
@@ -160,7 +160,7 @@ const initializePredefinedRoles = async (req, res) => {
     // TODO: Add admin permission check here
     // For now, allowing any authenticated user to initialize
     
-    await RoleV2.initializePredefinedRoles();
+    await Role.initializePredefinedRoles();
 
     res.status(200).json({
       success: true,
@@ -184,7 +184,7 @@ const initializePredefinedRoles = async (req, res) => {
  */
 const getPermissionsMatrix = async (req, res) => {
   try {
-    const roles = await RoleV2.find({ is_active: true }).lean();
+    const roles = await Role.find({ is_active: true }).lean();
     
     // Create permissions matrix
     const entities = ['org', 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'analytics'];
