@@ -1,12 +1,11 @@
 const mongoose = require('mongoose');
-const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Permission schema for each entity/module
 const PermissionSchema = new mongoose.Schema({
   entity: {
     type: String,
     required: true,
-    enum: [ 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'analytics'],
+    enum: [ 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'analytics', 'organisations'],
     trim: true
   },
   view: {
@@ -184,7 +183,6 @@ RoleSchema.statics.initializePredefinedRoles = async function() {
   }
 };
 
-// Apply tenant plugin for multi-tenancy support
-RoleSchema.plugin(tenantPlugin);
+// Roles are global and not tenant-scoped
 
 module.exports = mongoose.model('Role', RoleSchema);

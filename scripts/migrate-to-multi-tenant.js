@@ -27,7 +27,6 @@ require('dotenv').config();
 
 // Import models
 const Organization = require('../models/Organization');
-const UserOrganization = require('../models/UserOrganization');
 const Plan = require('../models/Plan');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
@@ -172,33 +171,21 @@ async function migrateToMultiTenant() {
       slug: defaultOrganization.slug
     };
 
-    // Step 4: Assign all users to default organization
-    console.log('\n📋 Step 4: Assigning users to default organization...');
+    // Step 4: Update users with tenant_id
+    console.log('\n📋 Step 4: Updating users with tenant_id...');
     const users = await User.find({});
     console.log(`   Found ${users.length} users`);
 
-    let usersAssigned = 0;
+    let usersUpdated = 0;
     for (const user of users) {
-      // Check if user is already assigned
-      const existing = await UserOrganization.findOne({
-        user_id: user._id,
-        organization_id: defaultOrganization._id
-      });
-
-      if (!existing) {
-        await UserOrganization.create({
-          user_id: user._id,
-          organization_id: defaultOrganization._id,
-          is_primary: true,
-          status: 'active',
-          accepted_at: new Date()
-        });
-        usersAssigned++;
+      if (!user.tenant_id) {
+        await User.findByIdAndUpdate(user._id, { tenant_id: defaultOrganization._id });
+        usersUpdated++;
       }
     }
 
-    console.log(`   ✓ ${usersAssigned} users assigned to organization`);
-    migrationReport.statistics.usersAssigned = usersAssigned;
+    console.log(`   ✓ ${usersUpdated} users updated with tenant_id`);
+    migrationReport.statistics.usersUpdated = usersUpdated;
 
     // Step 5: Update all tenant-scoped collections
     console.log('\n📋 Step 5: Adding tenant_id to all records...');
@@ -322,11 +309,11 @@ async function migrateToMultiTenant() {
     console.log('─────────────────────');
     console.log(`Default Organization: ${defaultOrganization.name}`);
     console.log(`Organization ID: ${defaultOrganization._id}`);
-    console.log(`Users Assigned: ${migrationReport.statistics.usersAssigned || 0}`);
+    console.log(`Users Updated: ${migrationReport.statistics.usersUpdated || 0}`);
 
     console.log('\nRecords Migrated:');
     for (const [modelName, stats] of Object.entries(migrationReport.statistics)) {
-      if (modelName !== 'usersAssigned' && modelName !== 'organizationUsage' && stats.total) {
+      if (modelName !== 'usersUpdated' && modelName !== 'organizationUsage' && stats.total) {
         console.log(`  ${modelName}: ${stats.migrated}/${stats.total}`);
       }
     }

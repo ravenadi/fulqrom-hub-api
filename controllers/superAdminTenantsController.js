@@ -1,4 +1,4 @@
-const Customer = require('../models/Customer');
+const Tenant = require('../models/Tenant');
 const User = require('../models/User');
 const Document = require('../models/Document');
 const Site = require('../models/Site');
@@ -34,17 +34,16 @@ const getAllTenants = async (req, res) => {
     
     if (search) {
       filter.$or = [
-        { 'organisation.organisation_name': { $regex: search, $options: 'i' } },
-        { 'organisation.email_domain': { $regex: search, $options: 'i' } },
-        { 'company_profile.business_number': { $regex: search, $options: 'i' } }
+        { 'tenant_name': { $regex: search, $options: 'i' } },
+        { 'phone': { $regex: search, $options: 'i' } }
       ];
     }
 
     if (active !== undefined) {
-      filter.is_active = active === 'true';
+      filter.status = active === 'true' ? 'active' : 'inactive';
     }
 
-    // For plan_id, we can query the Customer model directly
+    // For plan_id, we can query the Tenant model directly
     if (plan_id) {
       filter.plan_id = plan_id;
     }
@@ -57,25 +56,24 @@ const getAllTenants = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(per_page);
     
     const [tenants, total] = await Promise.all([
-      Customer.find(filter)
-        .populate('organisation', 'organisation_name email_domain')
+      Tenant.find(filter)
         .populate('plan_id', 'name plan_tier price time_period')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(per_page))
         .lean(),
-      Customer.countDocuments(filter)
+      Tenant.countDocuments(filter)
     ]);
 
     // Format tenants with additional data
-    const formattedTenants = await Promise.all(tenants.map(async (customer) => {
-      const usersCount = await User.countDocuments({ customer_id: customer._id });
-      const sitesCount = await Site.countDocuments({ customer_id: customer._id });
-      const buildingsCount = await Building.countDocuments({ customer_id: customer._id });
-      const documentsCount = await Document.countDocuments({ customer_id: customer._id });
+    const formattedTenants = await Promise.all(tenants.map(async (tenant) => {
+      const usersCount = await User.countDocuments({ tenant_id: tenant._id });
+      const sitesCount = await Site.countDocuments({ tenant_id: tenant._id });
+      const buildingsCount = await Building.countDocuments({ tenant_id: tenant._id });
+      const documentsCount = await Document.countDocuments({ tenant_id: tenant._id });
 
       // Get users list with basic info
-      const users = await User.find({ customer_id: customer._id })
+      const users = await User.find({ tenant_id: tenant._id })
         .select('full_name email phone is_active created_at')
         .limit(10)
         .lean();
@@ -83,33 +81,33 @@ const getAllTenants = async (req, res) => {
       // Get last activity from AuditLog
       const lastActivity = await AuditLog.findOne({ 
         resource_type: 'tenant',
-        resource_id: customer._id 
+        resource_id: tenant._id 
       })
         .sort({ created_at: -1 })
         .select('action created_at user_email')
         .lean();
 
       return {
-        id: customer._id,
-        name: customer.organisation?.organisation_name || 'N/A',
-        email_domain: customer.organisation?.email_domain || 'N/A',
-        organisation_id: customer._id, // In Node.js, Customer is the top-level tenant
-        is_active: customer.is_active,
-        is_active_label: customer.is_active ? 'Active' : 'Inactive',
-        status: customer.is_active ? 'active' : 'inactive',
-        plan: customer.plan_id ? {
-          id: customer.plan_id._id,
-          name: customer.plan_id.name,
-          price: customer.plan_id.price,
-          time_period: customer.plan_id.time_period
+        id: tenant._id,
+        name: tenant.tenant_name || 'N/A',
+        email_domain: 'N/A', // Tenant model doesn't have email_domain
+        organisation_id: tenant._id, // Tenant is the top-level entity
+        is_active: tenant.status === 'active',
+        is_active_label: tenant.status === 'active' ? 'Active' : 'Inactive',
+        status: tenant.status,
+        plan: tenant.plan_id ? {
+          id: tenant.plan_id._id,
+          name: tenant.plan_id.name,
+          price: tenant.plan_id.price,
+          time_period: tenant.plan_id.time_period
         } : null,
         plan_status: {
-          is_active: customer.is_active,
-          is_trial: customer.is_trial,
-          plan_start_date: customer.plan_start_date,
-          plan_end_date: customer.plan_end_date,
-          trial_start_date: customer.trial_start_date,
-          trial_end_date: customer.trial_end_date,
+          is_active: tenant.status === 'active',
+          is_trial: tenant.status === 'trial',
+          plan_start_date: null, // Tenant model doesn't have these fields
+          plan_end_date: null,
+          trial_start_date: null,
+          trial_end_date: null,
         },
         users_count: usersCount,
         users: users.map(user => ({
@@ -128,8 +126,8 @@ const getAllTenants = async (req, res) => {
           date: lastActivity.created_at,
           user: lastActivity.user_email
         } : null,
-        created_at: customer.created_at,
-        updated_at: customer.updated_at
+        created_at: tenant.created_at,
+        updated_at: tenant.updated_at
       };
     }));
 
@@ -161,8 +159,7 @@ const getTenantById = async (req, res) => {
   try {
     const { tenant } = req.params;
 
-    const tenantData = await Customer.findById(tenant)
-      .populate('organisation')
+    const tenantData = await Tenant.findById(tenant)
       .populate('plan_id', 'name plan_tier price time_period')
       .lean();
 
@@ -272,32 +269,14 @@ const createTenant = async (req, res) => {
       });
     }
 
-    // Check if tenant with same email domain exists (only if email_domain is provided)
-    if (email_domain) {
-      const existingTenant = await Customer.findOne({ 'organisation.email_domain': email_domain });
-      if (existingTenant) {
-        return res.status(422).json({
-          success: false,
-          message: 'Validation failed',
-          errors: {
-            email_domain: ['The email domain has already been taken.']
-          }
-        });
-      }
-    }
+    // Note: Tenant model doesn't have email_domain field, so we skip this check
+    // Email domain validation would need to be handled differently if required
 
     // Create tenant
-    const tenant = new Customer({
-      organisation: {
-        organisation_name: tenantName,
-        email_domain: email_domain || null // Allow null like Laravel version
-      },
-      company_profile: {
-        business_number: business_number
-      },
-      address: address,
+    const tenant = new Tenant({
+      tenant_name: tenantName,
       phone: phone,
-      is_active: tenantStatus
+      status: tenantStatus ? 'active' : 'inactive'
     });
 
     await tenant.save();
@@ -308,25 +287,16 @@ const createTenant = async (req, res) => {
       console.log(`🚀 Creating S3 bucket for tenant: ${tenant._id}`);
       const tenantS3Service = new TenantS3Service();
       s3BucketInfo = await tenantS3Service.createTenantBucketIfNotExists(
-        tenant.organisation.organisation_name,
+        tenant.tenant_name,
         tenant._id.toString()
       );
 
       if (s3BucketInfo.success) {
         console.log(`✅ S3 bucket created successfully: ${s3BucketInfo.bucket_name}`);
         
-        // Store S3 bucket info in tenant metadata
-        const metadata = tenant.metadata || {};
-        metadata.s3_bucket = {
-          bucket_name: s3BucketInfo.bucket_name,
-          org_slug: s3BucketInfo.org_slug,
-          region: s3BucketInfo.region,
-          status: s3BucketInfo.status,
-          created_at: new Date().toISOString()
-        };
-        
-        tenant.metadata = metadata;
-        await tenant.save();
+        // Store S3 bucket info in tenant metadata (if Tenant model supports metadata)
+        // Note: Tenant model is simplified and may not have metadata field
+        // This would need to be added to the Tenant schema if required
       } else {
         console.error(`❌ Failed to create S3 bucket: ${s3BucketInfo.error}`);
       }
@@ -343,8 +313,8 @@ const createTenant = async (req, res) => {
     // Update tenant with plan information if plan_id provided
     if (plan_id) {
       tenant.plan_id = plan_id;
-      tenant.plan_start_date = new Date();
-      tenant.is_trial = false;
+      // Note: Tenant model doesn't have plan_start_date or is_trial fields
+      // These would need to be added to the Tenant schema if required
       await tenant.save();
     }
 
@@ -357,7 +327,7 @@ const createTenant = async (req, res) => {
       user_email: req.superAdmin?.email,
       details: {
         tenant_name: tenantName,
-        email_domain: email_domain
+        phone: phone
       }
     });
 
@@ -366,12 +336,12 @@ const createTenant = async (req, res) => {
       message: 'Tenant created successfully',
       data: {
         id: tenant._id,
-        name: tenant.organisation.organisation_name,
-        email_domain: tenant.organisation.email_domain,
+        name: tenant.tenant_name,
+        email_domain: 'N/A', // Tenant model doesn't have email_domain
         organisation_id: tenant._id,
-        is_active: tenant.is_active,
-        is_active_label: tenant.is_active ? 'Active' : 'Inactive',
-        status: tenant.is_active ? 'active' : 'inactive',
+        is_active: tenant.status === 'active',
+        is_active_label: tenant.status === 'active' ? 'Active' : 'Inactive',
+        status: tenant.status,
         s3_bucket: s3BucketInfo ? {
           bucket_name: s3BucketInfo.bucket_name,
           status: s3BucketInfo.status,
@@ -445,17 +415,8 @@ const provisionTenant = async (req, res) => {
       });
     }
 
-    // Check if tenant with same email domain exists
-    const existingTenant = await Customer.findOne({ 'organisation.email_domain': email_domain });
-    if (existingTenant) {
-      return res.status(422).json({
-        success: false,
-        message: 'Validation failed',
-        errors: {
-          email_domain: ['The email domain has already been taken.']
-        }
-      });
-    }
+    // Note: Tenant model doesn't have email_domain field
+    // Email domain validation would need to be handled differently if required
 
     // Prepare provisioning data
     const provisioningData = {
@@ -595,7 +556,7 @@ const updateTenant = async (req, res) => {
       });
     }
 
-    const tenantData = await Customer.findById(tenant);
+    const tenantData = await Tenant.findById(tenant);
     if (!tenantData) {
       return res.status(404).json({
         success: false,
@@ -603,36 +564,19 @@ const updateTenant = async (req, res) => {
       });
     }
 
-    // Check if email domain is being changed and if it conflicts
-    if (email_domain && email_domain !== tenantData.organisation?.email_domain) {
-      const existingTenant = await Customer.findOne({ 
-        'organisation.email_domain': email_domain,
-        _id: { $ne: tenant } 
-      });
-      if (existingTenant) {
-        return res.status(422).json({
-          success: false,
-          message: 'Validation failed',
-          errors: {
-            email_domain: ['The email domain has already been taken.']
-          }
-        });
-      }
-    }
+    // Note: Tenant model doesn't have email_domain field
+    // Email domain validation would need to be handled differently if required
 
     // Update tenant data
     const updateData = {};
-    if (name !== undefined) updateData['organisation.organisation_name'] = name;
-    if (email_domain !== undefined) updateData['organisation.email_domain'] = email_domain;
-    if (business_number !== undefined) updateData['company_profile.business_number'] = business_number;
-    if (address !== undefined) updateData.address = address;
+    if (name !== undefined) updateData.tenant_name = name;
     if (phone !== undefined) updateData.phone = phone;
     
     // Handle status - use status if provided, otherwise use is_active
     if (status !== undefined) {
-      updateData.is_active = status === 'active';
+      updateData.status = status === 'active' ? 'active' : 'inactive';
     } else if (is_active !== undefined) {
-      updateData.is_active = is_active;
+      updateData.status = is_active ? 'active' : 'inactive';
     }
     
     // Handle plan_id
@@ -640,18 +584,13 @@ const updateTenant = async (req, res) => {
       if (plan_id === '' || plan_id === null) {
         // Remove plan assignment
         updateData.plan_id = null;
-        updateData.plan_start_date = null;
-        updateData.plan_end_date = null;
-        updateData.is_trial = true;
       } else {
         // Assign new plan
         updateData.plan_id = plan_id;
-        updateData.plan_start_date = new Date();
-        updateData.is_trial = false;
       }
     }
 
-    const updatedTenant = await Customer.findByIdAndUpdate(
+    const updatedTenant = await Tenant.findByIdAndUpdate(
       tenant,
       updateData,
       { new: true, runValidators: true }
@@ -673,12 +612,12 @@ const updateTenant = async (req, res) => {
       message: 'Tenant updated successfully',
       data: {
         id: updatedTenant._id,
-        name: updatedTenant.organisation.organisation_name,
-        email_domain: updatedTenant.organisation.email_domain,
+        name: updatedTenant.tenant_name,
+        email_domain: 'N/A', // Tenant model doesn't have email_domain
         organisation_id: updatedTenant._id,
-        is_active: updatedTenant.is_active,
-        is_active_label: updatedTenant.is_active ? 'Active' : 'Inactive',
-        status: updatedTenant.is_active ? 'active' : 'inactive',
+        is_active: updatedTenant.status === 'active',
+        is_active_label: updatedTenant.status === 'active' ? 'Active' : 'Inactive',
+        status: updatedTenant.status,
         plan: updatedTenant.plan_id ? {
           id: updatedTenant.plan_id._id,
           name: updatedTenant.plan_id.name,
@@ -686,12 +625,12 @@ const updateTenant = async (req, res) => {
           time_period: updatedTenant.plan_id.time_period
         } : null,
         plan_status: {
-          is_active: updatedTenant.is_active,
-          is_trial: updatedTenant.is_trial,
-          plan_start_date: updatedTenant.plan_start_date,
-          plan_end_date: updatedTenant.plan_end_date,
-          trial_start_date: updatedTenant.trial_start_date,
-          trial_end_date: updatedTenant.trial_end_date,
+          is_active: updatedTenant.status === 'active',
+          is_trial: updatedTenant.status === 'trial',
+          plan_start_date: null, // Tenant model doesn't have these fields
+          plan_end_date: null,
+          trial_start_date: null,
+          trial_end_date: null,
         },
         created_at: updatedTenant.created_at,
         updated_at: updatedTenant.updated_at
@@ -715,7 +654,7 @@ const deleteTenant = async (req, res) => {
   try {
     const { tenant } = req.params;
 
-    const tenantData = await Customer.findById(tenant);
+    const tenantData = await Tenant.findById(tenant);
     if (!tenantData) {
       return res.status(404).json({
         success: false,
@@ -724,7 +663,7 @@ const deleteTenant = async (req, res) => {
     }
 
     // Check if tenant has users
-    const usersCount = await User.countDocuments({ customer_id: tenant });
+    const usersCount = await User.countDocuments({ tenant_id: tenant });
     if (usersCount > 0) {
       return res.status(400).json({
         success: false,
@@ -732,8 +671,8 @@ const deleteTenant = async (req, res) => {
       });
     }
 
-    // Soft delete - set is_active to false
-    tenantData.is_active = false;
+    // Soft delete - set status to inactive
+    tenantData.status = 'inactive';
     await tenantData.save();
 
     // Log audit
@@ -744,7 +683,7 @@ const deleteTenant = async (req, res) => {
       user_id: req.superAdmin?.id,
       user_email: req.superAdmin?.email,
       details: {
-        tenant_name: tenantData.organisation?.organisation_name
+        tenant_name: tenantData.tenant_name
       }
     });
 
@@ -770,7 +709,7 @@ const getTenantStats = async (req, res) => {
   try {
     const { tenant } = req.params;
 
-    const tenantData = await Customer.findById(tenant);
+    const tenantData = await Tenant.findById(tenant);
     if (!tenantData) {
       return res.status(404).json({
         success: false,
@@ -780,23 +719,22 @@ const getTenantStats = async (req, res) => {
 
     const [
       totalUsers, totalDocuments, totalSites, totalBuildings, totalFloors,
-      totalAssets, totalVendors, subscription
+      totalAssets, totalVendors
     ] = await Promise.all([
-      User.countDocuments({ customer_id: tenant }),
-      Document.countDocuments({ customer_id: tenant }),
-      Site.countDocuments({ customer_id: tenant }),
-      Building.countDocuments({ customer_id: tenant }),
-      Floor.countDocuments({ customer_id: tenant }),
-      Asset.countDocuments({ customer_id: tenant }),
-      Vendor.countDocuments({ customer_id: tenant }),
-      Subscription.findOne({ tenant_id: tenant }).populate('plan')
+      User.countDocuments({ tenant_id: tenant }),
+      Document.countDocuments({ tenant_id: tenant }),
+      Site.countDocuments({ tenant_id: tenant }),
+      Building.countDocuments({ tenant_id: tenant }),
+      Floor.countDocuments({ tenant_id: tenant }),
+      Asset.countDocuments({ tenant_id: tenant }),
+      Vendor.countDocuments({ tenant_id: tenant })
     ]);
 
     res.status(200).json({
       success: true,
       data: {
         tenant_id: tenant,
-        tenant_name: tenantData.organisation?.organisation_name,
+        tenant_name: tenantData.tenant_name,
         total_users: totalUsers,
         total_documents: totalDocuments,
         total_sites: totalSites,
@@ -804,13 +742,7 @@ const getTenantStats = async (req, res) => {
         total_floors: totalFloors,
         total_assets: totalAssets,
         total_vendors: totalVendors,
-        subscription: subscription ? {
-          plan_name: subscription.plan?.name,
-          status: subscription.status,
-          is_trial: subscription.is_trial,
-          start_date: subscription.start_date,
-          end_date: subscription.end_date
-        } : null,
+        subscription: null, // Tenant model doesn't have subscription details
         generated_at: new Date()
       }
     });
@@ -837,7 +769,7 @@ const updateTenantRestrictions = async (req, res) => {
       max_storage_gb
     } = req.body;
 
-    const tenantData = await Customer.findById(tenant);
+    const tenantData = await Tenant.findById(tenant);
     if (!tenantData) {
       return res.status(404).json({
         success: false,
@@ -906,7 +838,7 @@ const updateStatus = async (req, res) => {
       });
     }
 
-    const tenantData = await Customer.findById(tenant);
+    const tenantData = await Tenant.findById(tenant);
     if (!tenantData) {
       return res.status(404).json({
         success: false,
@@ -914,7 +846,7 @@ const updateStatus = async (req, res) => {
       });
     }
 
-    tenantData.is_active = is_active;
+    tenantData.status = is_active ? 'active' : 'inactive';
     tenantData.updated_at = new Date();
     await tenantData.save();
 
@@ -923,7 +855,7 @@ const updateStatus = async (req, res) => {
       message: 'Tenant status updated successfully',
       data: {
         id: tenantData._id,
-        is_active: tenantData.is_active,
+        is_active: tenantData.status === 'active',
         updated_at: tenantData.updated_at
       }
     });
@@ -945,9 +877,7 @@ const getLocationData = async (req, res) => {
   try {
     const { tenant } = req.params;
 
-    const tenantData = await Customer.findById(tenant)
-      .populate('organisation')
-      .lean();
+    const tenantData = await Tenant.findById(tenant).lean();
 
     if (!tenantData) {
       return res.status(404).json({
@@ -960,13 +890,13 @@ const getLocationData = async (req, res) => {
       success: true,
       data: {
         id: tenantData._id,
-        name: tenantData.organisation?.organisation_name || 'N/A',
-        address: tenantData.organisation?.address || {},
+        name: tenantData.tenant_name || 'N/A',
+        address: {}, // Tenant model doesn't have address field
         location: {
-          country: tenantData.organisation?.address?.country || 'N/A',
-          state: tenantData.organisation?.address?.state || 'N/A',
-          city: tenantData.organisation?.address?.city || 'N/A',
-          postal_code: tenantData.organisation?.address?.postal_code || 'N/A'
+          country: 'N/A',
+          state: 'N/A',
+          city: 'N/A',
+          postal_code: 'N/A'
         }
       }
     });
@@ -997,14 +927,14 @@ const getSubscriptions = async (req, res) => {
     // Add search filter
     if (search) {
       query.$or = [
-        { 'organisation.organisation_name': { $regex: search, $options: 'i' } },
-        { 'organisation.email_domain': { $regex: search, $options: 'i' } }
+        { 'tenant_name': { $regex: search, $options: 'i' } },
+        { 'phone': { $regex: search, $options: 'i' } }
       ];
     }
 
     // Add status filter
     if (status) {
-      query.is_active = status === 'active';
+      query.status = status === 'active' ? 'active' : 'inactive';
     }
 
     // Add plan filter
@@ -1015,29 +945,29 @@ const getSubscriptions = async (req, res) => {
     const skip = (page - 1) * perPage;
     
     const [tenants, total] = await Promise.all([
-      Customer.find(query)
+      Tenant.find(query)
         .populate('plan_id', 'name plan_tier price time_period')
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(perPage),
-      Customer.countDocuments(query)
+      Tenant.countDocuments(query)
     ]);
 
     const subscriptions = tenants.map(tenant => ({
       id: tenant._id,
       tenant_id: tenant._id,
-      organisation_name: tenant.organisation?.organisation_name || 'Unknown',
-      email_domain: tenant.organisation?.email_domain || '',
+      organisation_name: tenant.tenant_name || 'Unknown',
+      email_domain: 'N/A', // Tenant model doesn't have email_domain
       plan_name: tenant.plan_id?.name || 'No Plan',
       plan_tier: tenant.plan_id?.plan_tier || '',
       plan_price: tenant.plan_id?.price || 0,
       plan_period: tenant.plan_id?.time_period || 'monthly',
-      is_active: tenant.is_active,
-      is_trial: tenant.is_trial,
-      plan_start_date: tenant.plan_start_date,
-      plan_end_date: tenant.plan_end_date,
-      trial_start_date: tenant.trial_start_date,
-      trial_end_date: tenant.trial_end_date,
+      is_active: tenant.status === 'active',
+      is_trial: tenant.status === 'trial',
+      plan_start_date: null, // Tenant model doesn't have these fields
+      plan_end_date: null,
+      trial_start_date: null,
+      trial_end_date: null,
       created_at: tenant.created_at,
       updated_at: tenant.updated_at
     }));
@@ -1084,7 +1014,7 @@ const subscribe = async (req, res) => {
     }
 
     // Check if tenant exists
-    const tenantDoc = await Customer.findById(tenant);
+    const tenantDoc = await Tenant.findById(tenant);
     if (!tenantDoc) {
       return res.status(404).json({
         success: false,
@@ -1103,15 +1033,12 @@ const subscribe = async (req, res) => {
 
     // Update tenant with subscription details
     const updateData = {
-      plan_id: plan_id,
-      plan_start_date: plan_start_date ? new Date(plan_start_date) : new Date(),
-      plan_end_date: plan_end_date ? new Date(plan_end_date) : null,
-      is_trial: is_trial || false,
-      trial_start_date: trial_start_date ? new Date(trial_start_date) : null,
-      trial_end_date: trial_end_date ? new Date(trial_end_date) : null
+      plan_id: plan_id
+      // Note: Tenant model doesn't have plan_start_date, plan_end_date, is_trial, etc.
+      // These fields would need to be added to the Tenant schema if required
     };
 
-    const updatedTenant = await Customer.findByIdAndUpdate(
+    const updatedTenant = await Tenant.findByIdAndUpdate(
       tenant,
       updateData,
       { new: true, runValidators: true }
@@ -1138,15 +1065,15 @@ const subscribe = async (req, res) => {
       data: {
         id: updatedTenant._id,
         tenant_id: updatedTenant._id,
-        organisation_name: updatedTenant.organisation?.organisation_name,
+        organisation_name: updatedTenant.tenant_name,
         plan_name: updatedTenant.plan_id?.name,
         plan_tier: updatedTenant.plan_id?.plan_tier,
-        is_active: updatedTenant.is_active,
-        is_trial: updatedTenant.is_trial,
-        plan_start_date: updatedTenant.plan_start_date,
-        plan_end_date: updatedTenant.plan_end_date,
-        trial_start_date: updatedTenant.trial_start_date,
-        trial_end_date: updatedTenant.trial_end_date
+        is_active: updatedTenant.status === 'active',
+        is_trial: updatedTenant.status === 'trial',
+        plan_start_date: null, // Tenant model doesn't have these fields
+        plan_end_date: null,
+        trial_start_date: null,
+        trial_end_date: null
       }
     });
   } catch (error) {
@@ -1181,7 +1108,7 @@ const updateSubscriptionStatus = async (req, res) => {
     }
 
     // Find tenant by subscription ID (in this case, tenant ID)
-    const tenant = await Customer.findById(id).populate('plan_id');
+    const tenant = await Tenant.findById(id).populate('plan_id');
     if (!tenant) {
       return res.status(404).json({
         success: false,
@@ -1193,16 +1120,16 @@ const updateSubscriptionStatus = async (req, res) => {
     let updateData = {};
     switch (status) {
       case 'active':
-        updateData.is_active = true;
+        updateData.status = 'active';
         break;
       case 'inactive':
       case 'suspended':
       case 'cancelled':
-        updateData.is_active = false;
+        updateData.status = 'inactive';
         break;
     }
 
-    const updatedTenant = await Customer.findByIdAndUpdate(
+    const updatedTenant = await Tenant.findByIdAndUpdate(
       id,
       updateData,
       { new: true, runValidators: true }
@@ -1215,7 +1142,7 @@ const updateSubscriptionStatus = async (req, res) => {
       resource_type: 'Customer',
       resource_id: id,
       details: {
-        old_status: tenant.is_active ? 'active' : 'inactive',
+        old_status: tenant.status,
         new_status: status,
         plan_name: tenant.plan_id?.name
       },
@@ -1229,10 +1156,10 @@ const updateSubscriptionStatus = async (req, res) => {
       data: {
         id: updatedTenant._id,
         tenant_id: updatedTenant._id,
-        organisation_name: updatedTenant.organisation?.organisation_name,
+        organisation_name: updatedTenant.tenant_name,
         plan_name: updatedTenant.plan_id?.name,
         status: status,
-        is_active: updatedTenant.is_active,
+        is_active: updatedTenant.status === 'active',
         updated_at: updatedTenant.updated_at
       }
     });
@@ -1241,6 +1168,106 @@ const updateSubscriptionStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error updating subscription status: ' + error.message
+    });
+  }
+};
+
+/**
+ * Get all users for a specific tenant
+ * @route GET /api/admin/tenants/:tenant/users
+ * @access Super Admin only
+ */
+const getTenantUsers = async (req, res) => {
+  try {
+    const { tenant } = req.params;
+    const {
+      page = 1,
+      limit = 15,
+      search,
+      is_active,
+      role_id
+    } = req.query;
+
+    // Validate tenant ID
+    if (!tenant.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tenant ID format'
+      });
+    }
+
+    // Check if tenant exists
+    const tenantExists = await Tenant.findById(tenant);
+    if (!tenantExists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant not found'
+      });
+    }
+
+    // Build filter query for users
+    let filterQuery = { tenant_id: tenant };
+
+    if (is_active !== undefined) {
+      filterQuery.is_active = is_active === 'true';
+    }
+
+    if (role_id) {
+      filterQuery.role_ids = role_id;
+    }
+
+    // Search by name or email
+    if (search) {
+      filterQuery.$or = [
+        { full_name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Fetch users with roles populated
+    const [users, totalUsers] = await Promise.all([
+      User.find(filterQuery)
+        .populate('role_ids', 'name description permissions')
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      User.countDocuments(filterQuery)
+    ]);
+
+    // Format users for response
+    const formattedUsers = users.map(user => ({
+      id: user._id,
+      full_name: user.full_name,
+      email: user.email,
+      phone: user.phone,
+      is_active: user.is_active,
+      roles: user.role_ids || [],
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+      auth0_id: user.auth0_id
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formattedUsers.length,
+      total: totalUsers,
+      page: pageNum,
+      pages: Math.ceil(totalUsers / limitNum),
+      data: formattedUsers
+    });
+
+  } catch (error) {
+    console.error('Error fetching tenant users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching tenant users',
+      error: error.message
     });
   }
 };
@@ -1256,6 +1283,7 @@ module.exports = {
   updateTenantRestrictions,
   updateStatus,
   getLocationData,
+  getTenantUsers,
   getSubscriptions,
   subscribe,
   updateSubscriptionStatus

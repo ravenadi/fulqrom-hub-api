@@ -585,6 +585,65 @@ router.get('/tenants/:tenant/location-data',
   SuperAdminTenantsController.getLocationData
 );
 
+/**
+ * @swagger
+ * /api/admin/tenants/{tenant}/users:
+ *   get:
+ *     summary: Get all users for a specific tenant
+ *     tags: [Super Admin - Tenants]
+ *     security:
+ *       - SuperAdminAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tenant
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Tenant ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 15
+ *         description: Items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by name or email
+ *       - in: query
+ *         name: is_active
+ *         schema:
+ *           type: boolean
+ *         description: Filter by active status
+ *       - in: query
+ *         name: role_id
+ *         schema:
+ *           type: string
+ *         description: Filter by role
+ *     responses:
+ *       200:
+ *         description: Tenant users retrieved successfully
+ *       404:
+ *         description: Tenant not found
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Super admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.get('/tenants/:tenant/users',
+  
+  SuperAdminTenantsController.getTenantUsers
+);
+
 // ===== USER MANAGEMENT ROUTES =====
 
 /**
@@ -857,12 +916,6 @@ router.get('/users/roles',
  *       - SuperAdminAuth: []
  *     parameters:
  *       - in: query
- *         name: tenant_id
- *         required: true
- *         schema:
- *           type: string
- *         description: Tenant ID
- *       - in: query
  *         name: search
  *         schema:
  *           type: string
@@ -870,8 +923,6 @@ router.get('/users/roles',
  *     responses:
  *       200:
  *         description: Roles retrieved successfully
- *       400:
- *         description: Tenant ID is required
  *       401:
  *         description: Authentication required
  *       403:
@@ -911,8 +962,6 @@ router.get('/roles',
  *                 type: string
  *               permissions:
  *                 type: array
- *               tenant_id:
- *                 type: string
  *     responses:
  *       201:
  *         description: Role created successfully
@@ -1093,8 +1142,6 @@ router.get('/roles/permissions/available',
  *               user_id:
  *                 type: string
  *               role_id:
- *                 type: string
- *               tenant_id:
  *                 type: string
  *     responses:
  *       200:

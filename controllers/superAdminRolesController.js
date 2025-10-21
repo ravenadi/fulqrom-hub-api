@@ -10,15 +10,7 @@ const AuditLog = require('../models/AuditLog');
  */
 const getAllRoles = async (req, res) => {
   try {
-    const { tenant_id, search } = req.query;
-
-    // Validate tenant_id is required
-    if (!tenant_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Tenant ID is required'
-      });
-    }
+    const { search } = req.query;
 
     // Build filter query
     let filter = {};
@@ -38,8 +30,7 @@ const getAllRoles = async (req, res) => {
     const rolesWithCounts = await Promise.all(
       roles.map(async (role) => {
         const usersCount = await User.countDocuments({ 
-          role_ids: role._id,
-          customer_id: tenant_id 
+          role_ids: role._id
         });
 
         return {
@@ -83,8 +74,7 @@ const createRole = async (req, res) => {
       description,
       document_type,
       engineering_discipline,
-      permissions = [],
-      tenant_id
+      permissions = []
     } = req.body;
 
     // Validate required fields
@@ -122,7 +112,6 @@ const createRole = async (req, res) => {
       description,
       document_type,
       engineering_discipline,
-      tenant_id: tenant_id || null,
       permissions,
       is_active: true,
       created_by: req.superAdmin?.email || 'super_admin'
@@ -138,8 +127,7 @@ const createRole = async (req, res) => {
       user_id: req.superAdmin?.id,
       user_email: req.superAdmin?.email,
       details: {
-        role_name: name,
-        tenant_id: tenant_id
+        role_name: name
       }
     });
 
@@ -455,7 +443,7 @@ const getAvailablePermissions = async (req, res) => {
  */
 const assignRole = async (req, res) => {
   try {
-    const { user_id, role_id, tenant_id } = req.body;
+    const { user_id, role_id } = req.body;
 
     // Validate required fields
     const validationErrors = {};

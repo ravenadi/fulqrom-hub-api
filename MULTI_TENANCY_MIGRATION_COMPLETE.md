@@ -18,8 +18,6 @@ The multi-tenancy migration has been successfully completed for the Fulqrom Hub 
 - **tenants** (6 records) - Master tenant table
 - **plans** (3 records) - Global subscription plans
 - **superadmins** (1 record) - Global super admin users
-- **legacyroles** (6 records) - Legacy global roles
-- **roles_legacy** (9 records) - Legacy global roles
 
 ### Tenant-Scoped Collections (WITH tenant_id) ✅
 
@@ -295,9 +293,7 @@ All tenant-scoped models have these indexes:
 
 ⚠️ **BuildingTenant**: Represents lessees/offices in buildings, NOT the organizational tenant
 
-⚠️ **Legacy Collections**: `documents_legacy`, `roles_legacy`, `legacyroles` are not migrated (deprecated)
-
-⚠️ **Global Collections**: Plans, superadmins, and legacy role tables remain global (no tenant_id)
+⚠️ **Global Collections**: Plans and superadmins remain global (no tenant_id)
 
 ---
 

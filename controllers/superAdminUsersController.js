@@ -470,30 +470,16 @@ const getTenants = async (req, res) => {
  */
 const getRoles = async (req, res) => {
   try {
-    const { tenant_id } = req.query;
-    
     let filter = { is_active: true };
-    
-    // If tenant_id is provided, filter roles for that tenant + global roles (null tenant_id)
-    if (tenant_id) {
-      filter.$or = [
-        { tenant_id: null }, // Global roles
-        { tenant_id: tenant_id } // Tenant-specific roles
-      ];
-    } else {
-      // If no tenant specified, return global roles only
-      filter.tenant_id = null;
-    }
 
     const roles = await Role.find(filter)
-      .select('_id name tenant_id')
+      .select('_id name')
       .sort({ name: 1 })
       .lean();
 
     const formattedRoles = roles.map(role => ({
       id: role._id,
-      name: role.name,
-      tenant_id: role.tenant_id
+      name: role.name
     }));
 
     res.status(200).json({

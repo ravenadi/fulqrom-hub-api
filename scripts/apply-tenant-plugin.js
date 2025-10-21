@@ -16,9 +16,7 @@ const MODELS_DIR = path.join(__dirname, '../models');
 // Models that should NOT have the tenant plugin
 const EXCLUDED_MODELS = [
   'Organization.js',      // This IS the tenant
-  'Plan.js',             // Global subscription plans
-  'UserOrganization.js', // Junction table, uses organization_id not tenant_id
-  'Role_Legacy.js'       // Legacy model, might be deprecated
+  'Plan.js'              // Global subscription plans
 ];
 
 // Models that need tenant plugin
