@@ -295,12 +295,14 @@ class ReminderService {
     // Add approvers from approval_config
     if (document.approval_config && document.approval_config.approvers) {
       document.approval_config.approvers.forEach(approver => {
-        if (approver.user_email && !seenEmails.has(approver.user_email)) {
+        // Support both 'email' and 'user_email' field names
+        const approverEmail = approver.user_email || approver.email;
+        if (approverEmail && !seenEmails.has(approverEmail)) {
           recipients.push({
-            user_id: approver.user_id || approver.user_email,
-            user_email: approver.user_email
+            user_id: approver.user_id || approverEmail,
+            user_email: approverEmail
           });
-          seenEmails.add(approver.user_email);
+          seenEmails.add(approverEmail);
         }
       });
     }
