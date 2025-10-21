@@ -83,7 +83,7 @@ const UserSchema = new mongoose.Schema({
   // Roles (many-to-many using array of role IDs)
   role_ids: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Role'
+    ref: 'RoleV2'
   }],
 
   // Resource access assignments

@@ -252,15 +252,266 @@ const deleteAuth0Role = async (auth0RoleId) => {
 const getAuth0RoleByName = async (name) => {
   try {
     const management = getAuth0Client();
-    // Auth0 SDK v5 API - list roles with name filter
-    const result = await management.roles.list({
-      name_filter: name
-    });
-    // Result structure: { roles: [...], start: 0, limit: 50, length: 1, total: 1 }
-    return result.roles && result.roles.length > 0 ? result.roles[0] : null;
+    // Auth0 SDK v5 API - list all roles and filter by name
+    const result = await management.roles.list();
+    
+    // Auth0 SDK v5 returns roles in the 'data' property
+    const roles = result.data || result.roles || [];
+    
+    // Filter roles by name (case-insensitive)
+    const matchingRole = roles.find(role => 
+      role.name && role.name.toLowerCase() === name.toLowerCase()
+    );
+    
+    return matchingRole || null;
   } catch (error) {
     console.error('Auth0 get role by name error:', error);
     return null;
+  }
+};
+
+/**
+ * Assign roles to an Auth0 user
+ * @param {string} auth0UserId - Auth0 user ID
+ * @param {Array<string>} roleIds - Array of MongoDB role IDs
+ * @returns {Promise<Object>} Assignment result
+ */
+const assignRolesToUser = async (auth0UserId, roleIds) => {
+  try {
+    const management = getAuth0Client();
+    
+    if (!roleIds || roleIds.length === 0) {
+      console.log('No roles to assign');
+      return { assigned: 0, skipped: 0 };
+    }
+
+    // Get Auth0 roles that correspond to our MongoDB role IDs
+    const auth0RoleIds = [];
+    let assignedCount = 0;
+    let skippedCount = 0;
+
+    for (const roleId of roleIds) {
+      try {
+        // Find the role in our MongoDB to get the name
+        const RoleV2 = require('../models/v2/Role');
+        const role = await RoleV2.findById(roleId);
+        
+        if (!role) {
+          console.log(`⚠️ MongoDB role not found: ${roleId}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Find corresponding Auth0 role by name
+        const auth0Role = await getAuth0RoleByName(role.name);
+        
+        if (auth0Role) {
+          auth0RoleIds.push(auth0Role.id);
+          console.log(`✅ Found Auth0 role for "${role.name}": ${auth0Role.id}`);
+        } else {
+          console.log(`⚠️ Auth0 role not found for "${role.name}", creating it...`);
+          try {
+            // Create Auth0 role if it doesn't exist
+            const newAuth0Role = await createAuth0Role({
+              name: role.name,
+              description: role.description || `Role: ${role.name}`
+            });
+            auth0RoleIds.push(newAuth0Role.id);
+            console.log(`🆕 Created Auth0 role "${role.name}": ${newAuth0Role.id}`);
+          } catch (createError) {
+            console.error(`Failed to create Auth0 role "${role.name}":`, createError.message);
+            skippedCount++;
+            continue;
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing role ${roleId}:`, error.message);
+        skippedCount++;
+      }
+    }
+
+    // Assign roles to user in Auth0
+    if (auth0RoleIds.length > 0) {
+      await management.users.roles.assign(auth0UserId, { roles: auth0RoleIds });
+      assignedCount = auth0RoleIds.length;
+      console.log(`✅ Assigned ${assignedCount} roles to Auth0 user: ${auth0UserId}`);
+    }
+
+    return { assigned: assignedCount, skipped: skippedCount };
+  } catch (error) {
+    console.error('Auth0 assign roles error:', error);
+    throw new Error(`Failed to assign roles in Auth0: ${error.message}`);
+  }
+};
+
+/**
+ * Remove roles from an Auth0 user
+ * @param {string} auth0UserId - Auth0 user ID
+ * @param {Array<string>} roleIds - Array of MongoDB role IDs to remove
+ * @returns {Promise<Object>} Removal result
+ */
+const removeRolesFromUser = async (auth0UserId, roleIds) => {
+  try {
+    const management = getAuth0Client();
+    
+    if (!roleIds || roleIds.length === 0) {
+      console.log('No roles to remove');
+      return { removed: 0, skipped: 0 };
+    }
+
+    const auth0RoleIds = [];
+    let removedCount = 0;
+    let skippedCount = 0;
+
+    for (const roleId of roleIds) {
+      try {
+        // Find the role in our MongoDB to get the name
+        const RoleV2 = require('../models/v2/Role');
+        const role = await RoleV2.findById(roleId);
+        
+        if (!role) {
+          console.log(`⚠️ MongoDB role not found: ${roleId}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Find corresponding Auth0 role by name
+        const auth0Role = await getAuth0RoleByName(role.name);
+        
+        if (auth0Role) {
+          auth0RoleIds.push(auth0Role.id);
+        } else {
+          console.log(`⚠️ Auth0 role not found for "${role.name}"`);
+          skippedCount++;
+        }
+      } catch (error) {
+        console.error(`Error processing role ${roleId}:`, error.message);
+        skippedCount++;
+      }
+    }
+
+    // Remove roles from user in Auth0
+    if (auth0RoleIds.length > 0) {
+      await management.users.roles.delete(auth0UserId, { roles: auth0RoleIds });
+      removedCount = auth0RoleIds.length;
+      console.log(`✅ Removed ${removedCount} roles from Auth0 user: ${auth0UserId}`);
+    }
+
+    return { removed: removedCount, skipped: skippedCount };
+  } catch (error) {
+    console.error('Auth0 remove roles error:', error);
+    throw new Error(`Failed to remove roles in Auth0: ${error.message}`);
+  }
+};
+
+/**
+ * Sync user roles between MongoDB and Auth0
+ * @param {string} auth0UserId - Auth0 user ID
+ * @param {Array<string>} newRoleIds - New role IDs from MongoDB
+ * @returns {Promise<Object>} Sync result
+ */
+const syncUserRoles = async (auth0UserId, newRoleIds) => {
+  try {
+    const management = getAuth0Client();
+    
+    // Get current Auth0 roles for the user using the correct API
+    let currentAuth0Roles = [];
+    try {
+      const rolesResponse = await management.users.roles.list(auth0UserId);
+      // Auth0 SDK v5 returns roles in the 'data' property
+      currentAuth0Roles = rolesResponse.data || rolesResponse.roles || rolesResponse || [];
+      console.log(`Current Auth0 roles for user ${auth0UserId}:`, currentAuth0Roles.map(r => r.name || r));
+    } catch (getRolesError) {
+      console.log(`Could not get current roles for user ${auth0UserId}:`, getRolesError.message);
+      // Continue with empty roles array
+    }
+
+    // Get new Auth0 role IDs
+    const newAuth0RoleIds = [];
+    const RoleV2 = require('../models/v2/Role');
+    
+    for (const roleId of newRoleIds) {
+      const role = await RoleV2.findById(roleId);
+      if (role) {
+        let auth0Role = await getAuth0RoleByName(role.name);
+        if (!auth0Role) {
+          // Create Auth0 role if it doesn't exist
+          auth0Role = await createAuth0Role({
+            name: role.name,
+            description: role.description || `Role: ${role.name}`
+          });
+        }
+        newAuth0RoleIds.push(auth0Role.id);
+      }
+    }
+
+    // Remove old roles and assign new ones
+    const currentRoleIds = currentAuth0Roles.map(r => r.id || r);
+    const rolesToRemove = currentRoleIds.filter(id => !newAuth0RoleIds.includes(id));
+    const rolesToAdd = newAuth0RoleIds.filter(id => !currentRoleIds.includes(id));
+
+    let result = { added: 0, removed: 0, skipped: 0 };
+
+    if (rolesToRemove.length > 0) {
+      await management.users.roles.delete(auth0UserId, { roles: rolesToRemove });
+      result.removed = rolesToRemove.length;
+      console.log(`✅ Removed ${result.removed} roles from Auth0 user`);
+    }
+
+    if (rolesToAdd.length > 0) {
+      await management.users.roles.assign(auth0UserId, { roles: rolesToAdd });
+      result.added = rolesToAdd.length;
+      console.log(`✅ Added ${result.added} roles to Auth0 user`);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Auth0 sync roles error:', error);
+    throw new Error(`Failed to sync roles in Auth0: ${error.message}`);
+  }
+};
+
+/**
+ * Check if user exists in Auth0 and create if not exists
+ * @param {Object} userData - User data
+ * @returns {Promise<Object>} Auth0 user object (existing or newly created)
+ */
+const ensureAuth0User = async (userData) => {
+  try {
+    // First check if user already exists
+    const existingUser = await getAuth0UserByEmail(userData.email);
+    if (existingUser) {
+      console.log(`✅ Auth0 user already exists: ${existingUser.user_id}`);
+      
+      // Sync roles if user exists
+      if (userData.role_ids && userData.role_ids.length > 0) {
+        try {
+          await syncUserRoles(existingUser.user_id, userData.role_ids);
+        } catch (roleError) {
+          console.error('Failed to sync roles for existing user:', roleError.message);
+        }
+      }
+      
+      return existingUser;
+    }
+
+    // User doesn't exist, create new one
+    console.log(`🆕 Creating new Auth0 user for: ${userData.email}`);
+    const newUser = await createAuth0User(userData);
+    
+    // Assign roles to new user
+    if (userData.role_ids && userData.role_ids.length > 0) {
+      try {
+        await assignRolesToUser(newUser.user_id, userData.role_ids);
+      } catch (roleError) {
+        console.error('Failed to assign roles to new user:', roleError.message);
+      }
+    }
+    
+    return newUser;
+  } catch (error) {
+    console.error('Error ensuring Auth0 user:', error);
+    throw error;
   }
 };
 
@@ -273,5 +524,9 @@ module.exports = {
   createAuth0Role,
   updateAuth0Role,
   deleteAuth0Role,
-  getAuth0RoleByName
+  getAuth0RoleByName,
+  ensureAuth0User,
+  assignRolesToUser,
+  removeRolesFromUser,
+  syncUserRoles
 };

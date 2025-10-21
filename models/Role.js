@@ -89,4 +89,4 @@ RoleSchema.virtual('user_count', {
 RoleSchema.set('toJSON', { virtuals: true });
 RoleSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Role', RoleSchema);
+module.exports = mongoose.model('LegacyRole', RoleSchema);

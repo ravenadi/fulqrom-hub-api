@@ -1,5 +1,5 @@
 const express = require('express');
-const Role = require('../models/Role');
+const LegacyRole = require('../models/Role');
 const User = require('../models/User');
 const {
   createAuth0Role,
@@ -37,12 +37,12 @@ router.get('/', async (req, res) => {
 
     // Fetch roles
     const [roles, totalRoles] = await Promise.all([
-      Role.find(filterQuery)
+      LegacyRole.find(filterQuery)
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      Role.countDocuments(filterQuery)
+      LegacyRole.countDocuments(filterQuery)
     ]);
 
     // Get user counts for each role
@@ -88,7 +88,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    const role = await Role.findById(id);
+    const role = await LegacyRole.findById(id);
 
     if (!role) {
       return res.status(404).json({
@@ -132,7 +132,7 @@ router.post('/', async (req, res) => {
     }
 
     // Check if role name already exists
-    const existingRole = await Role.findOne({ name: name.trim() });
+    const existingRole = await LegacyRole.findOne({ name: name.trim() });
     if (existingRole) {
       return res.status(400).json({
         success: false,
@@ -141,7 +141,7 @@ router.post('/', async (req, res) => {
     }
 
     // Create role
-    const role = new Role({
+    const role = new LegacyRole({
       name: name.trim(),
       description: description?.trim(),
       is_active: is_active !== undefined ? is_active : true,
@@ -200,7 +200,7 @@ router.put('/:id', async (req, res) => {
     }
 
     // Check if role exists
-    const role = await Role.findById(id);
+    const role = await LegacyRole.findById(id);
     if (!role) {
       return res.status(404).json({
         success: false,
@@ -210,7 +210,7 @@ router.put('/:id', async (req, res) => {
 
     // Check if new name conflicts with existing role
     if (name && name.trim() !== role.name) {
-      const existingRole = await Role.findOne({ name: name.trim() });
+      const existingRole = await LegacyRole.findOne({ name: name.trim() });
       if (existingRole) {
         return res.status(400).json({
           success: false,
@@ -276,7 +276,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     // Check if role exists
-    const role = await Role.findById(id);
+    const role = await LegacyRole.findById(id);
     if (!role) {
       return res.status(404).json({
         success: false,
@@ -305,7 +305,7 @@ router.delete('/:id', async (req, res) => {
     const auth0Id = role.auth0_id;
 
     // Delete from MongoDB
-    await Role.findByIdAndDelete(id);
+    await LegacyRole.findByIdAndDelete(id);
 
     // Delete from Auth0 (if auth0_id exists)
     let auth0Deleted = false;
@@ -350,7 +350,7 @@ router.get('/:id/users', async (req, res) => {
     }
 
     // Check if role exists
-    const role = await Role.findById(id);
+    const role = await LegacyRole.findById(id);
     if (!role) {
       return res.status(404).json({
         success: false,

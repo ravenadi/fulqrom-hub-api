@@ -1,12 +1,14 @@
 const express = require('express');
 const User = require('../models/User');
-const Role = require('../models/Role');
+const RoleV2 = require('../models/v2/Role');
 const AuditLog = require('../models/AuditLog');
 const {
   createAuth0User,
   updateAuth0User,
   deleteAuth0User,
-  getAuth0UserByEmail
+  getAuth0UserByEmail,
+  ensureAuth0User,
+  syncUserRoles
 } = require('../services/auth0Service');
 
 const router = express.Router();
@@ -168,7 +170,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Check if user already exists
+    // Check if user already exists in MongoDB
     const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
       return res.status(400).json({
@@ -177,9 +179,25 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Check if user already exists in Auth0
+    let existingAuth0User = null;
+    try {
+      existingAuth0User = await getAuth0UserByEmail(email.toLowerCase().trim());
+      if (existingAuth0User) {
+        return res.status(400).json({
+          success: false,
+          message: 'User with this email already exists in Auth0. Please contact support.',
+          auth0_user_id: existingAuth0User.user_id
+        });
+      }
+    } catch (auth0CheckError) {
+      console.error('Error checking Auth0 for existing user:', auth0CheckError.message);
+      // Continue with creation - Auth0 check failed but we can still try to create
+    }
+
     // Validate role IDs if provided
     if (role_ids && role_ids.length > 0) {
-      const validRoles = await Role.find({ _id: { $in: role_ids } });
+      const validRoles = await RoleV2.find({ _id: { $in: role_ids } });
       if (validRoles.length !== role_ids.length) {
         return res.status(400).json({
           success: false,
@@ -199,10 +217,10 @@ router.post('/', async (req, res) => {
 
     await user.save();
 
-    // Create user in Auth0
+    // Create user in Auth0 (or link existing)
     let auth0User = null;
     try {
-      auth0User = await createAuth0User({
+      auth0User = await ensureAuth0User({
         _id: user._id,
         email: user.email,
         full_name: user.full_name,
@@ -215,9 +233,10 @@ router.post('/', async (req, res) => {
       if (auth0User) {
         user.auth0_id = auth0User.user_id;
         await user.save();
+        console.log(`✅ Auth0 user ensured: ${auth0User.user_id}`);
       }
     } catch (auth0Error) {
-      console.error('Auth0 user creation failed:', auth0Error.message);
+      console.error('Auth0 user creation/linking failed:', auth0Error.message);
       // Continue even if Auth0 creation fails - user exists in MongoDB
     }
 
@@ -326,7 +345,7 @@ router.put('/:id', async (req, res) => {
 
     // Validate role IDs if provided
     if (role_ids && role_ids.length > 0) {
-      const validRoles = await Role.find({ _id: { $in: role_ids } });
+      const validRoles = await RoleV2.find({ _id: { $in: role_ids } });
       if (validRoles.length !== role_ids.length) {
         return res.status(400).json({
           success: false,
@@ -355,10 +374,22 @@ router.put('/:id', async (req, res) => {
 
     // Update user in Auth0 (if auth0_id exists)
     let auth0Updated = false;
+    let rolesSynced = false;
     if (user.auth0_id) {
       try {
         await updateAuth0User(user.auth0_id, updateData);
         auth0Updated = true;
+        
+        // Sync roles if role_ids were updated
+        if (role_ids !== undefined) {
+          try {
+            const syncResult = await syncUserRoles(user.auth0_id, role_ids);
+            rolesSynced = true;
+            console.log(`✅ Roles synced for user ${user.email}:`, syncResult);
+          } catch (roleSyncError) {
+            console.error('Auth0 role sync failed:', roleSyncError.message);
+          }
+        }
       } catch (auth0Error) {
         console.error('Auth0 user update failed:', auth0Error.message);
         // Continue even if Auth0 update fails - user updated in MongoDB
@@ -374,6 +405,7 @@ router.put('/:id', async (req, res) => {
       status: 'success',
       details: {
         auth0_synced: auth0Updated,
+        roles_synced: rolesSynced,
         auth0_id: user.auth0_id
       }
     }, req);
@@ -385,7 +417,8 @@ router.put('/:id', async (req, res) => {
       success: true,
       message: 'User updated successfully',
       data: user,
-      auth0_synced: auth0Updated
+      auth0_synced: auth0Updated,
+      roles_synced: rolesSynced
     });
 
   } catch (error) {

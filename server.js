@@ -19,7 +19,7 @@ const hierarchyRouter = require('./routes/hierarchy');
 const dropdownsRouter = require('./routes/dropdowns');
 const vendorsRouter = require('./routes/vendors');
 const usersRouter = require('./routes/users');
-const rolesRouter = require('./routes/roles'); //legacy roles api
+// const rolesRouter = require('./routes/roles'); //legacy roles api - DEPRECATED
 const rolesV2Router = require('./routes/v2/roles'); //new roles api
 const authRouter = require('./routes/auth');
 const notificationsRouter = require('./routes/notifications');
@@ -98,8 +98,8 @@ app.use('/api/hierarchy', hierarchyRouter);
 app.use('/api/dropdowns', dropdownsRouter);
 app.use('/api/vendors', vendorsRouter);
 app.use('/api/users', usersRouter);
-app.use('/api/roles', rolesRouter);
-app.use('/api/v2/roles', rolesV2Router);
+// app.use('/api/roles', rolesRouter); // DEPRECATED - legacy roles api
+app.use('/api/roles', rolesV2Router); // Main roles API (formerly V2)
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/admin', adminRouter); //super admin routes
 
