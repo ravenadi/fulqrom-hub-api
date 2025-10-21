@@ -8,7 +8,7 @@ const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
-const Tenant = require('../models/Tenant');
+const BuildingTenant = require('../models/BuildingTenant');
 const Vendor = require('../models/Vendor');
 const { uploadFileToS3, generatePresignedUrl, generatePreviewUrl, deleteFileFromS3 } = require('../utils/s3Upload');
 const {
@@ -126,7 +126,7 @@ async function fetchEntityNames(documentData) {
 
     // Fetch tenant name
     if (tenantId) {
-      const tenant = await Tenant.findById(tenantId.toString());
+      const tenant = await BuildingTenant.findById(tenantId.toString());
       if (tenant) {
         entityNames.tenant_name = tenant.tenant_name;
       }
@@ -1684,7 +1684,7 @@ router.get('/options/entities', async (req, res) => {
 
     // Get tenants (filtered by building if provided)
     const tenantFilter = building_id ? { building_id } : {};
-    const tenants = await Tenant.find(tenantFilter, '_id tenant_name building_id')
+    const tenants = await BuildingTenant.find(tenantFilter, '_id tenant_name building_id')
       .limit(100)
       .lean();
 

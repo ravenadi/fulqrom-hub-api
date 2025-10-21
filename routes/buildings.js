@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
-const Tenant = require('../models/Tenant');
+const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
@@ -174,7 +174,7 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
       // Lookup tenants count
       {
         $lookup: {
-          from: 'tenants',
+          from: 'building_tenants',
           let: { buildingId: '$_id' },
           pipeline: [
             { $match: { $expr: { $eq: ['$building_id', '$$buildingId'] } } },

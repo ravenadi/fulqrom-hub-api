@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Vendor License schema
 // NOTE: Enum validations removed - values loaded from GET /api/dropdowns if needed
@@ -592,5 +593,8 @@ VendorSchema.pre('save', function(next) {
 
   next();
 });
+
+// Apply tenant plugin for multi-tenancy support
+VendorSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Vendor', VendorSchema);

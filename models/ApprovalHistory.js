@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Approval History Schema for tracking document approval workflow
 const ApprovalHistorySchema = new mongoose.Schema({
@@ -109,5 +110,8 @@ ApprovalHistorySchema.virtual('formatted_date').get(function() {
 // Ensure virtual fields are serialized
 ApprovalHistorySchema.set('toJSON', { virtuals: true });
 ApprovalHistorySchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+ApprovalHistorySchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('ApprovalHistory', ApprovalHistorySchema);

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Address schema for building location
 const BuildingAddressSchema = new mongoose.Schema({
@@ -301,5 +302,8 @@ BuildingSchema.set('toJSON', {
   }
 });
 BuildingSchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+BuildingSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Building', BuildingSchema);

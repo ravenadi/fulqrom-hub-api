@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Permission schema for each entity/module
 const PermissionSchema = new mongoose.Schema({
@@ -182,5 +183,8 @@ RoleSchema.statics.initializePredefinedRoles = async function() {
     }
   }
 };
+
+// Apply tenant plugin for multi-tenancy support
+RoleSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Role', RoleSchema);

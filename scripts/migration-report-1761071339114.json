@@ -1,0 +1,70 @@
+{
+  "startTime": "2025-10-21T18:28:40.609Z",
+  "endTime": "2025-10-21T18:28:59.114Z",
+  "success": false,
+  "defaultTenant": {
+    "id": "68f7d0db3c5ae331c086199c",
+    "name": "Default Tenant",
+    "status": "active"
+  },
+  "statistics": {
+    "Organization": {
+      "total": 0,
+      "migrated": 0,
+      "skipped": 0
+    },
+    "Customer": {
+      "total": 6,
+      "migrated": 6,
+      "skipped": 0
+    },
+    "User": {
+      "total": 11,
+      "migrated": 11,
+      "skipped": 0
+    },
+    "Site": {
+      "total": 4,
+      "migrated": 4,
+      "skipped": 0
+    },
+    "Building": {
+      "total": 4,
+      "migrated": 4,
+      "skipped": 0
+    },
+    "Floor": {
+      "total": 56,
+      "migrated": 56,
+      "skipped": 0
+    },
+    "Asset": {
+      "total": 472,
+      "migrated": 472,
+      "skipped": 0
+    },
+    "BuildingTenant": {
+      "total": 26,
+      "migrated": 26,
+      "skipped": 0
+    },
+    "Vendor": {
+      "total": 3,
+      "migrated": 3,
+      "skipped": 0
+    },
+    "Document": {
+      "total": 214,
+      "skipped": null
+    },
+    "Role": {
+      "total": 6,
+      "migrated": 5,
+      "skipped": 1
+    }
+  },
+  "errors": [],
+  "warnings": [
+    "Document: 214 records still without tenant_id"
+  ]
+}

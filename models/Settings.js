@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Settings Schema for storing application-wide configuration
 // This includes dropdown values that can be managed from the Settings UI
@@ -150,5 +151,8 @@ SettingsSchema.statics.resetToDefault = async function(settingKey, updatedBy = '
   await setting.save();
   return setting;
 };
+
+// Apply tenant plugin for multi-tenancy support
+SettingsSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Settings', SettingsSchema);

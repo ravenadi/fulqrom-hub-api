@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const Tenant = require('../models/Tenant');
+const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
@@ -199,7 +199,7 @@ router.get('/', checkModulePermission('tenants', 'view'), async (req, res) => {
       ];
     }
 
-    const tenants = await Tenant.find(filterQuery)
+    const tenants = await BuildingTenant.find(filterQuery)
       .populate('customer_id', 'organisation.organisation_name')
       .populate('site_id', 'site_name address')
       .populate('building_id', 'building_name building_code')
@@ -244,7 +244,7 @@ router.get('/', checkModulePermission('tenants', 'view'), async (req, res) => {
 // GET /api/tenants/:id - Get single tenant
 router.get('/:id', checkResourcePermission('tenant', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    const tenant = await Tenant.findById(req.params.id)
+    const tenant = await BuildingTenant.findById(req.params.id)
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address status')
       .populate('building_id', 'building_name building_code category')
@@ -273,7 +273,7 @@ router.get('/:id', checkResourcePermission('tenant', 'view', (req) => req.params
 // POST /api/tenants - Create new tenant
 router.post('/', checkModulePermission('tenants', 'create'), validateTenantData, async (req, res) => {
   try {
-    const tenant = new Tenant(req.body);
+    const tenant = new BuildingTenant(req.body);
     await tenant.save();
 
     // Populate the created tenant before returning
@@ -299,7 +299,7 @@ router.post('/', checkModulePermission('tenants', 'create'), validateTenantData,
 // PUT /api/tenants/:id - Update tenant
 router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params.id), validateTenantData, async (req, res) => {
   try {
-    const tenant = await Tenant.findByIdAndUpdate(
+    const tenant = await BuildingTenant.findByIdAndUpdate(
       req.params.id,
       req.body,
       { new: true, runValidators: true }
@@ -329,7 +329,7 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
 // GET /api/tenants/by-building/:buildingId - Get tenants by building
 router.get('/by-building/:buildingId', async (req, res) => {
   try {
-    const tenants = await Tenant.find({ building_id: req.params.buildingId })
+    const tenants = await BuildingTenant.find({ building_id: req.params.buildingId })
       .populate('customer_id', 'organisation.organisation_name')
       .populate('site_id', 'site_name')
       .populate('floor_id', 'floor_name floor_number')
@@ -368,7 +368,7 @@ router.get('/summary/stats', async (req, res) => {
     if (site_id) matchQuery.site_id = mongoose.Types.ObjectId(site_id);
     if (building_id) matchQuery.building_id = mongoose.Types.ObjectId(building_id);
 
-    const stats = await Tenant.aggregate([
+    const stats = await BuildingTenant.aggregate([
       { $match: matchQuery },
       {
         $group: {
@@ -426,7 +426,7 @@ router.get('/summary/stats', async (req, res) => {
 // DELETE /api/tenants/:id - Delete tenant
 router.delete('/:id', checkResourcePermission('tenant', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    const tenant = await Tenant.findByIdAndDelete(req.params.id);
+    const tenant = await BuildingTenant.findByIdAndDelete(req.params.id);
 
     if (!tenant) {
       return res.status(404).json({
@@ -459,7 +459,7 @@ router.get('/by-industry', async (req, res) => {
     if (site_id) matchQuery.site_id = mongoose.Types.ObjectId(site_id);
     if (building_id) matchQuery.building_id = mongoose.Types.ObjectId(building_id);
 
-    const industryStats = await Tenant.aggregate([
+    const industryStats = await BuildingTenant.aggregate([
       { $match: matchQuery },
       {
         $group: {

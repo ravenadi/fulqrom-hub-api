@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Metadata schema for additional asset information
 const AssetMetadataSchema = new mongoose.Schema({
@@ -275,5 +276,8 @@ AssetSchema.set('toJSON', {
   }
 });
 AssetSchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+AssetSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Asset', AssetSchema);

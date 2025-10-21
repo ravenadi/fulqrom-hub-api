@@ -125,26 +125,8 @@ const checkSuperAdminPermission = (permission) => {
   };
 };
 
-/**
- * Super Admin Configuration Check
- * Checks if super admin system is enabled
- */
-const checkSuperAdminEnabled = (req, res, next) => {
-  const isEnabled = process.env.SUPER_ADMIN_ENABLED === 'true';
-  
-  if (!isEnabled) {
-    return res.status(503).json({
-      success: false,
-      message: 'Super admin functionality is currently disabled',
-      error_code: 'SUPER_ADMIN_DISABLED'
-    });
-  }
-
-  next();
-};
 
 module.exports = {
   checkSuperAdmin,
-  checkSuperAdminPermission,
-  checkSuperAdminEnabled
+  checkSuperAdminPermission
 };

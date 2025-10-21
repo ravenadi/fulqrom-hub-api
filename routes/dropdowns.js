@@ -6,7 +6,7 @@ const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
-const Tenant = require('../models/Tenant');
+const BuildingTenant = require('../models/BuildingTenant');
 const Vendor = require('../models/Vendor');
 const Document = require('../models/Document');
 
@@ -341,7 +341,7 @@ router.get('/entities/tenants', async (req, res) => {
     }
     if (tenant_status) filter.tenant_status = tenant_status;
 
-    const tenants = await Tenant.find(filter)
+    const tenants = await BuildingTenant.find(filter)
       .select('_id  tenant_trading_name tenant_legal_name building_id site_id customer_id')
       .sort({ tenant_trading_name: 1 })
       .lean();

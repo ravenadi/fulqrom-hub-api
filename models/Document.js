@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // File metadata schema
 const FileMetaSchema = new mongoose.Schema({
@@ -518,5 +519,8 @@ DocumentSchema.index({
 // Ensure virtual fields are serialized
 DocumentSchema.set('toJSON', { virtuals: true });
 DocumentSchema.set('toObject', { virtuals: true });
+
+// Apply tenant isolation plugin
+DocumentSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Document', DocumentSchema);

@@ -8,6 +8,9 @@
     "dev": "nodemon server.js",
     "scheduler": "node scripts/notificationScheduler.js --daemon",
     "check-reminders": "node scripts/notificationScheduler.js",
+    "migrate:tenant-structure": "node migrations/run_migration.js",
+    "rollback:tenant-structure": "node migrations/rollback_tenant_structure.js",
+    "verify:migration": "node migrations/verify_migration.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "echo \"No linter configured\" && exit 0"
   },

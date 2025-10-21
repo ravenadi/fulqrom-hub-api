@@ -662,6 +662,7 @@ const updateTenant = async (req, res) => {
       action: 'update',
       resource_type: 'tenant',
       resource_id: tenant,
+      tenant_id: tenant, // Add tenant_id field
       user_id: req.superAdmin?.id,
       user_email: req.superAdmin?.email,
       details: updateData

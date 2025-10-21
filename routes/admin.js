@@ -4,12 +4,14 @@ const SuperAdminTenantsController = require('../controllers/superAdminTenantsCon
 const SuperAdminUsersController = require('../controllers/superAdminUsersController');
 const SuperAdminRolesController = require('../controllers/superAdminRolesController');
 const SuperAdminPlansController = require('../controllers/superAdminPlansController');
+const authenticate = require('../middleware/authMiddleware');
+const { checkSuperAdmin } = require('../middleware/superAdmin');
 
 const router = express.Router();
 
-// Super admin middleware removed for frontend development
-// router.use(checkSuperAdminEnabled);
-// router.use(checkSuperAdmin);
+// Apply authentication and super admin middleware to all admin routes
+router.use(authenticate);
+router.use(checkSuperAdmin);
 
 /**
  * @swagger

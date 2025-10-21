@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Email Notification Schema for tracking sent emails
 const EmailNotificationSchema = new mongoose.Schema({
@@ -143,5 +144,8 @@ EmailNotificationSchema.statics.getFailedEmailsForRetry = function(maxRetries = 
 // Ensure virtual fields are serialized
 EmailNotificationSchema.set('toJSON', { virtuals: true });
 EmailNotificationSchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+EmailNotificationSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('EmailNotification', EmailNotificationSchema);

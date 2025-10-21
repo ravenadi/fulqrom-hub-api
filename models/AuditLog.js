@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Audit Log schema for tracking user actions
 const AuditLogSchema = new mongoose.Schema({
@@ -78,5 +79,8 @@ AuditLogSchema.index({ resource_type: 1, resource_id: 1 });
 AuditLogSchema.index({ action: 1 });
 AuditLogSchema.index({ created_at: -1 });
 AuditLogSchema.index({ status: 1 });
+
+// Apply tenant plugin for multi-tenancy support
+AuditLogSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('AuditLog', AuditLogSchema);

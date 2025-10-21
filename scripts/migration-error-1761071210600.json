@@ -1,0 +1,11 @@
+{
+  "startTime": "2025-10-21T18:26:47.310Z",
+  "endTime": "2025-10-21T18:26:50.600Z",
+  "success": false,
+  "defaultTenant": null,
+  "statistics": {},
+  "errors": [
+    "Fatal: Tenant validation failed: phone: Please enter a valid phone number"
+  ],
+  "warnings": []
+}

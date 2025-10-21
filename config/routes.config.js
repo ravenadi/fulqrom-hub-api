@@ -18,6 +18,7 @@ const vendorsRouter = require('../routes/vendors');
 const usersRouter = require('../routes/users');
 const rolesV2Router = require('../routes/v2/roles');
 const authRouter = require('../routes/auth');
+const organizationsRouter = require('../routes/organizations');
 const notificationsRouter = require('../routes/notifications');
 const analyticsRouter = require('../routes/analytics');
 const adminRouter = require('../routes/admin');
@@ -29,6 +30,7 @@ const adminRouter = require('../routes/admin');
  */
 const apiRoutes = [
   { path: '/auth', router: authRouter, description: 'Authentication endpoints' },
+  { path: '/organizations', router: organizationsRouter, description: 'Organization management (multi-tenancy)' },
   { path: '/customers', router: customersRouter, description: 'Customer management' },
   { path: '/customers/:customerId/contacts', router: contactsRouter, description: 'Customer contacts' },
   { path: '/sites', router: sitesRouter, description: 'Site management' },

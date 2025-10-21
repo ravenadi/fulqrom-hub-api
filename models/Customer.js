@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Organisation schema
 const OrganisationSchema = new mongoose.Schema({
@@ -283,5 +284,8 @@ CustomerSchema.set('toJSON', { virtuals: true });
 CustomerSchema.set('toObject', { virtuals: true });
 
 // Remove unique ABN validation for flexibility
+
+// Apply tenant plugin for multi-tenancy support
+CustomerSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Customer', CustomerSchema);

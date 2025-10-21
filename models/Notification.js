@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 /**
  * In-App Notification Schema
@@ -301,5 +302,8 @@ NotificationSchema.statics.deleteOldReadNotifications = function(daysOld = 90) {
 // Ensure virtual fields are serialized
 NotificationSchema.set('toJSON', { virtuals: true });
 NotificationSchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+NotificationSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Notification', NotificationSchema);

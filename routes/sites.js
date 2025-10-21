@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Asset = require('../models/Asset');
-const Tenant = require('../models/Tenant');
+const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();

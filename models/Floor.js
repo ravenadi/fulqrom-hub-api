@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Metadata schema for additional floor information
 const FloorMetadataSchema = new mongoose.Schema({
@@ -192,5 +193,8 @@ FloorSchema.set('toJSON', {
   }
 });
 FloorSchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+FloorSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Floor', FloorSchema);

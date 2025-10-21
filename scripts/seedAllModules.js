@@ -13,7 +13,7 @@ const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
-const Tenant = require('../models/Tenant');
+const BuildingTenant = require('../models/BuildingTenant');
 const Document = require('../models/Document');
 const User = require('../models/User');
 const LegacyRole = require('../models/Role'); // Model is named LegacyRole, creates 'legacyroles' collection
@@ -434,7 +434,7 @@ async function seedAllModules() {
 
     // 7. Create Building Tenants
     console.log('\n👥 Creating Building Tenants...');
-    const tenants = await Tenant.insertMany([
+    const tenants = await BuildingTenant.insertMany([
       {
         building_id: buildings[0]._id,
         floor_id: createdFloors[1]._id,

@@ -6,7 +6,7 @@ const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
 const Vendor = require('../models/Vendor');
-const Tenant = require('../models/Tenant');
+const BuildingTenant = require('../models/BuildingTenant');
 const Plan = require('../models/Plan');
 const AuditLog = require('../models/AuditLog');
 
@@ -33,7 +33,7 @@ const getAllStats = async (req, res) => {
       Site.countDocuments(queryFilter),
       Building.countDocuments(queryFilter),
       Floor.countDocuments(queryFilter),
-      Tenant.countDocuments(queryFilter), // Assuming Tenant model maps to BuildingTenant in Laravel context
+      BuildingTenant.countDocuments(queryFilter), // Building tenants (lessees)
       Asset.countDocuments(queryFilter),
       Vendor.countDocuments(queryFilter),
       Customer.countDocuments(tenant_id ? { _id: tenant_id } : {}), // Total tenants (customers)

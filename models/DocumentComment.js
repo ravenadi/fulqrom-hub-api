@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 /**
  * Document Comment Schema
@@ -134,5 +135,8 @@ DocumentCommentSchema.statics.getCommentCount = function(documentId) {
 // Ensure virtual fields are serialized
 DocumentCommentSchema.set('toJSON', { virtuals: true });
 DocumentCommentSchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+DocumentCommentSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('DocumentComment', DocumentCommentSchema);

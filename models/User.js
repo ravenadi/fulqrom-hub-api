@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Resource Access schema (embedded in User)
 const ResourceAccessSchema = new mongoose.Schema({
@@ -135,5 +136,8 @@ UserSchema.virtual('display_name').get(function() {
 // Ensure virtual fields are serialized
 UserSchema.set('toJSON', { virtuals: true });
 UserSchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+UserSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('User', UserSchema);

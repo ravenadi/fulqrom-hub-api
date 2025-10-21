@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 // Structured address schema
 const SiteAddressSchema = new mongoose.Schema({
@@ -319,5 +320,8 @@ SiteSchema.set('toJSON', {
   }
 });
 SiteSchema.set('toObject', { virtuals: true });
+
+// Apply tenant plugin for multi-tenancy support
+SiteSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Site', SiteSchema);

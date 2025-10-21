@@ -1,0 +1,29 @@
+{
+  "success": [
+    "ApprovalHistory.js",
+    "Asset.js",
+    "AuditLog.js",
+    "Building.js",
+    "DocumentComment.js",
+    "EmailNotification.js",
+    "Floor.js",
+    "Notification.js",
+    "Role.js",
+    "Settings.js",
+    "Site.js",
+    "User.js",
+    "Vendor.js"
+  ],
+  "skipped": [
+    "Organization.js",
+    "Plan.js",
+    "Role_Legacy.js",
+    "UserOrganization.js"
+  ],
+  "errors": [],
+  "alreadyApplied": [
+    "BuildingTenant.js",
+    "Customer.js",
+    "Document.js"
+  ]
+}
