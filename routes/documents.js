@@ -11,7 +11,6 @@ const Asset = require('../models/Asset');
 const Tenant = require('../models/Tenant');
 const Vendor = require('../models/Vendor');
 const { uploadFileToS3, generatePresignedUrl, generatePreviewUrl, deleteFileFromS3 } = require('../utils/s3Upload');
-const TenantS3Service = require('../services/tenantS3Service');
 const {
   validateCreateDocument,
   validateUpdateDocument,
@@ -652,28 +651,27 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
       });
     }
 
-    // Upload file to tenant-specific S3 bucket
-    let uploadResult;
-    try {
-      const tenantS3Service = new TenantS3Service();
-      uploadResult = await tenantS3Service.uploadFileToTenantBucket(
-        req.file,
-        documentData.customer_id,
-        customer.organisation.organisation_name
-      );
-    } catch (s3Error) {
-      console.error('Tenant S3 upload failed, falling back to shared bucket:', s3Error);
-      // Fallback to original S3 upload method
-      uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
-    }
+    // Upload file to S3 using shared bucket (simple and reliable)
+    console.log('📤 Starting file upload to S3...');
+    console.log('📁 File details:', {
+      originalname: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      customer_id: documentData.customer_id
+    });
+
+    const uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
 
     if (!uploadResult.success) {
+      console.error('❌ S3 upload failed:', uploadResult.error);
       return res.status(400).json({
         success: false,
         message: 'File upload failed',
         error: uploadResult.error
       });
     }
+
+    console.log('✅ File uploaded to S3 successfully:', uploadResult.data?.file_meta?.file_key);
 
     // Build document object
     const documentPayload = {
