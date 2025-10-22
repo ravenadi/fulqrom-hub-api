@@ -329,6 +329,7 @@ const createTenant = async (req, res) => {
       action: 'create',
       resource_type: 'tenant',
       resource_id: tenant._id,
+      tenant_id: tenant._id, // Add tenant_id field
       user_id: req.superAdmin?.id,
       user_email: req.superAdmin?.email,
       details: {
@@ -469,6 +470,7 @@ const provisionTenant = async (req, res) => {
       action: 'provision_tenant',
       resource_type: 'tenant',
       resource_id: provisioningResult.tenant._id,
+      tenant_id: provisioningResult.tenant._id, // Add tenant_id field
       user_id: req.superAdmin?.id,
       user_email: req.superAdmin?.email,
       details: {
@@ -652,13 +654,26 @@ const updateTenant = async (req, res) => {
 };
 
 /**
- * Delete tenant (soft delete)
+ * Delete tenant (hard delete - permanently removes tenant and all dependencies)
  * @route DELETE /api/admin/tenants/:id
  * @access Super Admin only
+ * @query {boolean} delete_s3 - If true, handle S3 bucket (default: true)
+ * @query {boolean} immediate_s3_delete - If true, delete S3 immediately; if false, mark for auto-deletion after 90 days (default: false)
+ * @query {boolean} force_delete - If true, delete even with active users (default: false)
  */
 const deleteTenant = async (req, res) => {
   try {
     const { tenant } = req.params;
+    const {
+      delete_s3 = 'true',
+      immediate_s3_delete = 'false',
+      force_delete = 'false'
+    } = req.query;
+
+    // Convert query params to booleans
+    const shouldDeleteS3 = delete_s3 === 'true';
+    const isImmediateS3Delete = immediate_s3_delete === 'true';
+    const isForceDelete = force_delete === 'true';
 
     const tenantData = await Tenant.findById(tenant);
     if (!tenantData) {
@@ -668,35 +683,50 @@ const deleteTenant = async (req, res) => {
       });
     }
 
-    // Check if tenant has users
-    const usersCount = await User.countDocuments({ tenant_id: tenant });
-    if (usersCount > 0) {
+    // Import deletion service
+    const TenantDeletionService = require('../services/tenantDeletionService');
+    const deletionService = new TenantDeletionService();
+
+    // Hard delete - permanently remove tenant and all dependencies
+    console.log(`🗑️  Starting HARD DELETE for tenant: ${tenant}`);
+    console.log(`   S3 Strategy: ${isImmediateS3Delete ? 'IMMEDIATE DELETE' : 'MARK FOR AUTO-DELETION (90 days)'}`);
+
+    const result = await deletionService.deleteTenantCompletely(tenant, {
+      deleteS3: shouldDeleteS3,
+      immediateS3Delete: isImmediateS3Delete,
+      deleteDatabase: true,
+      forceDelete: isForceDelete,
+      createFinalAuditLog: true,
+      adminUserId: req.superAdmin?.id,
+      adminEmail: req.superAdmin?.email
+    });
+
+    if (result.success) {
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {
+          tenant_id: result.tenant_id,
+          tenant_name: result.tenant_name,
+          deletion_type: 'hard',
+          database_records_deleted: result.database?.counts,
+          s3_deletion_type: result.s3_deletion_type,
+          s3_bucket_name: result.s3?.bucket_name,
+          s3_deletion_date: result.s3?.deletion_date,
+          s3_days_until_deletion: result.s3?.days_until_deletion,
+          s3_files_deleted: result.s3?.files_deleted || 0,
+          deletion_log: result.deletion_log
+        }
+      });
+    } else {
       return res.status(400).json({
         success: false,
-        message: `Cannot delete tenant. ${usersCount} user(s) are associated with this tenant.`
+        message: result.message,
+        error: result.error,
+        deletion_log: result.deletion_log,
+        errors: result.errors
       });
     }
-
-    // Soft delete - set status to inactive
-    tenantData.status = 'inactive';
-    await tenantData.save();
-
-    // Log audit
-    await AuditLog.create({
-      action: 'delete',
-      resource_type: 'tenant',
-      resource_id: tenant,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        tenant_name: tenantData.tenant_name
-      }
-    });
-
-    res.status(200).json({
-      success: true,
-      message: 'Tenant deactivated successfully'
-    });
   } catch (error) {
     console.error('Error deleting tenant:', error);
     res.status(500).json({
@@ -802,6 +832,7 @@ const updateTenantRestrictions = async (req, res) => {
       action: 'update_restrictions',
       resource_type: 'tenant',
       resource_id: tenant,
+      tenant_id: tenant, // Add tenant_id field
       user_id: req.superAdmin?.id,
       user_email: req.superAdmin?.email,
       details: {
@@ -1058,6 +1089,7 @@ const subscribe = async (req, res) => {
       action: 'subscribe_tenant',
       resource_type: 'Customer',
       resource_id: tenant,
+      tenant_id: tenant, // Add tenant_id field
       details: {
         plan_id: plan_id,
         plan_name: plan.name,
@@ -1149,6 +1181,7 @@ const updateSubscriptionStatus = async (req, res) => {
       action: 'update_subscription_status',
       resource_type: 'Customer',
       resource_id: id,
+      tenant_id: id, // Add tenant_id field
       details: {
         old_status: tenant.status,
         new_status: status,
