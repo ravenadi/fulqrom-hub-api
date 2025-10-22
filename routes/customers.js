@@ -5,12 +5,10 @@ const Building = require('../models/Building');
 const Asset = require('../models/Asset');
 const Document = require('../models/Document');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
-const { tenantContext, optionalTenantContext } = require('../middleware/tenantContext');
 
 const router = express.Router();
 
 // Note: Authentication is applied globally in server.js
-// Tenant context middleware ensures all queries are scoped to the user's tenant
 
 // GET /api/customers - List all customers (requires module-level view permission)
 router.get('/', checkModulePermission('customers', 'view'), async (req, res) => {
@@ -59,16 +57,9 @@ router.get('/', checkModulePermission('customers', 'view'), async (req, res) => 
 });
 
 // GET /api/customers/:id - Get single customer (requires view permission for this customer)
-router.get('/:id', optionalTenantContext, checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
+router.get('/:id', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    // Use tenant-scoped query - will only find customer if it belongs to user's tenant
-    let customer;
-    if (req.tenant && req.tenant.tenantId) {
-      customer = await Customer.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
-    } else {
-      // Fallback for development/testing
-      customer = await Customer.findById(req.params.id);
-    }
+    const customer = await Customer.findById(req.params.id);
 
     if (!customer) {
       return res.status(404).json({
@@ -91,17 +82,11 @@ router.get('/:id', optionalTenantContext, checkResourcePermission('customer', 'v
 });
 
 // GET /api/customers/:id/stats - Get customer statistics (requires view permission)
-router.get('/:id/stats', optionalTenantContext, checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
+router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
     const customerId = req.params.id;
 
-    // Verify customer exists AND belongs to tenant
-    let customer;
-    if (req.tenant && req.tenant.tenantId) {
-      customer = await Customer.findById(customerId).setOptions({ _tenantId: req.tenant.tenantId });
-    } else {
-      customer = await Customer.findById(customerId);
-    }
+    const customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
@@ -109,23 +94,13 @@ router.get('/:id/stats', optionalTenantContext, checkResourcePermission('custome
       });
     }
 
-    // Get counts with tenant scope if available
-    let siteCount, buildingCount, assetCount, documentCount;
-    if (req.tenant && req.tenant.tenantId) {
-      [siteCount, buildingCount, assetCount, documentCount] = await Promise.all([
-        Site.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
-        Building.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
-        Asset.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
-        Document.countDocuments({ 'customer.customer_id': customerId }).setOptions({ _tenantId: req.tenant.tenantId })
-      ]);
-    } else {
-      [siteCount, buildingCount, assetCount, documentCount] = await Promise.all([
-        Site.countDocuments({ customer_id: customerId }),
-        Building.countDocuments({ customer_id: customerId }),
-        Asset.countDocuments({ customer_id: customerId }),
-        Document.countDocuments({ 'customer.customer_id': customerId })
-      ]);
-    }
+    // Get counts
+    const [siteCount, buildingCount, assetCount, documentCount] = await Promise.all([
+      Site.countDocuments({ customer_id: customerId }),
+      Building.countDocuments({ customer_id: customerId }),
+      Asset.countDocuments({ customer_id: customerId }),
+      Document.countDocuments({ 'customer.customer_id': customerId })
+    ]);
 
     const stats = {
       totalSites: siteCount,
@@ -152,15 +127,9 @@ router.get('/:id/stats', optionalTenantContext, checkResourcePermission('custome
 });
 
 // GET /api/customers/:id/contacts/primary - Get primary contact (requires view permission)
-router.get('/:id/contacts/primary', optionalTenantContext, checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
+router.get('/:id/contacts/primary', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    // Use tenant-scoped query
-    let customer;
-    if (req.tenant && req.tenant.tenantId) {
-      customer = await Customer.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
-    } else {
-      customer = await Customer.findById(req.params.id);
-    }
+    const customer = await Customer.findById(req.params.id);
 
     if (!customer) {
       return res.status(404).json({
@@ -193,14 +162,9 @@ router.get('/:id/contacts/primary', optionalTenantContext, checkResourcePermissi
 });
 
 // POST /api/customers - Create new customer (requires module-level create permission)
-router.post('/', optionalTenantContext, checkModulePermission('customers', 'create'), async (req, res) => {
+router.post('/', checkModulePermission('customers', 'create'), async (req, res) => {
   try {
-    // Set tenant_id for the new customer if tenant context is available
-    const customerData = { ...req.body };
-    if (req.tenant && req.tenant.tenantId) {
-      customerData.tenant_id = req.tenant.tenantId; // Explicitly set tenant_id
-    }
-    const customer = new Customer(customerData);
+    const customer = new Customer(req.body);
     await customer.save();
 
     res.status(201).json({
@@ -218,20 +182,15 @@ router.post('/', optionalTenantContext, checkModulePermission('customers', 'crea
 });
 
 // PUT /api/customers/:id - Update customer (requires edit permission for this customer)
-router.put('/:id', optionalTenantContext, checkResourcePermission('customer', 'edit', (req) => req.params.id), async (req, res) => {
+router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.params.id), async (req, res) => {
   try {
-    // Use tenant-scoped update - will only update if customer belongs to tenant
-    const updateOptions = {
-      new: true,
-      runValidators: true
-    };
-    if (req.tenant && req.tenant.tenantId) {
-      updateOptions._tenantId = req.tenant.tenantId; // Tenant-scoped update
-    }
     const customer = await Customer.findByIdAndUpdate(
       req.params.id,
       req.body,
-      updateOptions
+      {
+        new: true,
+        runValidators: true
+      }
     );
 
     if (!customer) {
@@ -256,14 +215,9 @@ router.put('/:id', optionalTenantContext, checkResourcePermission('customer', 'e
 });
 
 // DELETE /api/customers/:id - Delete customer (requires delete permission for this customer)
-router.delete('/:id', optionalTenantContext, checkResourcePermission('customer', 'delete', (req) => req.params.id), async (req, res) => {
+router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    // Use tenant-scoped delete - will only delete if customer belongs to tenant
-    const deleteOptions = {};
-    if (req.tenant && req.tenant.tenantId) {
-      deleteOptions._tenantId = req.tenant.tenantId; // Tenant-scoped delete
-    }
-    const customer = await Customer.findByIdAndDelete(req.params.id, deleteOptions);
+    const customer = await Customer.findByIdAndDelete(req.params.id);
 
     if (!customer) {
       return res.status(404).json({
