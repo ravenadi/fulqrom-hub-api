@@ -1,5 +1,6 @@
 const Tenant = require('../models/Tenant');
 const User = require('../models/User');
+const Customer = require('../models/Customer');
 const Document = require('../models/Document');
 const Site = require('../models/Site');
 const Building = require('../models/Building');
@@ -68,6 +69,8 @@ const getAllTenants = async (req, res) => {
     // Format tenants with additional data
     const formattedTenants = await Promise.all(tenants.map(async (tenant) => {
       const usersCount = await User.countDocuments({ tenant_id: tenant._id });
+      // Use withTenant for proper tenant context or withoutTenantFilter for super admin
+      const customersCount = await Customer.withTenant(tenant._id).countDocuments({});
       const sitesCount = await Site.countDocuments({ tenant_id: tenant._id });
       const buildingsCount = await Building.countDocuments({ tenant_id: tenant._id });
       const documentsCount = await Document.countDocuments({ tenant_id: tenant._id });
@@ -110,6 +113,7 @@ const getAllTenants = async (req, res) => {
           trial_end_date: null,
         },
         users_count: usersCount,
+        customers_count: customersCount,
         users: users.map(user => ({
           id: user._id,
           name: user.full_name,
@@ -171,8 +175,9 @@ const getTenantById = async (req, res) => {
     }
 
     // Get additional statistics
-    const [usersCount, sitesCount, buildingsCount, documentsCount, subscription] = await Promise.all([
+    const [usersCount, customersCount, sitesCount, buildingsCount, documentsCount, subscription] = await Promise.all([
       User.countDocuments({ customer_id: tenant }),
+      Customer.withTenant(tenant).countDocuments({}),
       Site.countDocuments({ customer_id: tenant }),
       Building.countDocuments({ customer_id: tenant }),
       Document.countDocuments({ customer_id: tenant }),
@@ -202,6 +207,7 @@ const getTenantById = async (req, res) => {
         trial_end_date: subscription?.trial_end_date,
       },
       users_count: usersCount,
+      customers_count: customersCount,
       sites_count: sitesCount,
       buildings_count: buildingsCount,
       documents_count: documentsCount,
@@ -718,10 +724,11 @@ const getTenantStats = async (req, res) => {
     }
 
     const [
-      totalUsers, totalDocuments, totalSites, totalBuildings, totalFloors,
+      totalUsers, totalCustomers, totalDocuments, totalSites, totalBuildings, totalFloors,
       totalAssets, totalVendors
     ] = await Promise.all([
       User.countDocuments({ tenant_id: tenant }),
+      Customer.withTenant(tenant).countDocuments({}),
       Document.countDocuments({ tenant_id: tenant }),
       Site.countDocuments({ tenant_id: tenant }),
       Building.countDocuments({ tenant_id: tenant }),
@@ -736,6 +743,7 @@ const getTenantStats = async (req, res) => {
         tenant_id: tenant,
         tenant_name: tenantData.tenant_name,
         total_users: totalUsers,
+        total_customers: totalCustomers,
         total_documents: totalDocuments,
         total_sites: totalSites,
         total_buildings: totalBuildings,

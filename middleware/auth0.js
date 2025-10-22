@@ -65,13 +65,15 @@ const attachUser = async (req, res, next) => {
     // Attach user to request object for use in subsequent middleware
     req.user = {
       id: user._id.toString(),
+      userId: user._id.toString(), // Add userId for tenantContext compatibility
       _id: user._id,
       auth0_id: user.auth0_id,
       email: user.email,
       full_name: user.full_name,
       role_ids: user.role_ids,
       resource_access: user.resource_access,
-      is_active: user.is_active
+      is_active: user.is_active,
+      tenant_id: user.tenant_id // Add tenant_id for tenantContext middleware
     };
 
     next();

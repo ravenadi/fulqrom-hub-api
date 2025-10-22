@@ -38,13 +38,13 @@ async function tenantContext(req, res, next) {
     }
 
     // Check if user is authenticated
-    if (!req.user || !req.user.userId) {
+    if (!req.user || (!req.user.userId && !req.user.id)) {
       // If no authenticated user, skip tenant resolution
       // (authentication middleware will handle auth errors)
       return next();
     }
 
-    const userId = req.user.userId;
+    const userId = req.user.userId || req.user.id;
 
     // Check if this is a super admin user
     // Super admins can bypass tenant context or switch tenants via header
@@ -223,12 +223,12 @@ async function optionalTenantContext(req, res, next) {
     }
 
     // Check if user is authenticated
-    if (!req.user || !req.user.userId) {
+    if (!req.user || (!req.user.userId && !req.user.id)) {
       req.tenant = null;
       return next();
     }
 
-    const userId = req.user.userId;
+    const userId = req.user.userId || req.user.id;
 
     // Get user from database
     const user = await User.findById(userId);
