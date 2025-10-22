@@ -78,9 +78,12 @@ class TenantDeletionService {
    * @returns {Promise<Object>} - Result
    */
   async markS3BucketForDeletion(tenantId, tenantName) {
+    let tenantS3Service;
+    let bucketName;
+
     try {
-      const tenantS3Service = new TenantS3Service(tenantId);
-      const bucketName = tenantS3Service.generateBucketName(tenantName, tenantId);
+      tenantS3Service = new TenantS3Service(tenantId);
+      bucketName = tenantS3Service.generateBucketName(tenantName, tenantId);
 
       this.log('Checking S3 bucket existence', { bucket_name: bucketName });
 
@@ -179,7 +182,7 @@ class TenantDeletionService {
       return {
         success: false,
         error: error.message,
-        bucket_name: tenantS3Service?.generateBucketName(tenantName, tenantId)
+        bucket_name: bucketName || null
       };
     }
   }
@@ -191,9 +194,12 @@ class TenantDeletionService {
    * @returns {Promise<Object>} - Deletion result
    */
   async deleteS3BucketAndFiles(tenantId, tenantName) {
+    let tenantS3Service;
+    let bucketName;
+
     try {
-      const tenantS3Service = new TenantS3Service(tenantId);
-      const bucketName = tenantS3Service.generateBucketName(tenantName, tenantId);
+      tenantS3Service = new TenantS3Service(tenantId);
+      bucketName = tenantS3Service.generateBucketName(tenantName, tenantId);
 
       this.log('Checking S3 bucket existence', { bucket_name: bucketName });
 
@@ -286,7 +292,7 @@ class TenantDeletionService {
       return {
         success: false,
         error: error.message,
-        bucket_name: tenantS3Service?.generateBucketName(tenantName, tenantId)
+        bucket_name: bucketName || null
       };
     }
   }

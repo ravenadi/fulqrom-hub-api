@@ -640,8 +640,211 @@ router.get('/tenants/:tenant/location-data',
  *         description: Server error
  */
 router.get('/tenants/:tenant/users',
-  
+
   SuperAdminTenantsController.getTenantUsers
+);
+
+/**
+ * @swagger
+ * /api/admin/tenants/{tenant}/users:
+ *   post:
+ *     summary: Create a new user for a specific tenant
+ *     tags: [Super Admin - Tenants]
+ *     security:
+ *       - SuperAdminAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tenant
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Tenant ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *               - roleIds
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               roleIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *       400:
+ *         description: Invalid input data or email exists
+ *       404:
+ *         description: Tenant not found
+ *       422:
+ *         description: Validation failed
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Super admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.post('/tenants/:tenant/users',
+
+  SuperAdminTenantsController.createTenantUser
+);
+
+/**
+ * @swagger
+ * /api/admin/tenants/{tenant}/users/{userId}:
+ *   put:
+ *     summary: Update a user for a specific tenant
+ *     tags: [Super Admin - Tenants]
+ *     security:
+ *       - SuperAdminAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tenant
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Tenant ID
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               roleIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *       400:
+ *         description: Invalid input data
+ *       404:
+ *         description: Tenant or user not found
+ *       422:
+ *         description: Validation failed
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Super admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.put('/tenants/:tenant/users/:userId',
+
+  SuperAdminTenantsController.updateTenantUser
+);
+
+/**
+ * @swagger
+ * /api/admin/tenants/{tenant}/users/{userId}:
+ *   delete:
+ *     summary: Delete a user from a specific tenant
+ *     tags: [Super Admin - Tenants]
+ *     security:
+ *       - SuperAdminAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tenant
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Tenant ID
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: User deleted successfully
+ *       404:
+ *         description: Tenant or user not found
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Super admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.delete('/tenants/:tenant/users/:userId',
+
+  SuperAdminTenantsController.deleteTenantUser
+);
+
+/**
+ * @swagger
+ * /api/admin/tenants/{tenant}/users/sync-auth0:
+ *   post:
+ *     summary: Sync tenant users to Auth0
+ *     tags: [Super Admin - Tenants]
+ *     security:
+ *       - SuperAdminAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tenant
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Tenant ID
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Limit number of users to sync
+ *       - in: query
+ *         name: skipExisting
+ *         schema:
+ *           type: boolean
+ *           default: true
+ *         description: Skip users that already have Auth0 ID
+ *     responses:
+ *       200:
+ *         description: Sync completed successfully
+ *       404:
+ *         description: Tenant not found
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Super admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.post('/tenants/:tenant/users/sync-auth0',
+  SuperAdminTenantsController.syncUsersToAuth0
 );
 
 // ===== USER MANAGEMENT ROUTES =====

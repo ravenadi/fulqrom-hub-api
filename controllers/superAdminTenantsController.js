@@ -5,6 +5,7 @@ const Document = require('../models/Document');
 const Site = require('../models/Site');
 const Building = require('../models/Building');
 const Floor = require('../models/Floor');
+const BuildingTenant = require('../models/BuildingTenant');
 const Asset = require('../models/Asset');
 const Vendor = require('../models/Vendor');
 const Plan = require('../models/Plan');
@@ -71,9 +72,34 @@ const getAllTenants = async (req, res) => {
       const usersCount = await User.countDocuments({ tenant_id: tenant._id });
       // Use withTenant for proper tenant context or withoutTenantFilter for super admin
       const customersCount = await Customer.withTenant(tenant._id).countDocuments({});
-      const sitesCount = await Site.countDocuments({ tenant_id: tenant._id });
-      const buildingsCount = await Building.countDocuments({ tenant_id: tenant._id });
+
+      // Get all customer IDs for this tenant
+      const customers = await Customer.find({ tenant_id: tenant._id }).select('_id').lean();
+      const customerIds = customers.map(c => c._id);
+
+      // Count entities that belong to customers
+      const sitesCount = await Site.countDocuments({ customer_id: { $in: customerIds } });
+      const buildingsCount = await Building.countDocuments({ customer_id: { $in: customerIds } });
+      const floorsCount = await Floor.countDocuments({ customer_id: { $in: customerIds } });
+      const buildingTenantsCount = await BuildingTenant.countDocuments({ customer_id: { $in: customerIds } });
+      const assetsCount = await Asset.countDocuments({ customer_id: { $in: customerIds } });
+
+      // Count entities that belong directly to tenant
       const documentsCount = await Document.countDocuments({ tenant_id: tenant._id });
+      const vendorsCount = await Vendor.countDocuments({ tenant_id: tenant._id });
+
+      // Calculate total storage used (sum of all document file sizes)
+      const storageAggregation = await Document.aggregate([
+        { $match: { tenant_id: tenant._id } },
+        {
+          $group: {
+            _id: null,
+            totalSize: { $sum: { $ifNull: ['$file.file_meta.file_size', 0] } }
+          }
+        }
+      ]);
+      const totalStorageBytes = storageAggregation.length > 0 ? storageAggregation[0].totalSize : 0;
+      const totalStorageMB = (totalStorageBytes / (1024 * 1024)).toFixed(2);
 
       // Get users list with basic info
       const users = await User.find({ tenant_id: tenant._id })
@@ -104,10 +130,10 @@ const getAllTenants = async (req, res) => {
           price: tenant.plan_id.price,
           time_period: tenant.plan_id.time_period
         } : null,
-        plan_status: {
+        plan_status: tenant.plan_status || {
           is_active: tenant.status === 'active',
           is_trial: tenant.status === 'trial',
-          plan_start_date: null, // Tenant model doesn't have these fields
+          plan_start_date: null,
           plan_end_date: null,
           trial_start_date: null,
           trial_end_date: null,
@@ -125,6 +151,12 @@ const getAllTenants = async (req, res) => {
         sites_count: sitesCount,
         buildings_count: buildingsCount,
         documents_count: documentsCount,
+        floors_count: floorsCount,
+        building_tenants_count: buildingTenantsCount,
+        assets_count: assetsCount,
+        vendors_count: vendorsCount,
+        storage_used_bytes: totalStorageBytes,
+        storage_used_mb: totalStorageMB,
         last_activity: lastActivity ? {
           action: lastActivity.action,
           date: lastActivity.created_at,
@@ -299,15 +331,28 @@ const createTenant = async (req, res) => {
 
       if (s3BucketInfo.success) {
         console.log(`✅ S3 bucket created successfully: ${s3BucketInfo.bucket_name}`);
-        
-        // Store S3 bucket info in tenant metadata (if Tenant model supports metadata)
-        // Note: Tenant model is simplified and may not have metadata field
-        // This would need to be added to the Tenant schema if required
+
+        // Store S3 bucket info in tenant record
+        tenant.s3_bucket_name = s3BucketInfo.bucket_name;
+        tenant.s3_bucket_region = process.env.AWS_DEFAULT_REGION || 'ap-southeast-2';
+        tenant.s3_bucket_status = s3BucketInfo.status === 'created' ? 'created' : 'pending';
+        await tenant.save();
+
+        console.log(`✅ S3 bucket info saved to tenant record`);
       } else {
         console.error(`❌ Failed to create S3 bucket: ${s3BucketInfo.error}`);
+
+        // Mark bucket creation as failed
+        tenant.s3_bucket_status = 'failed';
+        await tenant.save();
       }
     } catch (s3Error) {
       console.error('S3 bucket creation failed:', s3Error);
+
+      // Mark bucket creation as failed
+      tenant.s3_bucket_status = 'failed';
+      await tenant.save();
+
       // Don't fail tenant creation if S3 bucket creation fails
       s3BucketInfo = {
         success: false,
@@ -579,14 +624,14 @@ const updateTenant = async (req, res) => {
     const updateData = {};
     if (name !== undefined) updateData.tenant_name = name;
     if (phone !== undefined) updateData.phone = phone;
-    
+
     // Handle status - use status if provided, otherwise use is_active
     if (status !== undefined) {
       updateData.status = status === 'active' ? 'active' : 'inactive';
     } else if (is_active !== undefined) {
       updateData.status = is_active ? 'active' : 'inactive';
     }
-    
+
     // Handle plan_id
     if (plan_id !== undefined) {
       if (plan_id === '' || plan_id === null) {
@@ -596,6 +641,32 @@ const updateTenant = async (req, res) => {
         // Assign new plan
         updateData.plan_id = plan_id;
       }
+    }
+
+    // Handle plan_status if provided
+    if (req.body.plan_status !== undefined) {
+      updateData.plan_status = {};
+      if (req.body.plan_status.is_active !== undefined) {
+        updateData.plan_status.is_active = req.body.plan_status.is_active;
+      }
+      if (req.body.plan_status.is_trial !== undefined) {
+        updateData.plan_status.is_trial = req.body.plan_status.is_trial;
+      }
+      if (req.body.plan_status.plan_start_date !== undefined) {
+        updateData.plan_status.plan_start_date = req.body.plan_status.plan_start_date;
+      }
+      if (req.body.plan_status.plan_end_date !== undefined) {
+        updateData.plan_status.plan_end_date = req.body.plan_status.plan_end_date;
+      }
+      if (req.body.plan_status.trial_start_date !== undefined) {
+        updateData.plan_status.trial_start_date = req.body.plan_status.trial_start_date;
+      }
+      if (req.body.plan_status.trial_end_date !== undefined) {
+        updateData.plan_status.trial_end_date = req.body.plan_status.trial_end_date;
+      }
+
+      console.log('📋 Received plan_status in request:', req.body.plan_status);
+      console.log('✅ Updating tenant with plan_status:', updateData.plan_status);
     }
 
     const updatedTenant = await Tenant.findByIdAndUpdate(
@@ -632,10 +703,10 @@ const updateTenant = async (req, res) => {
           price: updatedTenant.plan_id.price,
           time_period: updatedTenant.plan_id.time_period
         } : null,
-        plan_status: {
+        plan_status: updatedTenant.plan_status || {
           is_active: updatedTenant.status === 'active',
           is_trial: updatedTenant.status === 'trial',
-          plan_start_date: null, // Tenant model doesn't have these fields
+          plan_start_date: null,
           plan_end_date: null,
           trial_start_date: null,
           trial_end_date: null,
@@ -1313,6 +1384,454 @@ const getTenantUsers = async (req, res) => {
   }
 };
 
+/**
+ * Create a new user for a specific tenant
+ * @route POST /api/admin/tenants/:tenant/users
+ * @access Super Admin only
+ */
+const createTenantUser = async (req, res) => {
+  try {
+    const { tenant } = req.params;
+    const { name, email, phone, roleIds, password, is_active } = req.body;
+
+    // Validate tenant ID
+    if (!tenant.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tenant ID format'
+      });
+    }
+
+    // Check if tenant exists
+    const tenantExists = await Tenant.findById(tenant);
+    if (!tenantExists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant not found'
+      });
+    }
+
+    // Validate required fields
+    const validationErrors = {};
+    if (!name || !name.trim()) {
+      validationErrors.name = ['Name is required'];
+    }
+    if (!email || !email.trim()) {
+      validationErrors.email = ['Email is required'];
+    }
+    if (!password || password.length < 6) {
+      validationErrors.password = ['Password must be at least 6 characters'];
+    }
+    if (!roleIds || roleIds.length === 0) {
+      validationErrors.roleIds = ['At least one role is required'];
+    }
+
+    if (Object.keys(validationErrors).length > 0) {
+      return res.status(422).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ email: email.trim() });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already exists',
+        errors: {
+          email: ['A user with this email already exists']
+        }
+      });
+    }
+
+    // Create user in MongoDB
+    const bcrypt = require('bcrypt');
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = new User({
+      full_name: name.trim(),
+      email: email.trim(),
+      phone: phone?.trim() || '',
+      password: hashedPassword,
+      tenant_id: tenant,
+      role_ids: roleIds,
+      is_active: is_active !== undefined ? is_active : true
+    });
+
+    await newUser.save();
+
+    // Populate roles for response
+    await newUser.populate('role_ids', 'name description permissions');
+
+    // Create user in Auth0
+    let auth0User = null;
+    try {
+      console.log(`🔐 Creating Auth0 user for: ${email.trim()}`);
+      const auth0Service = require('../services/auth0Service');
+
+      auth0User = await auth0Service.createAuth0User({
+        email: email.trim(),
+        full_name: name.trim(),
+        phone: phone?.trim() || '',
+        is_active: is_active !== undefined ? is_active : true,
+        role_ids: roleIds,
+        _id: newUser._id
+      });
+
+      // Assign roles to Auth0 user
+      if (roleIds && roleIds.length > 0) {
+        await auth0Service.assignRolesToUser(auth0User.user_id, roleIds);
+      }
+
+      // Save Auth0 user ID to MongoDB user
+      newUser.auth0_id = auth0User.user_id;
+      await newUser.save();
+
+      console.log(`✅ Auth0 user created successfully: ${auth0User.user_id}`);
+    } catch (auth0Error) {
+      console.error('❌ Failed to create Auth0 user:', auth0Error.message);
+      // Don't fail the entire operation if Auth0 fails
+      // User is still created in MongoDB, but will need manual Auth0 sync
+      console.log('⚠️ User created in MongoDB without Auth0 integration');
+    }
+
+    // Log audit
+    await AuditLog.create({
+      action: 'create',
+      resource_type: 'user',
+      resource_id: newUser._id,
+      tenant_id: tenant,
+      user_id: req.superAdmin?.id,
+      user_email: req.superAdmin?.email,
+      details: {
+        user_email: email.trim(),
+        user_name: name.trim(),
+        roles: roleIds,
+        auth0_created: !!auth0User,
+        auth0_id: auth0User?.user_id || null
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: {
+        id: newUser._id,
+        full_name: newUser.full_name,
+        email: newUser.email,
+        phone: newUser.phone,
+        is_active: newUser.is_active,
+        roles: newUser.role_ids || [],
+        created_at: newUser.created_at,
+        updated_at: newUser.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Error creating tenant user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating user',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update a user for a specific tenant
+ * @route PUT /api/admin/tenants/:tenant/users/:userId
+ * @access Super Admin only
+ */
+const updateTenantUser = async (req, res) => {
+  try {
+    const { tenant, userId } = req.params;
+    const { name, phone, roleIds, password, is_active } = req.body;
+
+    // Validate tenant ID
+    if (!tenant.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tenant ID format'
+      });
+    }
+
+    // Check if tenant exists
+    const tenantExists = await Tenant.findById(tenant);
+    if (!tenantExists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant not found'
+      });
+    }
+
+    // Find user
+    const user = await User.findOne({ _id: userId, tenant_id: tenant });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found in this tenant'
+      });
+    }
+
+    // Validate required fields
+    const validationErrors = {};
+    if (name !== undefined && (!name || !name.trim())) {
+      validationErrors.name = ['Name is required'];
+    }
+    if (password !== undefined && password && password.length < 6) {
+      validationErrors.password = ['Password must be at least 6 characters'];
+    }
+    if (roleIds !== undefined && (!roleIds || roleIds.length === 0)) {
+      validationErrors.roleIds = ['At least one role is required'];
+    }
+
+    if (Object.keys(validationErrors).length > 0) {
+      return res.status(422).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+
+    // Update fields
+    if (name) user.full_name = name.trim();
+    if (phone !== undefined) user.phone = phone?.trim() || '';
+    if (roleIds) user.role_ids = roleIds;
+    if (is_active !== undefined) user.is_active = is_active;
+
+    // Update password if provided
+    if (password) {
+      const bcrypt = require('bcrypt');
+      user.password = await bcrypt.hash(password, 10);
+    }
+
+    user.updated_at = new Date();
+    await user.save();
+
+    // Populate roles for response
+    await user.populate('role_ids', 'name description permissions');
+
+    // Update user in Auth0
+    if (user.auth0_id) {
+      try {
+        console.log(`🔐 Updating Auth0 user: ${user.auth0_id}`);
+        const auth0Service = require('../services/auth0Service');
+
+        const auth0UpdateData = {};
+        if (name) auth0UpdateData.full_name = name.trim();
+        if (phone !== undefined) auth0UpdateData.phone = phone?.trim() || '';
+        if (is_active !== undefined) auth0UpdateData.is_active = is_active;
+
+        await auth0Service.updateAuth0User(user.auth0_id, auth0UpdateData);
+
+        // Sync roles if changed
+        if (roleIds) {
+          await auth0Service.syncUserRoles(user.auth0_id, roleIds);
+        }
+
+        console.log(`✅ Auth0 user updated successfully`);
+      } catch (auth0Error) {
+        console.error('❌ Failed to update Auth0 user:', auth0Error.message);
+        // Don't fail the entire operation if Auth0 fails
+      }
+    } else {
+      console.log('⚠️ User does not have auth0_id, skipping Auth0 update');
+    }
+
+    // Log audit
+    await AuditLog.create({
+      action: 'update',
+      resource_type: 'user',
+      resource_id: userId,
+      tenant_id: tenant,
+      user_id: req.superAdmin?.id,
+      user_email: req.superAdmin?.email,
+      details: {
+        user_email: user.email,
+        user_name: user.full_name,
+        updated_fields: Object.keys(req.body),
+        auth0_synced: !!user.auth0_id
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'User updated successfully',
+      data: {
+        id: user._id,
+        full_name: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        is_active: user.is_active,
+        roles: user.role_ids || [],
+        created_at: user.created_at,
+        updated_at: user.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Error updating tenant user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating user',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete a user from a specific tenant
+ * @route DELETE /api/admin/tenants/:tenant/users/:userId
+ * @access Super Admin only
+ */
+const deleteTenantUser = async (req, res) => {
+  try {
+    const { tenant, userId } = req.params;
+
+    // Validate tenant ID
+    if (!tenant.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tenant ID format'
+      });
+    }
+
+    // Check if tenant exists
+    const tenantExists = await Tenant.findById(tenant);
+    if (!tenantExists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant not found'
+      });
+    }
+
+    // Find user
+    const user = await User.findOne({ _id: userId, tenant_id: tenant });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found in this tenant'
+      });
+    }
+
+    // Delete user from Auth0 first
+    if (user.auth0_id) {
+      try {
+        console.log(`🔐 Deleting Auth0 user: ${user.auth0_id}`);
+        const auth0Service = require('../services/auth0Service');
+        await auth0Service.deleteAuth0User(user.auth0_id);
+        console.log(`✅ Auth0 user deleted successfully`);
+      } catch (auth0Error) {
+        console.error('❌ Failed to delete Auth0 user:', auth0Error.message);
+        // Continue with MongoDB deletion even if Auth0 fails
+      }
+    } else {
+      console.log('⚠️ User does not have auth0_id, skipping Auth0 deletion');
+    }
+
+    // Log audit before deletion
+    await AuditLog.create({
+      action: 'delete',
+      resource_type: 'user',
+      resource_id: userId,
+      tenant_id: tenant,
+      user_id: req.superAdmin?.id,
+      user_email: req.superAdmin?.email,
+      details: {
+        user_email: user.email,
+        user_name: user.full_name,
+        auth0_deleted: !!user.auth0_id,
+        auth0_id: user.auth0_id || null
+      }
+    });
+
+    // Delete user from MongoDB
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting tenant user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting user',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Sync tenant users to Auth0
+ * @route POST /api/admin/tenants/:tenant/users/sync-auth0
+ * @access Super Admin only
+ */
+const syncUsersToAuth0 = async (req, res) => {
+  try {
+    const { tenant } = req.params;
+    const { limit, skipExisting = 'true' } = req.query;
+
+    // Validate tenant ID
+    if (!tenant.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tenant ID format'
+      });
+    }
+
+    // Check if tenant exists
+    const tenantExists = await Tenant.findById(tenant);
+    if (!tenantExists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant not found'
+      });
+    }
+
+    console.log(`🔄 Starting Auth0 sync for tenant: ${tenant}`);
+
+    // Use the sync script
+    const syncUsersScript = require('../scripts/syncUsersToAuth0');
+    const result = await syncUsersScript({
+      tenantId: tenant,
+      dryRun: false,
+      skipExisting: skipExisting === 'true',
+      limit: limit ? parseInt(limit) : null
+    });
+
+    // Log audit
+    await AuditLog.create({
+      action: 'update',
+      resource_type: 'tenant',
+      resource_id: tenant,
+      tenant_id: tenant,
+      user_id: req.superAdmin?.id,
+      user_email: req.superAdmin?.email,
+      details: {
+        action: 'sync_users_to_auth0',
+        synced: result.synced,
+        skipped: result.skipped,
+        failed: result.failed
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Auth0 sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Error syncing users to Auth0:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error syncing users to Auth0',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllTenants,
   getTenantById,
@@ -1325,6 +1844,10 @@ module.exports = {
   updateStatus,
   getLocationData,
   getTenantUsers,
+  createTenantUser,
+  updateTenantUser,
+  deleteTenantUser,
+  syncUsersToAuth0,
   getSubscriptions,
   subscribe,
   updateSubscriptionStatus

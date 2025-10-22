@@ -42,6 +42,49 @@ const TenantSchema = new mongoose.Schema({
     default: null,
     index: true
   },
+  // Plan Status Information
+  plan_status: {
+    is_active: {
+      type: Boolean,
+      default: true
+    },
+    is_trial: {
+      type: Boolean,
+      default: false
+    },
+    plan_start_date: {
+      type: Date,
+      default: null
+    },
+    plan_end_date: {
+      type: Date,
+      default: null
+    },
+    trial_start_date: {
+      type: Date,
+      default: null
+    },
+    trial_end_date: {
+      type: Date,
+      default: null
+    }
+  },
+  // S3 Bucket Information
+  s3_bucket_name: {
+    type: String,
+    trim: true,
+    index: true
+  },
+  s3_bucket_region: {
+    type: String,
+    default: 'ap-southeast-2',
+    trim: true
+  },
+  s3_bucket_status: {
+    type: String,
+    enum: ['created', 'pending', 'failed', 'not_created'],
+    default: 'not_created'
+  },
   // Audit fields
   created_at: {
     type: Date,

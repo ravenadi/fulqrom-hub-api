@@ -11,6 +11,8 @@ const Asset = require('../models/Asset');
 const BuildingTenant = require('../models/BuildingTenant');
 const Vendor = require('../models/Vendor');
 const { uploadFileToS3, generatePresignedUrl, generatePreviewUrl, deleteFileFromS3 } = require('../utils/s3Upload');
+const TenantS3Service = require('../services/tenantS3Service');
+const Tenant = require('../models/Tenant');
 const {
   validateCreateDocument,
   validateUpdateDocument,
@@ -652,16 +654,51 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
       });
     }
 
-    // Upload file to S3 using shared bucket (simple and reliable)
+    // Get tenant ID from request (set by auth middleware)
+    const tenantId = req.user?.tenant_id || req.tenantId;
+
     console.log('📤 Starting file upload to S3...');
     console.log('📁 File details:', {
       originalname: req.file.originalname,
       size: req.file.size,
       mimetype: req.file.mimetype,
-      customer_id: documentData.customer_id
+      customer_id: documentData.customer_id,
+      tenant_id: tenantId
     });
 
-    const uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+    let uploadResult;
+
+    // Try to upload to tenant-specific bucket first
+    if (tenantId) {
+      try {
+        // Get tenant information
+        const tenant = await Tenant.findById(tenantId);
+
+        if (tenant && tenant.s3_bucket_name && tenant.s3_bucket_status === 'created') {
+          console.log(`📦 Using tenant-specific S3 bucket: ${tenant.s3_bucket_name}`);
+
+          // Upload to tenant-specific bucket
+          const tenantS3Service = new TenantS3Service(tenantId);
+          uploadResult = await tenantS3Service.uploadFileToTenantBucket(
+            req.file,
+            tenantId,
+            tenant.tenant_name
+          );
+
+          console.log(`✅ File uploaded to tenant bucket successfully`);
+        } else {
+          console.log('⚠️  Tenant bucket not available, falling back to shared bucket');
+          uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+        }
+      } catch (tenantS3Error) {
+        console.error('❌ Tenant bucket upload failed, falling back to shared bucket:', tenantS3Error.message);
+        uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+      }
+    } else {
+      // Fallback to shared bucket if no tenant ID
+      console.log('📦 Using shared S3 bucket (no tenant ID)');
+      uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+    }
 
     if (!uploadResult.success) {
       console.error('❌ S3 upload failed:', uploadResult.error);
