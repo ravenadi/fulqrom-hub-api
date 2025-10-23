@@ -11,14 +11,22 @@ const DROPDOWN_CONSTANTS = {
   // Loaded from: GET /api/dropdowns (flattened as customer_industry_types)
   customer: {
     industry_types: [
-      'Commercial Real Estate',
-      'Property Management',
-      'HVAC Services',
-      'Facility Management',
       'Building Maintenance',
-      'Energy Management',
+      'Commercial Real Estate',
       'Construction',
-      'Engineering Services'
+      'Energy Management',
+      'Engineering Services',
+      'Facility Management',
+      'HVAC Services',
+      'Property Management'
+    ],
+    organisation_sizes: [
+      '1-10',
+      '11-50',
+      '51-200',
+      '201-500',
+      '501-1000',
+      '1001+'
     ]
   },
 
@@ -26,26 +34,32 @@ const DROPDOWN_CONSTANTS = {
   // Loaded from: GET /api/dropdowns (flattened as contact_role_types, contact_types, contact_platform_access)
   contact: {
     role_types: [
+      'Emergency',
+      'Financial',
+      'Other',
       'Primary',
       'Secondary',
-      'Emergency',
-      'Technical',
-      'Financial',
-      'Other'
+      'Technical'
     ],
     types: [
-      'Internal',
-      'External',
-      'Contractor',
-      'Vendor',
       'Consultant',
-      'Other'
+      'Contractor',
+      'External',
+      'Internal',
+      'Other',
+      'Vendor'
     ],
     platform_access: [
       'Admin',
+      'None',
       'Operational',
-      'View Only',
-      'None'
+      'View Only'
+    ],
+    method_types: [
+      'Email',
+      'Phone',
+      'SMS',
+      'WhatsApp'
     ]
   },
 
@@ -155,26 +169,26 @@ const DROPDOWN_CONSTANTS = {
       'Ventilation'
     ],
     statuses: [
-      'Operational',
-      'Under Testing',
+      'Decommissioned',
       'Maintenance Required',
+      'Operational',
       'Out of Service',
-      'Decommissioned'
+      'Under Testing'
     ],
     criticality_levels: [
       'Critical',
       'High',
-      'Medium',
-      'Low'
+      'Low',
+      'Medium'
     ],
     conditions: [
-      'Excellent',
-      'Good',
-      'Fair',
-      'Poor',
-      'New',
       'Average',
-      'Other'
+      'Excellent',
+      'Fair',
+      'Good',
+      'New',
+      'Other',
+      'Poor'
     ]
   },
 
@@ -217,59 +231,60 @@ const DROPDOWN_CONSTANTS = {
   // Loaded from: GET /api/dropdowns (flattened as document_types, document_categories, etc.)
   document: {
     types: [
-      'PDF',
-      'Word',
+      'BAK',
+      'BIM',
+      'CAD',
+      'DWG',
       'Excel',
       'Image',
-      'CAD',
-      'BIM',
-      'Other'
+      'Other',
+      'PDF',
+      'Word'
     ],
     categories: [
-      'Operations & Maintenance (O&M) Manuals',
+      'Asset Registers',
+      'Building Management & Control Diagrams',
+      'Certification Reports',
       'Commissioning Data (Air & Water Balance Reports)',
+      'Compliance Documents',
+      'Construction Drawings',
+      'Device Register',
+      'Drawing Schedules',
       'Egress Report',
+      'Electrical Schematics',
       'Fire Safety Reports',
       'HVAC Drawings',
-      'Electrical Schematics',
-      'Plumbing & Hydraulics Drawings',
       'Mechanical Services Drawings',
-      'Waste Services',
-      'Building Management & Control Diagrams',
-      'Construction Drawings',
-      'Tender Drawings & Specifications',
-      'Shop Drawings',
-      'Certification Reports',
-      'Warranty Certificates',
-      'Service Reports',
-      'Asset Registers',
-      'Drawing Register',
-      'Drawing Schedules',
-      'Compliance Documents',
-      'Project Management Documentation',
       'NABERS & Energy Reporting',
-      'Device Register'
+      'Operations & Maintenance (O&M) Manuals',
+      'Plumbing & Hydraulics Drawings',
+      'Project Management Documentation',
+      'Service Reports',
+      'Shop Drawings',
+      'Tender Drawings & Specifications',
+      'Warranty Certificates',
+      'Waste Services'
     ],
     statuses: [
-      'Draft',
-      'Under Review',
       'Approved',
       'Archived',
-      'Rejected'
+      'Draft',
+      'Rejected',
+      'Under Review'
     ],
     engineering_disciplines: [
-      'Mechanical',
-      'Electrical',
-      'Plumbing',
-      'Structural',
       'Civil',
+      'Electrical',
       'Fire Protection',
       'HVAC',
+      'Mechanical',
+      'Plumbing',
+      'Structural',
       'Telecommunications'
     ],
     approval_statuses: [
-      'Pending',
       'Approved',
+      'Pending',
       'Rejected',
       'Under Review'
     ]
@@ -279,45 +294,87 @@ const DROPDOWN_CONSTANTS = {
   // Loaded from: GET /api/dropdowns (flattened as vendor_contractor_types, vendor_consultant_specialisations, etc.)
   vendor: {
     contractor_types: [
-      'HVAC Contractor',
-      'Electrical Contractor',
-      'Plumbing Contractor',
-      'Fire Safety Contractor',
       'Building Consultant',
-      'General Contractor',
-      'Maintenance Contractor',
       'Cleaning Contractor',
-      'Security Contractor',
       'Construction Contractor',
+      'Electrical Contractor',
+      'Fire Safety Contractor',
+      'General Contractor',
+      'HVAC Contractor',
       'Landscaping Contractor',
-      'Pest Control Contractor'
+      'Maintenance Contractor',
+      'Pest Control Contractor',
+      'Plumbing Contractor',
+      'Security Contractor'
     ],
     consultant_specialisations: [
       'Building Consultant',
+      'Electrical Consultant',
+      'Energy Consultant',
       'Engineering Consultant',
+      'Environmental Consultant',
       'Fire Safety Consultant',
       'Mechanical Consultant',
-      'Electrical Consultant',
-      'Structural Consultant',
-      'Environmental Consultant',
-      'Energy Consultant'
+      'Structural Consultant'
     ],
     certification_authorities: [
+      'Accredited',
       'Council-appointed',
-      'Private',
-      'Accredited'
+      'Private'
     ],
     services_provided: [
-      'Maintenance & Repairs',
-      'Installation',
-      'Emergency Callout',
-      'Inspections',
-      'Testing & Commissioning',
+      'Compliance & Certification',
       'Consultation',
       'Design',
+      'Emergency Callout',
+      'Energy Audits',
+      'Inspections',
+      'Installation',
+      'Maintenance & Repairs',
       'Project Management',
-      'Compliance & Certification',
-      'Energy Audits'
+      'Testing & Commissioning'
+    ],
+    business_types: [
+      'company',
+      'other',
+      'partnership',
+      'sole-trader',
+      'trust'
+    ],
+    insurance_types: [
+      'cyber-liability',
+      'directors-officers',
+      'product-liability',
+      'professional-indemnity',
+      'public-liability',
+      'workers-compensation'
+    ],
+    license_types: [
+      'asbestos-removal',
+      'builders',
+      'crane-operator',
+      'demolition',
+      'electrical',
+      'fire-safety',
+      'gas-fitting',
+      'other',
+      'plumbing',
+      'refrigeration',
+      'scaffolding'
+    ],
+    status_types: [
+      'current',
+      'expired',
+      'expiring-soon',
+      'not-required',
+      'pending'
+    ],
+    statuses: [
+      'active',
+      'inactive',
+      'pending-approval',
+      'suspended',
+      'under-review'
     ]
   }
 };

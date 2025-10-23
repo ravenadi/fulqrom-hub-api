@@ -8,7 +8,7 @@ const SettingsSchema = new mongoose.Schema({
   setting_key: {
     type: String,
     required: true,
-    unique: true,
+    // unique: true,
     trim: true,
     index: true
   },

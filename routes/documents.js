@@ -449,6 +449,13 @@ router.get('/tags', async (req, res) => {
 
     // Build match query for optional filtering
     let matchQuery = {};
+
+    // CRITICAL: Filter by tenant for multi-tenant data isolation
+    // Only show tags from documents belonging to the current tenant
+    if (req.tenant && req.tenant.tenantId && !req.tenant.bypassTenant) {
+      matchQuery.tenant_id = req.tenant.tenantId;
+    }
+
     if (customer_id) matchQuery['customer.customer_id'] = customer_id;
     if (site_id) matchQuery['location.site.site_id'] = site_id;
     if (building_id) matchQuery['location.building.building_id'] = building_id;
@@ -510,7 +517,7 @@ router.get('/stats', async (req, res) => {
 
     const mongoose = require('mongoose');
     const filter = {
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     const totalDocuments = await Document.countDocuments(filter);
@@ -1648,7 +1655,7 @@ router.get('/storage/stats', async (req, res) => {
     // Build aggregation pipeline with mandatory tenant filter
     const matchStage = {
       'file.file_meta.file_size': { $exists: true, $ne: null },
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     // Aggregate total file size and count documents with files

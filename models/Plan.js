@@ -102,7 +102,7 @@ PlanSchema.index({ created_at: -1 });
 
 // Virtual for formatted price
 PlanSchema.virtual('price_formatted').get(function() {
-  return '$' + this.price.toFixed(2);
+  return this.price ? '$' + this.price.toFixed(2) : '$0.00';
 });
 
 // Virtual for billing cycle display

@@ -4,7 +4,7 @@
  */
 
 // Public routes that bypass authentication
-const PUBLIC_ROUTES = ['/auth', '/health', '/dropdowns', '/admin'];
+const PUBLIC_ROUTES = ['/auth', '/health', '/admin'];
 
 // Module mapping: URL path -> module name for permission checking
 const MODULE_MAP = {
@@ -21,7 +21,8 @@ const MODULE_MAP = {
   'roles': 'users', // roles are managed by users with user permissions
   'notifications': 'users', // notifications are user-related
   'analytics': 'analytics',
-  'hierarchy': 'customers' // hierarchy is customer-related
+  'hierarchy': 'customers', // hierarchy is customer-related
+  'dropdowns': 'users' // dropdowns are user-related (view permission)
 };
 
 // HTTP method to permission mapping

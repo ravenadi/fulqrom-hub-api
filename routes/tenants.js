@@ -364,9 +364,9 @@ router.get('/summary/stats', async (req, res) => {
     const { customer_id, site_id, building_id } = req.query;
 
     let matchQuery = {};
-    if (customer_id) matchQuery.customer_id = mongoose.Types.ObjectId(customer_id);
-    if (site_id) matchQuery.site_id = mongoose.Types.ObjectId(site_id);
-    if (building_id) matchQuery.building_id = mongoose.Types.ObjectId(building_id);
+    if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+    if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
+    if (building_id) matchQuery.building_id = new mongoose.Types.ObjectId(building_id);
 
     const stats = await BuildingTenant.aggregate([
       { $match: matchQuery },
@@ -455,9 +455,9 @@ router.get('/by-industry', async (req, res) => {
     const { customer_id, site_id, building_id } = req.query;
 
     let matchQuery = {};
-    if (customer_id) matchQuery.customer_id = mongoose.Types.ObjectId(customer_id);
-    if (site_id) matchQuery.site_id = mongoose.Types.ObjectId(site_id);
-    if (building_id) matchQuery.building_id = mongoose.Types.ObjectId(building_id);
+    if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+    if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
+    if (building_id) matchQuery.building_id = new mongoose.Types.ObjectId(building_id);
 
     const industryStats = await BuildingTenant.aggregate([
       { $match: matchQuery },

@@ -302,7 +302,7 @@ function tenantPlugin(schema, options = {}) {
       aggregate: (pipeline = []) => {
         // Prepend tenant filter to aggregation pipeline
         return model.aggregate([
-          { $match: { tenant_id: mongoose.Types.ObjectId(tenantId) } },
+          { $match: { tenant_id: new mongoose.Types.ObjectId(tenantId) } },
           ...pipeline
         ]);
       }

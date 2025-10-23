@@ -494,8 +494,8 @@ router.get('/summary/stats', async (req, res) => {
     const { customer_id, site_id } = req.query;
 
     let matchQuery = {};
-    if (customer_id) matchQuery.customer_id = mongoose.Types.ObjectId(customer_id);
-    if (site_id) matchQuery.site_id = mongoose.Types.ObjectId(site_id);
+    if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+    if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
 
     const stats = await Building.aggregate([
       { $match: matchQuery },
@@ -546,8 +546,8 @@ router.get('/by-category', async (req, res) => {
     const { customer_id, site_id } = req.query;
 
     let matchQuery = {};
-    if (customer_id) matchQuery.customer_id = mongoose.Types.ObjectId(customer_id);
-    if (site_id) matchQuery.site_id = mongoose.Types.ObjectId(site_id);
+    if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
+    if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
 
     const categoryStats = await Building.aggregate([
       { $match: matchQuery },

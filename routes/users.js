@@ -53,6 +53,12 @@ router.get('/', async (req, res) => {
     // Build filter query
     let filterQuery = {};
 
+    // CRITICAL: Filter by tenant for multi-tenant data isolation
+    // Only show users from the current tenant unless user is super admin bypassing tenant
+    if (req.tenant && req.tenant.tenantId && !req.tenant.bypassTenant) {
+      filterQuery.tenant_id = req.tenant.tenantId;
+    }
+
     if (is_active !== undefined) {
       filterQuery.is_active = is_active === 'true';
     }

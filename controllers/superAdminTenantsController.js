@@ -369,6 +369,33 @@ const createTenant = async (req, res) => {
       await tenant.save();
     }
 
+    // Setup default dropdown settings for tenant
+    try {
+      console.log(`🎨 Creating default dropdown settings for tenant: ${tenant._id}`);
+      const DROPDOWN_CONSTANTS = require('../constants/dropdownConstants');
+      const Settings = require('../models/Settings');
+
+      // Create tenant-specific dropdown settings
+      await Settings.create({
+        tenant_id: tenant._id,
+        setting_key: 'dropdown_values',
+        category: 'system',
+        setting_type: 'dropdown',
+        description: 'Application-wide dropdown values for all modules',
+        value: DROPDOWN_CONSTANTS,
+        default_value: DROPDOWN_CONSTANTS,
+        is_active: true,
+        is_editable: true,
+        created_by: 'system',
+        updated_by: 'system'
+      });
+
+      console.log(`✅ Default dropdown settings created successfully for tenant: ${tenant._id}`);
+    } catch (dropdownError) {
+      console.error('❌ Failed to create default dropdown settings:', dropdownError.message);
+      // Don't fail tenant creation if dropdown setup fails
+    }
+
     // Log audit
     await AuditLog.create({
       action: 'create',

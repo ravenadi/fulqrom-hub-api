@@ -79,7 +79,7 @@ router.get('/entities/customers', async (req, res) => {
     const mongoose = require('mongoose');
     const query = {
       is_active: true,
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     const customers = await Customer.find(query)
@@ -123,7 +123,7 @@ router.get('/entities/sites', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     if (customer_id) {
@@ -176,7 +176,7 @@ router.get('/entities/buildings', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     if (customer_id) {
@@ -236,7 +236,7 @@ router.get('/entities/floors', async (req, res) => {
 
     const mongoose = require('mongoose');
     const filter = {
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     if (customer_id) {
@@ -305,7 +305,7 @@ router.get('/entities/assets', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     if (customer_id) {
@@ -388,7 +388,7 @@ router.get('/entities/tenants', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     if (customer_id) {
@@ -466,7 +466,7 @@ router.get('/entities/vendors', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
-      tenant_id: mongoose.Types.ObjectId(tenantId)
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
     if (category) {
@@ -535,16 +535,45 @@ router.get('/document-tags', async (req, res) => {
 // GET /api/dropdowns - Get all dropdown values for all modules
 router.get('/', async (req, res) => {
   try {
-    // Try to get dropdown settings from database
+    // Debug logging
+    console.log('🔍 Dropdowns endpoint called');
+    console.log('req.tenant:', req.tenant);
+    console.log('req.user:', req.user);
+    console.log('req.auth:', req.auth);
+    
+    // Get tenant ID from request context (mandatory for tenant-specific data)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      console.error('❌ Dropdowns endpoint - No tenant ID found');
+      console.error('req.tenant:', req.tenant);
+      console.error('req.user:', req.user);
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required',
+        debug: {
+          hasTenantObject: !!req.tenant,
+          hasUserObject: !!req.user
+        }
+      });
+    }
+
+    console.log(`📋 Fetching dropdowns for tenant: ${tenantId}`);
+
+    // Try to get dropdown settings from database for this tenant
+    const mongoose = require('mongoose');
     let dropdownSetting = await Settings.findOne({
+      tenant_id: new mongoose.Types.ObjectId(tenantId),
       setting_key: 'dropdown_values',
       is_active: true
     });
 
-    // If no database setting exists, create one with default values
+    // If no database setting exists for this tenant, create one with default values
     if (!dropdownSetting) {
+      console.log(`📋 Creating default dropdown settings for tenant: ${tenantId}`);
       // Creating default dropdown settings from constants
       dropdownSetting = await Settings.create({
+        tenant_id: new mongoose.Types.ObjectId(tenantId),
         setting_key: 'dropdown_values',
         category: 'system',
         setting_type: 'dropdown',
@@ -556,6 +585,7 @@ router.get('/', async (req, res) => {
         created_by: 'system',
         updated_by: 'system'
       });
+      console.log(`✅ Default dropdown settings created for tenant: ${tenantId}`);
     }
 
     // Return flattened structure to match frontend
@@ -565,9 +595,11 @@ router.get('/', async (req, res) => {
       success: true,
       data: flattened,
       source: 'database',
+      tenant_id: tenantId,
       last_updated: dropdownSetting.updated_at
     });
   } catch (error) {
+    console.error('Error fetching dropdown settings:', error);
 
     // Fallback to constants if database fails
     const flattened = flattenDropdowns(DROPDOWN_CONSTANTS);
@@ -585,19 +617,32 @@ router.get('/', async (req, res) => {
 // This endpoint now persists changes to the database
 router.post('/', async (req, res) => {
   try {
+    // Get tenant ID from request context (mandatory for tenant-specific data)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
     const flattenedUpdates = req.body;
 
     // Convert flattened format back to nested structure
     const nestedUpdates = unflattenDropdowns(flattenedUpdates);
 
-    // Get or create dropdown setting
+    // Get or create dropdown setting for this tenant
+    const mongoose = require('mongoose');
     let dropdownSetting = await Settings.findOne({
+      tenant_id: new mongoose.Types.ObjectId(tenantId),
       setting_key: 'dropdown_values'
     });
 
     if (!dropdownSetting) {
-      // Create new setting with updates
+      // Create new setting with updates for this tenant
       dropdownSetting = await Settings.create({
+        tenant_id: new mongoose.Types.ObjectId(tenantId),
         setting_key: 'dropdown_values',
         category: 'system',
         setting_type: 'dropdown',
@@ -610,7 +655,7 @@ router.post('/', async (req, res) => {
         updated_by: req.body.updated_by || 'user'
       });
     } else {
-      // Update existing setting
+      // Update existing setting for this tenant
       dropdownSetting.value = nestedUpdates;
       dropdownSetting.updated_by = req.body.updated_by || 'user';
       dropdownSetting.updated_at = new Date();
@@ -624,9 +669,11 @@ router.post('/', async (req, res) => {
       success: true,
       message: 'Dropdown values updated successfully and saved to database',
       data: flattened,
+      tenant_id: tenantId,
       last_updated: dropdownSetting.updated_at
     });
   } catch (error) {
+    console.error('Error updating dropdown values:', error);
 
     res.status(500).json({
       success: false,
