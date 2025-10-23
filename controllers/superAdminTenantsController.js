@@ -70,8 +70,9 @@ const getAllTenants = async (req, res) => {
     // Format tenants with additional data
     const formattedTenants = await Promise.all(tenants.map(async (tenant) => {
       const usersCount = await User.countDocuments({ tenant_id: tenant._id });
-      // Use withTenant for proper tenant context or withoutTenantFilter for super admin
-      const customersCount = await Customer.withTenant(tenant._id).countDocuments({});
+
+      // Count customers for this tenant
+      const customersCount = await Customer.countDocuments({ tenant_id: tenant._id });
 
       // Get all customer IDs for this tenant
       const customers = await Customer.find({ tenant_id: tenant._id }).select('_id').lean();
@@ -206,37 +207,37 @@ const getTenantById = async (req, res) => {
       });
     }
 
-    // Get additional statistics
-    const [usersCount, customersCount, sitesCount, buildingsCount, documentsCount, subscription] = await Promise.all([
-      User.countDocuments({ customer_id: tenant }),
-      Customer.withTenant(tenant).countDocuments({}),
+    // Get additional statistics and users
+    const [usersCount, customersCount, sitesCount, buildingsCount, documentsCount, users] = await Promise.all([
+      User.countDocuments({ tenant_id: tenant }),
+      Customer.countDocuments({ tenant_id: tenant }),
       Site.countDocuments({ customer_id: tenant }),
       Building.countDocuments({ customer_id: tenant }),
-      Document.countDocuments({ customer_id: tenant }),
-      Subscription.findOne({ tenant_id: tenant }).populate('plan')
+      Document.countDocuments({ tenant_id: tenant }),
+      User.find({ tenant_id: tenant }).select('full_name email phone is_active created_at').limit(10).lean()
     ]);
 
     const formattedTenant = {
       id: tenantData._id,
-      name: tenantData.organisation?.organisation_name || 'N/A',
-      email_domain: tenantData.organisation?.email_domain || 'N/A',
+      name: tenantData.tenant_name || 'N/A',
+      email_domain: 'N/A', // Tenant model doesn't have email_domain
       organisation_id: tenantData._id,
-      is_active: tenantData.is_active,
-      is_active_label: tenantData.is_active ? 'Active' : 'Inactive',
-      status: tenantData.is_active ? 'active' : 'inactive',
-      plan: subscription?.plan ? {
-        id: subscription.plan._id,
-        name: subscription.plan.name,
-        price: subscription.plan.price,
-        time_period: subscription.plan.billing_cycle
+      is_active: tenantData.status === 'active',
+      is_active_label: tenantData.status === 'active' ? 'Active' : 'Inactive',
+      status: tenantData.status,
+      plan: tenantData.plan_id ? {
+        id: tenantData.plan_id._id,
+        name: tenantData.plan_id.name,
+        price: tenantData.plan_id.price,
+        time_period: tenantData.plan_id.time_period
       } : null,
-      plan_status: {
-        is_active: subscription?.status === 'active',
-        is_trial: subscription?.is_trial,
-        plan_start_date: subscription?.start_date,
-        plan_end_date: subscription?.end_date,
-        trial_start_date: subscription?.trial_start_date,
-        trial_end_date: subscription?.trial_end_date,
+      plan_status: tenantData.plan_status || {
+        is_active: tenantData.status === 'active',
+        is_trial: tenantData.status === 'trial',
+        plan_start_date: null,
+        plan_end_date: null,
+        trial_start_date: null,
+        trial_end_date: null,
       },
       users_count: usersCount,
       customers_count: customersCount,
@@ -245,7 +246,7 @@ const getTenantById = async (req, res) => {
       documents_count: documentsCount,
       created_at: tenantData.created_at,
       updated_at: tenantData.updated_at,
-      users: tenantData.users.map(user => ({
+      users: users.map(user => ({
         id: user._id,
         name: user.full_name,
         email: user.email,
@@ -856,7 +857,7 @@ const getTenantStats = async (req, res) => {
       totalAssets, totalVendors
     ] = await Promise.all([
       User.countDocuments({ tenant_id: tenant }),
-      Customer.withTenant(tenant).countDocuments({}),
+      Customer.countDocuments({ tenant_id: tenant }),
       Document.countDocuments({ tenant_id: tenant }),
       Site.countDocuments({ tenant_id: tenant }),
       Building.countDocuments({ tenant_id: tenant }),
