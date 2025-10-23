@@ -535,12 +535,6 @@ router.get('/document-tags', async (req, res) => {
 // GET /api/dropdowns - Get all dropdown values for all modules
 router.get('/', async (req, res) => {
   try {
-    // Debug logging
-    console.log('🔍 Dropdowns endpoint called');
-    console.log('req.tenant:', req.tenant);
-    console.log('req.user:', req.user);
-    console.log('req.auth:', req.auth);
-    
     // Get tenant ID from request context (mandatory for tenant-specific data)
     const tenantId = req.tenant?.tenantId;
 
