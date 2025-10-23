@@ -10,6 +10,14 @@ const router = express.Router();
 // GET /api/assets - List all assets
 router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const {
       customer_id,
       site_id,
@@ -211,11 +219,12 @@ router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
     const sortField = validSortFields.includes(sort_by) ? sort_by : 'createdAt';
     const sortDirection = sort_order === 'asc' ? 1 : -1;
 
-    // Get total count for pagination
-    const totalAssets = await Asset.countDocuments(filterQuery);
+    // Get total count for pagination (with tenant filtering)
+    const totalAssets = await Asset.countDocuments(filterQuery).setOptions({ _tenantId: req.tenant.tenantId });
 
-    // Get paginated assets
+    // Get paginated assets (with tenant filtering)
     const assets = await Asset.find(filterQuery)
+      .setOptions({ _tenantId: req.tenant.tenantId })
       .populate('customer_id', 'organisation.organisation_name')
       .populate('site_id', 'site_name address')
       .populate('building_id', 'building_name building_code')
@@ -285,8 +294,8 @@ router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
       installation_date: asset.date_of_installation || asset.installation_date || undefined
     }));
 
-    // Calculate summary statistics (on filtered data, not paginated)
-    const summaryStats = await Asset.aggregate([
+    // Calculate summary statistics (on filtered data, not paginated) with tenant filtering
+    const summaryStats = await Asset.withTenant(req.tenant.tenantId).aggregate([
       { $match: filterQuery },
       {
         $group: {
@@ -393,7 +402,16 @@ router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
 // GET /api/assets/:id - Get single asset
 router.get('/:id', checkResourcePermission('asset', 'view', (req) => req.params.id), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const asset = await Asset.findById(req.params.id)
+      .setOptions({ _tenantId: req.tenant.tenantId })
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address')
       .populate('building_id', 'building_name building_code')
@@ -432,6 +450,14 @@ router.get('/:id', checkResourcePermission('asset', 'view', (req) => req.params.
 // POST /api/assets - Create new asset
 router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset, async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
     if (!customer_id) {
@@ -447,6 +473,7 @@ router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset,
       site_id: site_id || null,
       building_id: building_id || null,
       floor_id: floor_id || null,
+      tenant_id: req.tenant.tenantId, // Ensure tenant_id is set
       ...otherFields
     };
 
@@ -515,6 +542,14 @@ router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset,
 // PUT /api/assets/:id - Update asset
 router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.id), validateUpdateAsset, async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
     // Build update object
@@ -527,6 +562,9 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
     if (site_id !== undefined) updateData.site_id = site_id || null;
     if (building_id !== undefined) updateData.building_id = building_id || null;
     if (floor_id !== undefined) updateData.floor_id = floor_id || null;
+
+    // Prevent tenant_id from being changed
+    delete updateData.tenant_id;
 
     // Handle legacy field mapping for backward compatibility
     if (otherFields.installation_date && !otherFields.date_of_installation) {
@@ -553,6 +591,7 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
       updateData,
       { new: true, runValidators: true }
     )
+    .setOptions({ _tenantId: req.tenant.tenantId })
     .populate('customer_id', 'organisation.organisation_name')
     .populate('site_id', 'site_name address')
     .populate('building_id', 'building_name building_code')
@@ -602,7 +641,16 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
 // DELETE /api/assets/:id - Delete asset
 router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    const asset = await Asset.findById(req.params.id);
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    const asset = await Asset.findById(req.params.id)
+      .setOptions({ _tenantId: req.tenant.tenantId });
 
     if (!asset) {
       return res.status(404).json({
@@ -620,7 +668,8 @@ router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.pa
       model: asset.model
     };
 
-    await Asset.findByIdAndDelete(req.params.id);
+    await Asset.findByIdAndDelete(req.params.id)
+      .setOptions({ _tenantId: req.tenant.tenantId });
 
     res.status(200).json({
       success: true,

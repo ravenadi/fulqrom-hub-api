@@ -25,8 +25,20 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
       is_active
     } = req.query;
 
-    // Build filter query
-    let filterQuery = {};
+    // Get tenant ID from request context (mandatory)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    // Build filter query with mandatory tenant filter
+    let filterQuery = {
+      tenant_id: tenantId
+    };
 
     // Search functionality
     if (search) {

@@ -1,8 +1,47 @@
 const express = require('express');
 const User = require('../models/User');
 const Role = require('../models/Role');
+const Tenant = require('../models/Tenant');
 
 const router = express.Router();
+
+/**
+ * Helper function to get tenant/organization information for a user
+ */
+async function getUserTenantInfo(user) {
+  try {
+    // If user has tenant_id, fetch the tenant info
+    if (user.tenant_id) {
+      const tenant = await Tenant.findById(user.tenant_id).lean();
+
+      if (tenant) {
+        return {
+          tenant_id: user.tenant_id.toString(),
+          tenant_name: tenant.tenant_name || tenant.display_name || 'Unknown Tenant',
+          organisation: {
+            organisation_id: tenant._id.toString(),
+            name: tenant.tenant_name || tenant.display_name || 'Unknown Tenant',
+            is_primary: true
+          }
+        };
+      }
+    }
+
+    // No tenant information available
+    return {
+      tenant_id: null,
+      tenant_name: null,
+      organisation: null
+    };
+  } catch (error) {
+    console.error('Error fetching tenant info:', error);
+    return {
+      tenant_id: null,
+      tenant_name: null,
+      organisation: null
+    };
+  }
+}
 
 /**
  * POST /api/auth/sync-user
@@ -35,6 +74,9 @@ router.post('/sync-user', async (req, res) => {
         user.updated_at = new Date();
         await user.save();
 
+        // Get tenant information
+        const tenantInfo = await getUserTenantInfo(user);
+
         return res.status(200).json({
           success: true,
           message: 'User synced with Auth0',
@@ -48,7 +90,10 @@ router.post('/sync-user', async (req, res) => {
             is_active: user.is_active,
             role_ids: user.role_ids,
             role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
-            resource_access: user.resource_access
+            resource_access: user.resource_access,
+            tenant_id: tenantInfo.tenant_id,
+            tenant_name: tenantInfo.tenant_name,
+            organisations: tenantInfo.organisation ? [tenantInfo.organisation] : []
           }
         });
       }
@@ -69,6 +114,9 @@ router.post('/sync-user', async (req, res) => {
       await user.save();
       await user.populate('role_ids');
 
+      // Get tenant information for new user
+      const tenantInfo = await getUserTenantInfo(user);
+
       return res.status(201).json({
         success: true,
         message: 'User created from Auth0',
@@ -82,12 +130,18 @@ router.post('/sync-user', async (req, res) => {
           is_active: user.is_active,
           role_ids: user.role_ids,
           role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
-          resource_access: user.resource_access
+          resource_access: user.resource_access,
+          tenant_id: tenantInfo.tenant_id,
+          tenant_name: tenantInfo.tenant_name,
+          organisations: tenantInfo.organisation ? [tenantInfo.organisation] : []
         }
       });
     }
 
     // User exists and already has auth0_id
+    // Get tenant information
+    const tenantInfo = await getUserTenantInfo(user);
+
     return res.status(200).json({
       success: true,
       message: 'User already synced',
@@ -101,7 +155,10 @@ router.post('/sync-user', async (req, res) => {
         is_active: user.is_active,
         role_ids: user.role_ids,
         role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
-        resource_access: user.resource_access
+        resource_access: user.resource_access,
+        tenant_id: tenantInfo.tenant_id,
+        tenant_name: tenantInfo.tenant_name,
+        organisations: tenantInfo.organisation ? [tenantInfo.organisation] : []
       }
     });
 
@@ -132,6 +189,9 @@ router.get('/user/:auth0_id', async (req, res) => {
       });
     }
 
+    // Get tenant information
+    const tenantInfo = await getUserTenantInfo(user);
+
     res.status(200).json({
       success: true,
       data: {
@@ -144,7 +204,10 @@ router.get('/user/:auth0_id', async (req, res) => {
         is_active: user.is_active,
         role_ids: user.role_ids,
         role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
-        resource_access: user.resource_access
+        resource_access: user.resource_access,
+        tenant_id: tenantInfo.tenant_id,
+        tenant_name: tenantInfo.tenant_name,
+        organisations: tenantInfo.organisation ? [tenantInfo.organisation] : []
       }
     });
 

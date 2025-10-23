@@ -132,7 +132,8 @@ router.get('/debug-user', async (req, res) => {
  */
 router.get('/unread-count', async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id?.toString() || req.user?.email;
+    // Use consistent user ID extraction - prioritize userId from auth middleware
+    const userId = req.user?.userId || req.user?.id || req.user?._id?.toString() || req.user?.email;
 
     if (!userId) {
       return res.status(401).json({

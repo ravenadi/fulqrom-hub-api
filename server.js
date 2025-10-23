@@ -8,6 +8,7 @@ require('dotenv').config();
 const errorHandler = require('./middleware/errorHandler');
 const authenticate = require('./middleware/authMiddleware');
 const authorize = require('./middleware/authorizationMiddleware');
+const { tenantContext } = require('./middleware/tenantContext');
 const { registerRoutes, getEndpointDocs } = require('./config/routes.config');
 
 const app = express();
@@ -18,19 +19,54 @@ const MONGODB_URI = process.env.MONGODB_CONNECTION;
 app.use(helmet());
 app.use(compression());
 
-// CORS configuration for development
+// CORS configuration for development and production
 app.use(cors({
-  origin: [
-    process.env.CLIENT_URL || 'http://localhost:8080',
-    'http://localhost:8080',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://hub.ravenlabs.biz'
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      process.env.CLIENT_URL || 'http://localhost:8080',
+      'http://localhost:8080',
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://hub.ravenlabs.biz'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-user-id']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'Accept', 
+    'x-user-id',
+    'x-tenant-id',
+    'x-requested-with',
+    'Access-Control-Allow-Origin',
+    'Access-Control-Allow-Headers',
+    'Access-Control-Allow-Methods'
+  ],
+  exposedHeaders: ['x-user-id', 'x-tenant-id'],
+  optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  preflightContinue: false
 }));
+
+// Handle preflight requests explicitly
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, x-user-id, x-tenant-id, x-requested-with');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
 
 // Body parsing middleware
 // Important: Do NOT parse multipart/form-data here - let multer handle it in routes
@@ -47,10 +83,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Apply authentication and authorization middleware to all API routes
-// These middlewares validate JWT tokens and check permissions
+// Apply authentication, authorization, and tenant context middleware to all API routes
+// These middlewares validate JWT tokens, check permissions, and set up tenant isolation
 app.use('/api', authenticate);
 app.use('/api', authorize);
+app.use('/api', tenantContext);
 
 // Register all API routes
 registerRoutes(app);

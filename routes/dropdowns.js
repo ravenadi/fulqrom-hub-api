@@ -66,7 +66,23 @@ function unflattenDropdowns(flattened) {
 // GET /api/dropdowns/entities/customers - Get all customers for dropdown
 router.get('/entities/customers', async (req, res) => {
   try {
-    const customers = await Customer.find({ is_active: true })
+    // Get tenant ID from request context (mandatory)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+    const query = {
+      is_active: true,
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
+
+    const customers = await Customer.find(query)
       .select('_id organisation.organisation_name')
       .sort({ 'organisation.organisation_name': 1 })
       .lean();
@@ -95,7 +111,20 @@ router.get('/entities/customers', async (req, res) => {
 router.get('/entities/sites', async (req, res) => {
   try {
     const { customer_id } = req.query;
-    const filter = { is_active: true };
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+    const filter = {
+      is_active: true,
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
 
     if (customer_id) {
       // Support multiple customer IDs (comma-separated)
@@ -135,7 +164,20 @@ router.get('/entities/sites', async (req, res) => {
 router.get('/entities/buildings', async (req, res) => {
   try {
     const { site_id, customer_id } = req.query;
-    const filter = { is_active: true };
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+    const filter = {
+      is_active: true,
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
 
     if (customer_id) {
       // Support multiple customer IDs (comma-separated)
@@ -183,7 +225,19 @@ router.get('/entities/buildings', async (req, res) => {
 router.get('/entities/floors', async (req, res) => {
   try {
     const { building_id, site_id, customer_id } = req.query;
-    const filter = {}; // Removed is_active filter to show all floors
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+    const filter = {
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
 
     if (customer_id) {
       // Support multiple customer IDs (comma-separated)
@@ -239,7 +293,20 @@ router.get('/entities/floors', async (req, res) => {
 router.get('/entities/assets', async (req, res) => {
   try {
     const { floor_id, building_id, site_id, customer_id, category, status, condition } = req.query;
-    const filter = { is_active: true };
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+    const filter = {
+      is_active: true,
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
 
     if (customer_id) {
       // Support multiple customer IDs (comma-separated)
@@ -309,7 +376,20 @@ router.get('/entities/assets', async (req, res) => {
 router.get('/entities/tenants', async (req, res) => {
   try {
     const { building_id, site_id, customer_id, floor_id, tenant_status } = req.query;
-    const filter = { is_active: true };
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+    const filter = {
+      is_active: true,
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
 
     if (customer_id) {
       // Support multiple customer IDs (comma-separated)
@@ -374,7 +454,20 @@ router.get('/entities/tenants', async (req, res) => {
 router.get('/entities/vendors', async (req, res) => {
   try {
     const { category } = req.query;
-    const filter = { is_active: true };
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+    const filter = {
+      is_active: true,
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
 
     if (category) {
       filter.category = category;

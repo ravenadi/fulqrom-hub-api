@@ -1,7 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
 const Role = require('../models/Role');
-const AuditLog = require('../models/AuditLog');
 const {
   createAuth0User,
   updateAuth0User,
@@ -11,22 +10,9 @@ const {
   syncUserRoles
 } = require('../services/auth0Service');
 const { validateUserCreation, validateUserElevation, getAccessibleResources } = require('../middleware/authorizationRules');
+const { checkModulePermission } = require('../middleware/checkPermission');
 
 const router = express.Router();
-
-// Helper function to log audit entry
-async function logAudit(logData, req) {
-  try {
-    const auditLog = new AuditLog({
-      ...logData,
-      ip_address: req.ip || req.connection.remoteAddress,
-      user_agent: req.get('user-agent')
-    });
-    await auditLog.save();
-  } catch (error) {
-
-  }
-}
 
 // GET /api/users/:id/accessible-resources - Get resources accessible to user for assignment (Rule 1)
 router.get('/:id/accessible-resources', async (req, res) => {
@@ -117,6 +103,7 @@ router.get('/', async (req, res) => {
     });
   }
 });
+
 
 // GET /api/users/:id - Get user by ID
 router.get('/:id', async (req, res) => {
@@ -275,17 +262,17 @@ router.post('/', validateUserCreation, async (req, res) => {
     }
 
     // Log audit
-    await logAudit({
-      action: 'create',
-      resource_type: 'user',
-      resource_id: user._id.toString(),
-      resource_name: user.full_name,
-      status: 'success',
-      details: {
-        auth0_synced: !!auth0User,
-        auth0_id: auth0User?.user_id
-      }
-    }, req);
+    // await logAudit({
+    //   action: 'create',
+    //   resource_type: 'user',
+    //   resource_id: user._id.toString(),
+    //   resource_name: user.full_name,
+    //   status: 'success',
+    //   details: {
+    //     auth0_synced: !!auth0User,
+    //     auth0_id: auth0User?.user_id
+    //   }
+    // }, req);
 
     // Populate roles before returning
     await user.populate('role_ids', 'name description permissions');
@@ -300,12 +287,12 @@ router.post('/', validateUserCreation, async (req, res) => {
   } catch (error) {
 
     // Log audit failure
-    await logAudit({
-      action: 'create',
-      resource_type: 'user',
-      status: 'error',
-      error_message: error.message
-    }, req);
+    // await logAudit({
+    //   action: 'create',
+    //   resource_type: 'user',
+    //   status: 'error',
+    //   error_message: error.message
+    // }, req);
 
     res.status(400).json({
       success: false,
@@ -431,18 +418,18 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     }
 
     // Log audit
-    await logAudit({
-      action: 'update',
-      resource_type: 'user',
-      resource_id: user._id.toString(),
-      resource_name: user.full_name,
-      status: 'success',
-      details: {
-        auth0_synced: auth0Updated,
-        roles_synced: rolesSynced,
-        auth0_id: user.auth0_id
-      }
-    }, req);
+    // await logAudit({
+    //   action: 'update',
+    //   resource_type: 'user',
+    //   resource_id: user._id.toString(),
+    //   resource_name: user.full_name,
+    //   status: 'success',
+    //   details: {
+    //     auth0_synced: auth0Updated,
+    //     roles_synced: rolesSynced,
+    //     auth0_id: user.auth0_id
+    //   }
+    // }, req);
 
     // Populate roles before returning
     await user.populate('role_ids', 'name description permissions');
@@ -458,13 +445,13 @@ router.put('/:id', validateUserElevation, async (req, res) => {
   } catch (error) {
 
     // Log audit failure
-    await logAudit({
-      action: 'update',
-      resource_type: 'user',
-      resource_id: id,
-      status: 'error',
-      error_message: error.message
-    }, req);
+    // await logAudit({
+    //   action: 'update',
+    //   resource_type: 'user',
+    //   resource_id: id,
+    //   status: 'error',
+    //   error_message: error.message
+    // }, req);
 
     res.status(400).json({
       success: false,
@@ -523,17 +510,17 @@ router.delete('/:id', async (req, res) => {
     }
 
     // Log audit
-    await logAudit({
-      action: 'delete',
-      resource_type: 'user',
-      resource_id: id,
-      resource_name: userName,
-      status: 'success',
-      details: {
-        auth0_synced: auth0Deleted,
-        auth0_id: auth0Id
-      }
-    }, req);
+    // await logAudit({
+    //   action: 'delete',
+    //   resource_type: 'user',
+    //   resource_id: id,
+    //   resource_name: userName,
+    //   status: 'success',
+    //   details: {
+    //     auth0_synced: auth0Deleted,
+    //     auth0_id: auth0Id
+    //   }
+    // }, req);
 
     res.status(200).json({
       success: true,
@@ -544,13 +531,13 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
 
     // Log audit failure
-    await logAudit({
-      action: 'delete',
-      resource_type: 'user',
-      resource_id: id,
-      status: 'error',
-      error_message: error.message
-    }, req);
+    // await logAudit({
+    //   action: 'delete',
+    //   resource_type: 'user',
+    //   resource_id: id,
+    //   status: 'error',
+    //   error_message: error.message
+    // }, req);
 
     res.status(500).json({
       success: false,
@@ -619,18 +606,18 @@ router.post('/:id/deactivate', async (req, res) => {
     }
 
     // Log audit
-    await logAudit({
-      action: 'deactivate',
-      resource_type: 'user',
-      resource_id: user._id.toString(),
-      resource_name: user.full_name,
-      user_id: deactivated_by,
-      status: 'success',
-      details: {
-        auth0_synced: auth0Updated,
-        auth0_id: user.auth0_id
-      }
-    }, req);
+    // await logAudit({
+    //   action: 'deactivate',
+    //   resource_type: 'user',
+    //   resource_id: user._id.toString(),
+    //   resource_name: user.full_name,
+    //   user_id: deactivated_by,
+    //   status: 'success',
+    //   details: {
+    //     auth0_synced: auth0Updated,
+    //     auth0_id: user.auth0_id
+    //   }
+    // }, req);
 
     res.status(200).json({
       success: true,
@@ -642,13 +629,13 @@ router.post('/:id/deactivate', async (req, res) => {
   } catch (error) {
 
     // Log audit failure
-    await logAudit({
-      action: 'deactivate',
-      resource_type: 'user',
-      resource_id: id,
-      status: 'error',
-      error_message: error.message
-    }, req);
+    // await logAudit({
+    //   action: 'deactivate',
+    //   resource_type: 'user',
+    //   resource_id: id,
+    //   status: 'error',
+    //   error_message: error.message
+    // }, req);
 
     res.status(500).json({
       success: false,
@@ -785,15 +772,15 @@ router.post('/resource-access', async (req, res) => {
     await user.save();
 
     // Log audit
-    await logAudit({
-      action: 'grant_access',
-      resource_type: resource_type,
-      resource_id: resource_id,
-      resource_name: resource_name,
-      user_id: granted_by,
-      details: { target_user_id: user_id },
-      status: 'success'
-    }, req);
+    // await logAudit({
+    //   action: 'grant_access',
+    //   resource_type: resource_type,
+    //   resource_id: resource_id,
+    //   resource_name: resource_name,
+    //   user_id: granted_by,
+    //   details: { target_user_id: user_id },
+    //   status: 'success'
+    // }, req);
 
     res.status(200).json({
       success: true,
@@ -804,13 +791,13 @@ router.post('/resource-access', async (req, res) => {
   } catch (error) {
 
     // Log audit failure
-    await logAudit({
-      action: 'grant_access',
-      resource_type: req.body.resource_type,
-      resource_id: req.body.resource_id,
-      status: 'error',
-      error_message: error.message
-    }, req);
+    // await logAudit({
+    //   action: 'grant_access',
+    //   resource_type: req.body.resource_type,
+    //   resource_id: req.body.resource_id,
+    //   status: 'error',
+    //   error_message: error.message
+    // }, req);
 
     res.status(400).json({
       success: false,
@@ -868,14 +855,14 @@ router.delete('/resource-access/:id', async (req, res) => {
     await user.save();
 
     // Log audit
-    await logAudit({
-      action: 'revoke_access',
-      resource_type: removedAccess.resource_type,
-      resource_id: removedAccess.resource_id,
-      resource_name: removedAccess.resource_name,
-      details: { target_user_id: user_id },
-      status: 'success'
-    }, req);
+    // await logAudit({
+    //   action: 'revoke_access',
+    //   resource_type: removedAccess.resource_type,
+    //   resource_id: removedAccess.resource_id,
+    //   resource_name: removedAccess.resource_name,
+    //   details: { target_user_id: user_id },
+    //   status: 'success'
+    // }, req);
 
     res.status(200).json({
       success: true,
@@ -885,13 +872,13 @@ router.delete('/resource-access/:id', async (req, res) => {
   } catch (error) {
 
     // Log audit failure
-    await logAudit({
-      action: 'revoke_access',
-      resource_type: 'unknown',
-      resource_id: req.params.id,
-      status: 'error',
-      error_message: error.message
-    }, req);
+    // await logAudit({
+    //   action: 'revoke_access',
+    //   resource_type: 'unknown',
+    //   resource_id: req.params.id,
+    //   status: 'error',
+    //   error_message: error.message
+    // }, req);
 
     res.status(500).json({
       success: false,
@@ -901,67 +888,6 @@ router.delete('/resource-access/:id', async (req, res) => {
   }
 });
 
-// POST /api/users/audit-logs - Log audit entry
-router.post('/audit-logs', async (req, res) => {
-  try {
-    const {
-      user_id,
-      user_email,
-      user_name,
-      action,
-      resource_type,
-      resource_id,
-      resource_name,
-      details,
-      status
-    } = req.body;
 
-    // Validate required fields
-    if (!action) {
-      return res.status(400).json({
-        success: false,
-        message: 'action is required'
-      });
-    }
-
-    if (!resource_type) {
-      return res.status(400).json({
-        success: false,
-        message: 'resource_type is required'
-      });
-    }
-
-    // Create audit log
-    const auditLog = new AuditLog({
-      user_id,
-      user_email,
-      user_name,
-      action,
-      resource_type,
-      resource_id,
-      resource_name,
-      details,
-      status: status || 'success',
-      ip_address: req.ip || req.connection.remoteAddress,
-      user_agent: req.get('user-agent')
-    });
-
-    await auditLog.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Audit log created successfully',
-      data: auditLog
-    });
-
-  } catch (error) {
-
-    res.status(400).json({
-      success: false,
-      message: 'Error creating audit log',
-      error: error.message
-    });
-  }
-});
 
 module.exports = router;

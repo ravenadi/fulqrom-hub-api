@@ -90,7 +90,7 @@ async function tenantContext(req, res, next) {
     }
 
     // Get tenant
-    const tenant = await Tenant.findById(targetTenantId);
+    const tenant = await Tenant.findById(targetTenantId).populate('plan_id', 'plan_name description');
 
     if (!tenant) {
       return res.status(404).json({
@@ -100,69 +100,42 @@ async function tenantContext(req, res, next) {
       });
     }
 
-    // Get organization for this tenant (1-to-1 relationship)
+    // Validate tenant is active
+    if (tenant.status !== 'active' && tenant.status !== 'trial') {
+      return res.status(403).json({
+        success: false,
+        error: 'TENANT_INACTIVE',
+        message: 'Your tenant account has been deactivated. Please contact support.',
+        tenantStatus: tenant.status
+      });
+    }
+
+    // Check if tenant is suspended
+    if (tenant.status === 'suspended') {
+      return res.status(403).json({
+        success: false,
+        error: 'TENANT_SUSPENDED',
+        message: 'Your tenant account has been suspended. Please contact support to resolve this issue.'
+      });
+    }
+
+    // Try to get organization for this tenant (optional for backward compatibility)
     const organization = await Organization.findOne({ tenant_id: targetTenantId })
-      .populate('plan_id', 'name description features');
-
-    if (!organization) {
-      return res.status(404).json({
-        success: false,
-        error: 'NO_ORGANIZATION',
-        message: 'No organization found for this tenant. Please contact your administrator.'
-      });
-    }
-
-    // Validate organization is active
-    if (!organization.is_active) {
-      return res.status(403).json({
-        success: false,
-        error: 'ORGANIZATION_INACTIVE',
-        message: 'Your organization has been deactivated. Please contact support.',
-        organizationStatus: organization.status
-      });
-    }
-
-    // Check if organization trial has expired
-    if (organization.status === 'trial' && !organization.is_trial_active) {
-      return res.status(403).json({
-        success: false,
-        error: 'TRIAL_EXPIRED',
-        message: 'Your trial period has expired. Please upgrade your subscription to continue.',
-        trialEndedAt: organization.trial_ends_at,
-        requiresUpgrade: true
-      });
-    }
-
-    // Check if organization is suspended
-    if (organization.status === 'suspended') {
-      return res.status(403).json({
-        success: false,
-        error: 'ORGANIZATION_SUSPENDED',
-        message: 'Your organization account has been suspended. Please contact support to resolve this issue.',
-        suspensionReason: organization.suspension_reason || 'Not specified'
-      });
-    }
-
-    // Check if organization is cancelled
-    if (organization.status === 'cancelled') {
-      return res.status(403).json({
-        success: false,
-        error: 'ORGANIZATION_CANCELLED',
-        message: 'Your organization account has been cancelled and is no longer accessible.',
-        cancellationDate: organization.updated_at
-      });
-    }
+      .populate('plan_id', 'name description features')
+      .lean()
+      .catch(() => null); // Don't fail if organization doesn't exist
 
     // Attach tenant context to request
     req.tenant = {
       // Core tenant identifiers
       tenantId: tenant._id,
-      organizationId: organization._id,
-      tenantSlug: organization.slug,
+      organizationId: organization?._id || tenant._id,
+      tenantSlug: organization?.slug || tenant.tenant_name?.toLowerCase().replace(/\s+/g, '-'),
+      tenantName: tenant.tenant_name || tenant.display_name,
 
       // Full objects
       tenant: tenant,
-      organization: organization,
+      organization: organization, // May be null
 
       // User information
       userId: user._id,
@@ -172,21 +145,21 @@ async function tenantContext(req, res, next) {
       // Admin flags
       isSuperAdmin: isSuperAdmin,
       isImpersonating: isSuperAdmin && !!req.headers['x-tenant-id'],
-      isOwner: organization.owner_id && user._id.toString() === organization.owner_id.toString(),
+      isOwner: organization?.owner_id && user._id.toString() === organization.owner_id.toString(),
 
-      // Organization status and limits
-      organizationStatus: organization.status,
+      // Tenant/Organization status and limits
+      organizationStatus: organization?.status || tenant.status,
       tenantStatus: tenant.status,
-      isTrialActive: organization.is_trial_active,
-      trialDaysRemaining: organization.trial_days_remaining,
-      limits: organization.limits,
-      currentUsage: organization.current_usage,
+      isTrialActive: tenant.plan_status?.is_trial || false,
+      trialDaysRemaining: 0, // Calculate if needed
+      limits: organization?.limits || { users: 999, buildings: 999, sites: 999, storage_gb: 100 },
+      currentUsage: organization?.current_usage || { users: 0, buildings: 0, sites: 0, storage_bytes: 0 },
 
-      // Helper methods
-      canAddUsers: (count = 1) => organization.canAddUsers(count),
-      canAddBuildings: (count = 1) => organization.canAddBuildings(count),
-      canAddSites: (count = 1) => organization.canAddSites(count),
-      canAddStorage: (bytes) => organization.canAddStorage(bytes)
+      // Helper methods (use organization if available, otherwise allow all)
+      canAddUsers: (count = 1) => organization?.canAddUsers?.(count) ?? true,
+      canAddBuildings: (count = 1) => organization?.canAddBuildings?.(count) ?? true,
+      canAddSites: (count = 1) => organization?.canAddSites?.(count) ?? true,
+      canAddStorage: (bytes) => organization?.canAddStorage?.(bytes) ?? true
     };
 
     // Also attach to res.locals for use in views/templates
@@ -238,26 +211,31 @@ async function optionalTenantContext(req, res, next) {
       return next();
     }
 
-    // Get tenant and organization
-    const tenant = await Tenant.findById(user.tenant_id);
-    const organization = await Organization.findOne({ tenant_id: user.tenant_id })
-      .populate('plan_id', 'name description features');
+    // Get tenant
+    const tenant = await Tenant.findById(user.tenant_id).populate('plan_id', 'plan_name description');
 
-    if (!tenant || !organization) {
+    if (!tenant) {
       req.tenant = null;
       return next();
     }
 
+    // Try to get organization (optional)
+    const organization = await Organization.findOne({ tenant_id: user.tenant_id })
+      .populate('plan_id', 'name description features')
+      .lean()
+      .catch(() => null);
+
     // Attach tenant context (minimal validation)
     req.tenant = {
       tenantId: tenant._id,
-      organizationId: organization._id,
-      tenantSlug: organization.slug,
+      organizationId: organization?._id || tenant._id,
+      tenantSlug: organization?.slug || tenant.tenant_name?.toLowerCase().replace(/\s+/g, '-'),
+      tenantName: tenant.tenant_name || tenant.display_name,
       tenant: tenant,
       organization: organization,
       userId: user._id,
       userEmail: user.email,
-      organizationStatus: organization.status,
+      organizationStatus: organization?.status || tenant.status,
       tenantStatus: tenant.status
     };
 

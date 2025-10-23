@@ -66,7 +66,7 @@ const attachUser = async (req, res, next) => {
     req.user = {
       id: user._id.toString(),
       userId: user._id.toString(), // Add userId for tenantContext compatibility
-      _id: user._id,
+      _id: user._id, // MongoDB ObjectId for database queries
       auth0_id: user.auth0_id,
       email: user.email,
       full_name: user.full_name,

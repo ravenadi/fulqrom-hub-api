@@ -21,6 +21,7 @@ const authRouter = require('../routes/auth');
 const organizationsRouter = require('../routes/organizations');
 const notificationsRouter = require('../routes/notifications');
 const analyticsRouter = require('../routes/analytics');
+const auditLogsRouter = require('../routes/auditLogs');
 const adminRouter = require('../routes/admin');
 
 /**
@@ -46,6 +47,7 @@ const apiRoutes = [
   { path: '/roles', router: rolesV2Router, description: 'Role management' },
   { path: '/notifications', router: notificationsRouter, description: 'User notifications' },
   { path: '/analytics', router: analyticsRouter, description: 'Analytics (super admin)' },
+  { path: '/audit-logs', router: auditLogsRouter, description: 'Audit logs management' },
   { path: '/admin', router: adminRouter, description: 'Admin operations (super admin)' }
 ];
 

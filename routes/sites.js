@@ -5,11 +5,12 @@ const Building = require('../models/Building');
 const Asset = require('../models/Asset');
 const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { tenantContext } = require('../middleware/tenantContext');
 
 const router = express.Router();
 
 // GET /api/sites - List all sites with filters, pagination, and sorting
-router.get('/', checkModulePermission('sites', 'view'), async (req, res) => {
+router.get('/', checkModulePermission('sites', 'view'), tenantContext, async (req, res) => {
   try {
     const {
       customer_id,
@@ -18,14 +19,40 @@ router.get('/', checkModulePermission('sites', 'view'), async (req, res) => {
       state,
       search,
       is_active,
+      tenant_id, // Allow explicit tenant_id for super admins
       page = 1,
       limit = 20,
       sort_by = 'created_date',
       sort_order = 'desc'
     } = req.query;
 
-    // Build filter query
+    // Build filter query with tenant isolation
     let filterQuery = {};
+
+    // Apply tenant filtering
+    if (req.tenant) {
+      // Check if user is super admin
+      const isSuperAdmin = req.tenant.isSuperAdmin || false;
+
+      if (isSuperAdmin) {
+        // Super admins can filter by specific tenant or see all
+        if (tenant_id) {
+          filterQuery.tenant_id = mongoose.Types.ObjectId.isValid(tenant_id)
+            ? new mongoose.Types.ObjectId(tenant_id)
+            : tenant_id;
+        }
+        // If no tenant_id specified, super admin sees all tenants
+      } else {
+        // Regular users can only see their tenant's data
+        filterQuery.tenant_id = req.tenant.tenantId;
+      }
+    } else {
+      // If no tenant context, deny access
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to access sites'
+      });
+    }
 
     if (customer_id) {
       // Support multi-select with comma-separated values
@@ -258,7 +285,7 @@ router.get('/', checkModulePermission('sites', 'view'), async (req, res) => {
 });
 
 // GET /api/sites/:id - Get single site with full details
-router.get('/:id', checkResourcePermission('site', 'view', (req) => req.params.id), async (req, res) => {
+router.get('/:id', checkResourcePermission('site', 'view', (req) => req.params.id), tenantContext, async (req, res) => {
   try {
     const siteId = req.params.id;
 
@@ -270,9 +297,28 @@ router.get('/:id', checkResourcePermission('site', 'view', (req) => req.params.i
       });
     }
 
+    // Build match query with tenant filtering
+    let matchQuery = { _id: new mongoose.Types.ObjectId(siteId) };
+
+    // Apply tenant filtering
+    if (req.tenant) {
+      const isSuperAdmin = req.tenant.isSuperAdmin || false;
+
+      if (!isSuperAdmin) {
+        // Regular users can only see their tenant's sites
+        matchQuery.tenant_id = req.tenant.tenantId;
+      }
+      // Super admins can see any site
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to access site'
+      });
+    }
+
     // Use aggregation to get site with all related counts
     const siteAggregation = await Site.aggregate([
-      { $match: { _id: new mongoose.Types.ObjectId(siteId) } },
+      { $match: matchQuery },
       // Lookup customer information
       {
         $lookup: {
@@ -426,7 +472,7 @@ router.get('/:id', checkResourcePermission('site', 'view', (req) => req.params.i
 });
 
 // POST /api/sites - Create new site
-router.post('/', checkModulePermission('sites', 'create'), async (req, res) => {
+router.post('/', checkModulePermission('sites', 'create'), tenantContext, async (req, res) => {
   try {
     // Validate required fields
     if (!req.body.customer_id) {
@@ -444,7 +490,21 @@ router.post('/', checkModulePermission('sites', 'create'), async (req, res) => {
       });
     }
 
-    const site = new Site(req.body);
+    // Ensure tenant context exists
+    if (!req.tenant) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to create site'
+      });
+    }
+
+    // Add tenant_id to site data
+    const siteData = {
+      ...req.body,
+      tenant_id: req.tenant.tenantId
+    };
+
+    const site = new Site(siteData);
     await site.save();
 
     // Fetch the created site with populated customer data
@@ -467,7 +527,7 @@ router.post('/', checkModulePermission('sites', 'create'), async (req, res) => {
 });
 
 // PUT /api/sites/:id - Update site
-router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.id), async (req, res) => {
+router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.id), tenantContext, async (req, res) => {
   try {
     // Validate land_area if provided
     if (req.body.land_area !== undefined && req.body.land_area < 0) {
@@ -477,9 +537,30 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
       });
     }
 
-    const site = await Site.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+    // Ensure tenant context exists
+    if (!req.tenant) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to update site'
+      });
+    }
+
+    // Build update query with tenant filtering
+    let updateQuery = { _id: req.params.id };
+
+    const isSuperAdmin = req.tenant.isSuperAdmin || false;
+    if (!isSuperAdmin) {
+      // Regular users can only update their tenant's sites
+      updateQuery.tenant_id = req.tenant.tenantId;
+    }
+
+    // Prevent updating tenant_id
+    const updateData = { ...req.body };
+    delete updateData.tenant_id;
+
+    const site = await Site.findOneAndUpdate(
+      updateQuery,
+      updateData,
       { new: true, runValidators: true }
     ).populate('customer_id', 'organisation.organisation_name');
 
@@ -506,10 +587,27 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
 });
 
 // DELETE /api/sites/:id - Soft delete site
-router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.params.id), async (req, res) => {
+router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.params.id), tenantContext, async (req, res) => {
   try {
-    const site = await Site.findByIdAndUpdate(
-      req.params.id,
+    // Ensure tenant context exists
+    if (!req.tenant) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to delete site'
+      });
+    }
+
+    // Build delete query with tenant filtering
+    let deleteQuery = { _id: req.params.id };
+
+    const isSuperAdmin = req.tenant.isSuperAdmin || false;
+    if (!isSuperAdmin) {
+      // Regular users can only delete their tenant's sites
+      deleteQuery.tenant_id = req.tenant.tenantId;
+    }
+
+    const site = await Site.findOneAndUpdate(
+      deleteQuery,
       { is_active: false },
       { new: true }
     );

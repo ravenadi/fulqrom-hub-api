@@ -22,8 +22,20 @@ router.get('/', checkModulePermission('vendors', 'view'), async (req, res) => {
       sort_order = 'asc'
     } = req.query;
 
-    // Build filter query
-    let filterQuery = {};
+    // Get tenant ID from request context (mandatory for data isolation)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    // Build filter query with mandatory tenant filter
+    let filterQuery = {
+      tenant_id: tenantId
+    };
 
     // Search across name, ABN, and email (case-insensitive)
     if (search) {
@@ -162,12 +174,22 @@ router.get('/', checkModulePermission('vendors', 'view'), async (req, res) => {
 // GET /api/vendors/stats - Get vendor statistics
 router.get('/stats', async (req, res) => {
   try {
+    // Get tenant ID from request context (mandatory for data isolation)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
     const today = new Date();
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
 
-    // Get all vendors
-    const allVendors = await Vendor.find({}).lean();
+    // Get vendors for this tenant only
+    const allVendors = await Vendor.find({ tenant_id: tenantId }).lean();
 
     const totalVendors = allVendors.length;
     const activeVendors = allVendors.filter(v => v.status === 'active').length;
@@ -241,6 +263,16 @@ router.get('/:id', checkResourcePermission('vendor', 'view', (req) => req.params
   try {
     const vendorId = req.params.id;
 
+    // Get tenant ID from request context (mandatory for data isolation)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(vendorId)) {
       return res.status(400).json({
@@ -249,7 +281,11 @@ router.get('/:id', checkResourcePermission('vendor', 'view', (req) => req.params
       });
     }
 
-    const vendor = await Vendor.findById(vendorId);
+    // Find vendor within tenant scope only
+    const vendor = await Vendor.findOne({
+      _id: vendorId,
+      tenant_id: tenantId
+    });
 
     if (!vendor) {
       return res.status(404).json({
@@ -275,6 +311,16 @@ router.get('/:id', checkResourcePermission('vendor', 'view', (req) => req.params
 // POST /api/vendors - Create new vendor
 router.post('/', checkModulePermission('vendors', 'create'), async (req, res) => {
   try {
+    // Get tenant ID from request context (mandatory for data isolation)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
     const errors = [];
 
     // Validate required fields (updated for new schema)
@@ -329,23 +375,27 @@ router.post('/', checkModulePermission('vendors', 'create'), async (req, res) =>
       });
     }
 
-    // Check for duplicate ABN if provided
+    // Check for duplicate ABN within this tenant if provided
     if (req.body.abn) {
       const existingVendor = await Vendor.findOne({
-        abn: req.body.abn.replace(/\s/g, '')
+        abn: req.body.abn.replace(/\s/g, ''),
+        tenant_id: tenantId
       });
 
       if (existingVendor) {
         return res.status(400).json({
           success: false,
-          message: 'A vendor with this ABN already exists',
+          message: 'A vendor with this ABN already exists in your organization',
           field: 'abn'
         });
       }
     }
 
-    // Create new vendor
-    const vendor = new Vendor(req.body);
+    // Create new vendor with tenant_id
+    const vendor = new Vendor({
+      ...req.body,
+      tenant_id: tenantId
+    });
     await vendor.save();
 
     res.status(201).json({
@@ -382,6 +432,16 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
   try {
     const vendorId = req.params.id;
 
+    // Get tenant ID from request context (mandatory for data isolation)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(vendorId)) {
       return res.status(400).json({
@@ -390,25 +450,27 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
       });
     }
 
-    // If ABN is being updated, check for duplicates
+    // If ABN is being updated, check for duplicates within this tenant
     if (req.body.abn) {
       const cleanedABN = req.body.abn.replace(/\s/g, '');
       const existingVendor = await Vendor.findOne({
         abn: cleanedABN,
+        tenant_id: tenantId,
         _id: { $ne: vendorId }
       });
 
       if (existingVendor) {
         return res.status(400).json({
           success: false,
-          message: 'A vendor with this ABN already exists',
+          message: 'A vendor with this ABN already exists in your organization',
           field: 'abn'
         });
       }
     }
 
-    const vendor = await Vendor.findByIdAndUpdate(
-      vendorId,
+    // Update vendor within tenant scope only
+    const vendor = await Vendor.findOneAndUpdate(
+      { _id: vendorId, tenant_id: tenantId },
       req.body,
       {
         new: true,
@@ -457,6 +519,16 @@ router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.p
   try {
     const vendorId = req.params.id;
 
+    // Get tenant ID from request context (mandatory for data isolation)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(vendorId)) {
       return res.status(400).json({
@@ -465,9 +537,9 @@ router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.p
       });
     }
 
-    // Soft delete by setting is_active to false
-    const vendor = await Vendor.findByIdAndUpdate(
-      vendorId,
+    // Soft delete vendor within tenant scope only
+    const vendor = await Vendor.findOneAndUpdate(
+      { _id: vendorId, tenant_id: tenantId },
       {
         is_active: false,
         status: 'inactive'
@@ -503,6 +575,16 @@ router.patch('/:id/status', async (req, res) => {
     const vendorId = req.params.id;
     const { status } = req.body;
 
+    // Get tenant ID from request context (mandatory for data isolation)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(vendorId)) {
       return res.status(400).json({
@@ -521,8 +603,9 @@ router.patch('/:id/status', async (req, res) => {
       });
     }
 
-    const vendor = await Vendor.findByIdAndUpdate(
-      vendorId,
+    // Update vendor status within tenant scope only
+    const vendor = await Vendor.findOneAndUpdate(
+      { _id: vendorId, tenant_id: tenantId },
       { status },
       { new: true, runValidators: true }
     );

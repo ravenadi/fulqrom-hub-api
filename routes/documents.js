@@ -151,6 +151,14 @@ async function fetchEntityNames(documentData) {
 // GET /api/documents - List all documents with advanced search and filtering
 router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering('document'), validateQueryParams, async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const sanitizedQuery = sanitizeQuery(req.query);
     const {
       customer_id,
@@ -336,17 +344,18 @@ router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering(
     const pagination = buildPagination(page, limit);
     const sortObj = buildSort(sort, order);
 
-    // Execute queries in parallel for better performance
+    // Execute queries in parallel for better performance - with tenant filtering
     const [documents, totalDocuments, categoryStats] = await Promise.all([
       Document.find(filterQuery)
+        .setOptions({ _tenantId: req.tenant.tenantId })
         .sort(sortObj)
         .skip(pagination.skip)
         .limit(pagination.limitNum)
         .lean() // Performance optimization - returns plain JS objects
         .exec(),
-      Document.countDocuments(filterQuery).exec(),
+      Document.countDocuments(filterQuery).setOptions({ _tenantId: req.tenant.tenantId }).exec(),
       Document.aggregate([
-        { $match: filterQuery },
+        { $match: { ...filterQuery, tenant_id: req.tenant.tenantId } },
         {
           $group: {
             _id: '$category',
@@ -489,7 +498,22 @@ router.get('/tags', async (req, res) => {
 // GET /api/documents/stats - Get simple document count statistics
 router.get('/stats', async (req, res) => {
   try {
-    const totalDocuments = await Document.countDocuments({});
+    // Get tenant ID from request context (mandatory)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+    const filter = {
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
+
+    const totalDocuments = await Document.countDocuments(filter);
 
     res.status(200).json({
       success: true,
@@ -511,7 +535,15 @@ router.get('/stats', async (req, res) => {
 // GET /api/documents/:id - Get single document
 router.get('/:id', checkModulePermission('documents', 'view'), validateObjectId, async (req, res) => {
   try {
-    const document = await Document.findById(req.params.id).lean();
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    const document = await Document.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId }).lean();
 
     if (!document) {
       return res.status(404).json({
@@ -634,6 +666,14 @@ router.get('/:id/preview', validateObjectId, async (req, res) => {
 // POST /api/documents - Create new document with file upload
 router.post('/', checkModulePermission('documents', 'create'), upload.single('file'), validateCreateDocument, async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     // Check if file was uploaded
     if (!req.file) {
       return res.status(400).json({
@@ -773,6 +813,9 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
         access_level: documentData.access_level || 'internal',
         access_users: documentData.access_users || []
       },
+
+      // Tenant ID for multi-tenancy
+      tenant_id: req.tenant.tenantId,
 
       // Audit fields
       created_by: documentData.created_by,
@@ -1057,11 +1100,22 @@ router.put('/bulk-update', async (req, res) => {
 // PUT /api/documents/:id - Update document
 router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId, async (req, res) => {
   try {
-    // Get old document to compare changes
-    const oldDocument = await Document.findById(req.params.id).lean();
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Get old document to compare changes - scoped to tenant
+    const oldDocument = await Document.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId }).lean();
 
     const updateData = { ...req.body };
     updateData.updated_at = new Date().toISOString();
+
+    // Prevent tenant_id from being changed
+    delete updateData.tenant_id;
 
     // Remove metadata wrapper - fields are now at root level
     delete updateData.metadata;
@@ -1105,7 +1159,7 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
       req.params.id,
       updateData,
       { new: true, runValidators: true }
-    ).lean();
+    ).setOptions({ _tenantId: req.tenant.tenantId }).lean();
 
     if (!document) {
       return res.status(404).json({
@@ -1336,7 +1390,15 @@ router.delete('/bulk', checkModulePermission('documents', 'delete'), async (req,
 // DELETE /api/documents/:id - Delete document
 router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, res) => {
   try {
-    const document = await Document.findById(req.params.id);
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    const document = await Document.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
 
     if (!document) {
       return res.status(404).json({
@@ -1353,8 +1415,8 @@ router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, 
       }
     }
 
-    // Delete document from database
-    await Document.findByIdAndDelete(req.params.id);
+    // Delete document from database - scoped to tenant
+    await Document.findByIdAndDelete(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
 
     res.status(200).json({
       success: true,
@@ -1571,13 +1633,28 @@ router.get('/summary/stats', async (req, res) => {
 // GET /api/storage/stats - Get document storage statistics
 router.get('/storage/stats', async (req, res) => {
   try {
+    // Get tenant ID from request context (mandatory)
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const mongoose = require('mongoose');
+
+    // Build aggregation pipeline with mandatory tenant filter
+    const matchStage = {
+      'file.file_meta.file_size': { $exists: true, $ne: null },
+      tenant_id: mongoose.Types.ObjectId(tenantId)
+    };
 
     // Aggregate total file size and count documents with files
     const sizeAggregation = await Document.aggregate([
       {
-        $match: {
-          'file.file_meta.file_size': { $exists: true, $ne: null }
-        }
+        $match: matchStage
       },
       {
         $group: {
@@ -1596,8 +1673,9 @@ router.get('/storage/stats', async (req, res) => {
     const totalSizeGB = (totalSize / (1024 * 1024 * 1024)).toFixed(2);
     const displaySize = parseFloat(totalSizeGB) >= 1 ? `${totalSizeGB} GB` : `${totalSizeMB} MB`;
 
-        // Count total document records
-    const totalRecords = await Document.count({});
+    // Count total document records with tenant filter
+    const options = tenantId ? { _tenantId: tenantId } : {};
+    const totalRecords = await Document.countDocuments({}, options);
 
     res.status(200).json({
       success: true,

@@ -13,6 +13,14 @@ const router = express.Router();
 // GET /api/customers - List all customers (requires module-level view permission)
 router.get('/', checkModulePermission('customers', 'view'), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const { search, limit } = req.query;
 
     // Build filter query
@@ -31,8 +39,8 @@ router.get('/', checkModulePermission('customers', 'view'), async (req, res) => 
       ];
     }
 
-    // Query without tenant filter for now (until tenant context is properly configured)
-    let query = Customer.find(filterQuery);
+    // Query with tenant filter - only show customers for the logged-in user's tenant
+    let query = Customer.find(filterQuery).setOptions({ _tenantId: req.tenant.tenantId });
 
     // Apply limit if provided
     if (limit) {
@@ -59,7 +67,16 @@ router.get('/', checkModulePermission('customers', 'view'), async (req, res) => 
 // GET /api/customers/:id - Get single customer (requires view permission for this customer)
 router.get('/:id', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    const customer = await Customer.findById(req.params.id);
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Find customer within tenant scope only
+    const customer = await Customer.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
 
     if (!customer) {
       return res.status(404).json({
@@ -84,9 +101,18 @@ router.get('/:id', checkResourcePermission('customer', 'view', (req) => req.para
 // GET /api/customers/:id/stats - Get customer statistics (requires view permission)
 router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const customerId = req.params.id;
 
-    const customer = await Customer.findById(customerId);
+    // Find customer within tenant scope
+    const customer = await Customer.findById(customerId).setOptions({ _tenantId: req.tenant.tenantId });
     if (!customer) {
       return res.status(404).json({
         success: false,
@@ -94,12 +120,12 @@ router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => re
       });
     }
 
-    // Get counts
+    // Get counts - also scoped by tenant
     const [siteCount, buildingCount, assetCount, documentCount] = await Promise.all([
-      Site.countDocuments({ customer_id: customerId }),
-      Building.countDocuments({ customer_id: customerId }),
-      Asset.countDocuments({ customer_id: customerId }),
-      Document.countDocuments({ 'customer.customer_id': customerId })
+      Site.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
+      Building.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
+      Asset.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
+      Document.countDocuments({ 'customer.customer_id': customerId }).setOptions({ _tenantId: req.tenant.tenantId })
     ]);
 
     const stats = {
@@ -129,7 +155,16 @@ router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => re
 // GET /api/customers/:id/contacts/primary - Get primary contact (requires view permission)
 router.get('/:id/contacts/primary', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    const customer = await Customer.findById(req.params.id);
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Find customer within tenant scope
+    const customer = await Customer.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
 
     if (!customer) {
       return res.status(404).json({
@@ -164,7 +199,21 @@ router.get('/:id/contacts/primary', checkResourcePermission('customer', 'view', 
 // POST /api/customers - Create new customer (requires module-level create permission)
 router.post('/', checkModulePermission('customers', 'create'), async (req, res) => {
   try {
-    const customer = new Customer(req.body);
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Create customer with tenant_id automatically assigned
+    const customerData = {
+      ...req.body,
+      tenant_id: req.tenant.tenantId
+    };
+
+    const customer = new Customer(customerData);
     await customer.save();
 
     res.status(201).json({
@@ -184,14 +233,27 @@ router.post('/', checkModulePermission('customers', 'create'), async (req, res) 
 // PUT /api/customers/:id - Update customer (requires edit permission for this customer)
 router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.params.id), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Prevent tenant_id from being changed
+    const updateData = { ...req.body };
+    delete updateData.tenant_id;
+
+    // Update customer within tenant scope only
     const customer = await Customer.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       {
         new: true,
         runValidators: true
       }
-    );
+    ).setOptions({ _tenantId: req.tenant.tenantId });
 
     if (!customer) {
       return res.status(404).json({
@@ -217,7 +279,16 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
 // DELETE /api/customers/:id - Delete customer (requires delete permission for this customer)
 router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    const customer = await Customer.findByIdAndDelete(req.params.id);
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Delete customer within tenant scope only
+    const customer = await Customer.findByIdAndDelete(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
 
     if (!customer) {
       return res.status(404).json({
