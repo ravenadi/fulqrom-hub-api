@@ -34,6 +34,10 @@ const FileMetaSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  bucket_name: {
+    type: String,
+    trim: true
+  },
   version: {
     type: String,
     default: '1.0',

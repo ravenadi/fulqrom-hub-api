@@ -207,6 +207,18 @@ router.post('/', checkModulePermission('floors', 'create'), async (req, res) => 
       });
     }
 
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to create floor'
+      });
+    }
+
+    // Add tenant_id to floor data
+    floorData.tenant_id = tenantId;
+
     const floor = new Floor(floorData);
     await floor.save();
 
@@ -289,8 +301,21 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
       });
     }
 
-    const floor = await Floor.findByIdAndUpdate(
-      req.params.id,
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to update floor'
+      });
+    }
+
+    // Update ONLY if belongs to user's tenant
+    const floor = await Floor.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        tenant_id: tenantId  // Ensure user owns this resource
+      },
       floorData,
       { new: true, runValidators: true }
     )
@@ -301,7 +326,7 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
     if (!floor) {
       return res.status(404).json({
         success: false,
-        message: 'Floor not found'
+        message: 'Floor not found or you do not have permission to update it'
       });
     }
 
@@ -322,12 +347,25 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
 // DELETE /api/floors/:id - Delete floor
 router.delete('/:id', checkResourcePermission('floor', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    const floor = await Floor.findByIdAndDelete(req.params.id);
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to delete floor'
+      });
+    }
+
+    // Delete ONLY if belongs to user's tenant
+    const floor = await Floor.findOneAndDelete({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this resource
+    });
 
     if (!floor) {
       return res.status(404).json({
         success: false,
-        message: 'Floor not found'
+        message: 'Floor not found or you do not have permission to delete it'
       });
     }
 

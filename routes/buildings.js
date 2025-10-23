@@ -372,7 +372,22 @@ router.post('/', checkModulePermission('buildings', 'create'), async (req, res) 
       });
     }
 
-    const building = new Building(req.body);
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to create building'
+      });
+    }
+
+    // Create building with tenant_id from authenticated user
+    const buildingData = {
+      ...req.body,
+      tenant_id: tenantId
+    };
+
+    const building = new Building(buildingData);
     await building.save();
 
     // Populate the created building before returning
@@ -434,8 +449,21 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       });
     }
 
-    const building = await Building.findByIdAndUpdate(
-      req.params.id,
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to update building'
+      });
+    }
+
+    // Update building ONLY if it belongs to the user's tenant
+    const building = await Building.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        tenant_id: tenantId  // Ensure user owns this building
+      },
       req.body,
       { new: true, runValidators: true }
     )
@@ -445,7 +473,7 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
     if (!building) {
       return res.status(404).json({
         success: false,
-        message: 'Building not found'
+        message: 'Building not found or you do not have permission to update it'
       });
     }
 
@@ -466,12 +494,25 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
 // DELETE /api/buildings/:id - Delete building
 router.delete('/:id', checkResourcePermission('building', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    const building = await Building.findByIdAndDelete(req.params.id);
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to delete building'
+      });
+    }
+
+    // Delete building ONLY if it belongs to the user's tenant
+    const building = await Building.findOneAndDelete({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this building
+    });
 
     if (!building) {
       return res.status(404).json({
         success: false,
-        message: 'Building not found'
+        message: 'Building not found or you do not have permission to delete it'
       });
     }
 

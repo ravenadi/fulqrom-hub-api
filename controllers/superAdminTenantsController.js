@@ -1859,6 +1859,110 @@ const syncUsersToAuth0 = async (req, res) => {
   }
 };
 
+/**
+ * Get audit logs for a specific tenant
+ * @route GET /api/admin/tenants/:tenant/audit-logs
+ * @access Super Admin only
+ */
+const getTenantAuditLogs = async (req, res) => {
+  try {
+    const { tenant } = req.params;
+    const { limit = 10, page = 1 } = req.query;
+
+    // Validate tenant ID
+    if (!tenant.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tenant ID format'
+      });
+    }
+
+    // Check if tenant exists
+    const tenantExists = await Tenant.findById(tenant);
+    if (!tenantExists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant not found'
+      });
+    }
+
+    // Fetch audit logs for this tenant
+    const limitNum = parseInt(limit);
+    const pageNum = parseInt(page);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Convert tenant ID to ObjectId to ensure proper matching
+    const mongoose = require('mongoose');
+    const tenantObjectId = mongoose.Types.ObjectId.isValid(tenant)
+      ? new mongoose.Types.ObjectId(tenant)
+      : null;
+
+    console.log(`🔍 Fetching audit logs for tenant: ${tenant}`);
+    console.log(`   Tenant ObjectId: ${tenantObjectId}`);
+
+    // Query filter that matches both String and ObjectId types
+    const queryFilter = {
+      $or: [
+        { tenant_id: tenant },           // String match
+        ...(tenantObjectId ? [{ tenant_id: tenantObjectId }] : [])  // ObjectId match (if valid)
+      ]
+    };
+
+    console.log(`   Query filter:`, JSON.stringify(queryFilter, null, 2));
+
+    const [auditLogs, totalLogs] = await Promise.all([
+      AuditLog.find(queryFilter)
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      AuditLog.countDocuments(queryFilter)
+    ]);
+
+    console.log(`✅ Found ${auditLogs.length} audit logs for tenant ${tenant} (total: ${totalLogs})`);
+
+    // Log sample of tenant_ids for debugging
+    if (auditLogs.length > 0) {
+      console.log('   Sample audit logs:');
+      auditLogs.slice(0, Math.min(5, auditLogs.length)).forEach((log, idx) => {
+        console.log(`     [${idx + 1}] action: ${log.action}, user: ${log.user_email || log.user_name}, tenant_id: ${log.tenant_id} (type: ${typeof log.tenant_id}), resource: ${log.resource_type}${log.resource_name ? ' - ' + log.resource_name : ''}`);
+      });
+    } else {
+      console.log('   ⚠️  No audit logs found for this tenant');
+
+      // Debug: Check if there are ANY audit logs in the collection
+      const totalAllLogs = await AuditLog.countDocuments({});
+      console.log(`   📊 Total audit logs in collection: ${totalAllLogs}`);
+
+      if (totalAllLogs > 0) {
+        // Sample a few audit logs to see what tenant_ids exist
+        const sampleLogs = await AuditLog.find({}).limit(5).lean();
+        console.log('   Sample of ALL audit logs in collection:');
+        sampleLogs.forEach((log, idx) => {
+          console.log(`     [${idx + 1}] tenant_id: ${log.tenant_id} (type: ${typeof log.tenant_id}), action: ${log.action}, user: ${log.user_email}`);
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      count: auditLogs.length,
+      total: totalLogs,
+      page: pageNum,
+      pages: Math.ceil(totalLogs / limitNum),
+      data: auditLogs
+    });
+
+  } catch (error) {
+    console.error('Error fetching tenant audit logs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching tenant audit logs',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllTenants,
   getTenantById,
@@ -1875,6 +1979,7 @@ module.exports = {
   updateTenantUser,
   deleteTenantUser,
   syncUsersToAuth0,
+  getTenantAuditLogs,
   getSubscriptions,
   subscribe,
   updateSubscriptionStatus

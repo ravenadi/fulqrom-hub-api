@@ -233,11 +233,12 @@ router.post('/', checkModulePermission('customers', 'create'), async (req, res) 
 // PUT /api/customers/:id - Update customer (requires edit permission for this customer)
 router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.params.id), async (req, res) => {
   try {
-    // Verify tenant context exists
-    if (!req.tenant || !req.tenant.tenantId) {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
       return res.status(403).json({
         success: false,
-        message: 'No tenant context found. User must be associated with a tenant.'
+        message: 'Tenant context required to update customer'
       });
     }
 
@@ -245,20 +246,23 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
     const updateData = { ...req.body };
     delete updateData.tenant_id;
 
-    // Update customer within tenant scope only
-    const customer = await Customer.findByIdAndUpdate(
-      req.params.id,
+    // Update ONLY if belongs to user's tenant
+    const customer = await Customer.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        tenant_id: tenantId  // Ensure user owns this resource
+      },
       updateData,
       {
         new: true,
         runValidators: true
       }
-    ).setOptions({ _tenantId: req.tenant.tenantId });
+    );
 
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: 'Customer not found or you do not have permission to update it'
       });
     }
 
@@ -279,21 +283,25 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
 // DELETE /api/customers/:id - Delete customer (requires delete permission for this customer)
 router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    // Verify tenant context exists
-    if (!req.tenant || !req.tenant.tenantId) {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
       return res.status(403).json({
         success: false,
-        message: 'No tenant context found. User must be associated with a tenant.'
+        message: 'Tenant context required to delete customer'
       });
     }
 
-    // Delete customer within tenant scope only
-    const customer = await Customer.findByIdAndDelete(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
+    // Delete ONLY if belongs to user's tenant
+    const customer = await Customer.findOneAndDelete({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this resource
+    });
 
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: 'Customer not found or you do not have permission to delete it'
       });
     }
 

@@ -70,7 +70,15 @@ app.options('*', (req, res) => {
 
 // Body parsing middleware
 // Important: Do NOT parse multipart/form-data here - let multer handle it in routes
-app.use(express.json({ limit: '10mb' }));
+// Skip JSON parsing for multipart requests to avoid parsing errors
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  // Skip JSON parsing if content-type suggests multipart or if body contains multipart boundary
+  if (contentType.includes('multipart/form-data') || req.headers['content-type']?.includes('boundary')) {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint (no authentication required)

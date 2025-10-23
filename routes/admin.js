@@ -847,6 +847,49 @@ router.post('/tenants/:tenant/users/sync-auth0',
   SuperAdminTenantsController.syncUsersToAuth0
 );
 
+/**
+ * @swagger
+ * /api/admin/tenants/{tenant}/audit-logs:
+ *   get:
+ *     summary: Get audit logs for a specific tenant
+ *     tags: [Super Admin - Tenants]
+ *     security:
+ *       - SuperAdminAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tenant
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Tenant ID
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of audit logs to retrieve
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *     responses:
+ *       200:
+ *         description: Tenant audit logs retrieved successfully
+ *       404:
+ *         description: Tenant not found
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Super admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.get('/tenants/:tenant/audit-logs',
+  SuperAdminTenantsController.getTenantAuditLogs
+);
+
 // ===== USER MANAGEMENT ROUTES =====
 
 /**

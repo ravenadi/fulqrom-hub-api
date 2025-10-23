@@ -542,11 +542,12 @@ router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset,
 // PUT /api/assets/:id - Update asset
 router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.id), validateUpdateAsset, async (req, res) => {
   try {
-    // Verify tenant context exists
-    if (!req.tenant || !req.tenant.tenantId) {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
       return res.status(403).json({
         success: false,
-        message: 'No tenant context found. User must be associated with a tenant.'
+        message: 'Tenant context required to update asset'
       });
     }
 
@@ -586,12 +587,15 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
       updateData.weight_kgs = otherFields.weight;
     }
 
-    const asset = await Asset.findByIdAndUpdate(
-      req.params.id,
+    // Update ONLY if belongs to user's tenant
+    const asset = await Asset.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        tenant_id: tenantId  // Ensure user owns this resource
+      },
       updateData,
       { new: true, runValidators: true }
     )
-    .setOptions({ _tenantId: req.tenant.tenantId })
     .populate('customer_id', 'organisation.organisation_name')
     .populate('site_id', 'site_name address')
     .populate('building_id', 'building_name building_code')
@@ -601,7 +605,7 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
     if (!asset) {
       return res.status(404).json({
         success: false,
-        message: 'Asset not found'
+        message: 'Asset not found or you do not have permission to update it'
       });
     }
 
@@ -641,25 +645,29 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
 // DELETE /api/assets/:id - Delete asset
 router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    // Verify tenant context exists
-    if (!req.tenant || !req.tenant.tenantId) {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
       return res.status(403).json({
         success: false,
-        message: 'No tenant context found. User must be associated with a tenant.'
+        message: 'Tenant context required to delete asset'
       });
     }
 
-    const asset = await Asset.findById(req.params.id)
-      .setOptions({ _tenantId: req.tenant.tenantId });
+    // Delete ONLY if belongs to user's tenant
+    const asset = await Asset.findOneAndDelete({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this resource
+    });
 
     if (!asset) {
       return res.status(404).json({
         success: false,
-        message: 'Asset not found'
+        message: 'Asset not found or you do not have permission to delete it'
       });
     }
 
-    // Store asset info before deletion for response
+    // Store asset info for response
     const deletedAssetInfo = {
       asset_id: asset.asset_id,
       asset_no: asset.asset_no,
@@ -667,9 +675,6 @@ router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.pa
       make: asset.make,
       model: asset.model
     };
-
-    await Asset.findByIdAndDelete(req.params.id)
-      .setOptions({ _tenantId: req.tenant.tenantId });
 
     res.status(200).json({
       success: true,

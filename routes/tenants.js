@@ -273,7 +273,22 @@ router.get('/:id', checkResourcePermission('tenant', 'view', (req) => req.params
 // POST /api/tenants - Create new tenant
 router.post('/', checkModulePermission('tenants', 'create'), validateTenantData, async (req, res) => {
   try {
-    const tenant = new BuildingTenant(req.body);
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to create building tenant'
+      });
+    }
+
+    // Create building tenant with tenant_id from authenticated user
+    const tenantData = {
+      ...req.body,
+      tenant_id: tenantId
+    };
+
+    const tenant = new BuildingTenant(tenantData);
     await tenant.save();
 
     // Populate the created tenant before returning
@@ -299,8 +314,21 @@ router.post('/', checkModulePermission('tenants', 'create'), validateTenantData,
 // PUT /api/tenants/:id - Update tenant
 router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params.id), validateTenantData, async (req, res) => {
   try {
-    const tenant = await BuildingTenant.findByIdAndUpdate(
-      req.params.id,
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to update building tenant'
+      });
+    }
+
+    // Update ONLY if belongs to user's tenant
+    const tenant = await BuildingTenant.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        tenant_id: tenantId  // Ensure user owns this resource
+      },
       req.body,
       { new: true, runValidators: true }
     );
@@ -308,7 +336,7 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
     if (!tenant) {
       return res.status(404).json({
         success: false,
-        message: 'Tenant not found'
+        message: 'Building tenant not found or you do not have permission to update it'
       });
     }
 
@@ -426,12 +454,25 @@ router.get('/summary/stats', async (req, res) => {
 // DELETE /api/tenants/:id - Delete tenant
 router.delete('/:id', checkResourcePermission('tenant', 'delete', (req) => req.params.id), async (req, res) => {
   try {
-    const tenant = await BuildingTenant.findByIdAndDelete(req.params.id);
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to delete building tenant'
+      });
+    }
+
+    // Delete ONLY if belongs to user's tenant
+    const tenant = await BuildingTenant.findOneAndDelete({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this resource
+    });
 
     if (!tenant) {
       return res.status(404).json({
         success: false,
-        message: 'Tenant not found'
+        message: 'Building tenant not found or you do not have permission to delete it'
       });
     }
 

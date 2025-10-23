@@ -144,11 +144,12 @@ function generateS3Key(customerId, originalname, customPath = null) {
 /**
  * Upload file to S3
  * @param {Object} file - Multer file object
- * @param {string} customerId - Customer ID
+ * @param {string} customerId - Customer ID (used for file path organization)
  * @param {string} customPath - Optional custom path prefix for versioning
+ * @param {string} tenantId - Tenant ID (for multi-tenancy isolation)
  * @returns {Promise<Object>} - Upload result
  */
-async function uploadFileToS3(file, customerId, customPath = null) {
+async function uploadFileToS3(file, customerId, customPath = null, tenantId = null) {
   try {
     console.log('[s3Upload.js] uploadFileToS3 called');
     console.log('[s3Upload.js] AWS Credentials check:', {
@@ -180,7 +181,8 @@ async function uploadFileToS3(file, customerId, customPath = null) {
       ServerSideEncryption: 'AES256',
       Metadata: {
         'original-filename': file.originalname,
-        'customer-id': customerId,
+        'tenant-id': tenantId ? String(tenantId) : 'unknown', // Tenant ID for multi-tenancy
+        'customer-id': String(customerId), // Customer ID for organization
         'upload-date': new Date().toISOString()
       }
     });
@@ -208,6 +210,7 @@ async function uploadFileToS3(file, customerId, customPath = null) {
         file_url: fileUrl,
         file_path: s3Key,
         file_key: s3Key,
+        bucket_name: process.env.AWS_BUCKET, // Add bucket name for preview/download routing
         version: '1.0',
         file_mime_type: file.mimetype
       }

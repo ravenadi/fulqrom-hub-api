@@ -23,11 +23,11 @@ async function logAudit(logData, req) {
 // No tenant_id parameter is accepted to prevent cross-tenant data access
 router.get('/', async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 50, 
-      action, 
-      resource_type, 
+    const {
+      page = 1,
+      limit = 50,
+      action,
+      resource_type,
       status,
       user_id,
       start_date,
@@ -39,13 +39,27 @@ router.get('/', async (req, res) => {
 
     // Tenant filtering - CRITICAL: Use tenant from request context, NOT query params
     const tenantId = req.tenant?.tenantId;
+
+    console.log('🔍 Audit Logs - Tenant Context:', {
+      tenantId: tenantId,
+      userId: req.user?.userId || req.user?.id,
+      userEmail: req.tenant?.userEmail,
+      isSuperAdmin: req.tenant?.isSuperAdmin,
+      headerTenantId: req.headers['x-tenant-id']
+    });
+
     if (!tenantId) {
       return res.status(400).json({
         success: false,
-        message: 'Tenant context is required'
+        message: 'Tenant context is required',
+        debug: {
+          hasTenant: !!req.tenant,
+          hasUser: !!req.user,
+          tenantKeys: req.tenant ? Object.keys(req.tenant) : []
+        }
       });
     }
-    
+
     // Always filter by current user's tenant - ignore any tenant_id in query params
     filterQuery.tenant_id = tenantId;
 
@@ -144,7 +158,16 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Create audit log
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to create audit log'
+      });
+    }
+
+    // Create audit log with tenant_id from authenticated user
     const auditLog = new AuditLog({
       user_id,
       user_email,
@@ -155,6 +178,7 @@ router.post('/', async (req, res) => {
       resource_name,
       details,
       status: status || 'success',
+      tenant_id: tenantId,
       ip_address: req.ip || req.connection.remoteAddress,
       user_agent: req.get('user-agent')
     });

@@ -348,9 +348,9 @@ class TenantS3Service {
         ServerSideEncryption: 'AES256',
         Metadata: {
           'original-filename': file.originalname,
-          'tenant-id': tenantId,
+          'tenant-id': String(tenantId), // Convert to string for AWS SDK
           'upload-date': new Date().toISOString(),
-          'file-size': file.size.toString()
+          'file-size': String(file.size) // Convert to string for AWS SDK
         }
       });
 
@@ -418,7 +418,7 @@ class TenantS3Service {
   }
 
   /**
-   * Generate presigned URL for tenant bucket file
+   * Generate presigned URL for tenant bucket file (download)
    * @param {string} bucketName - Bucket name
    * @param {string} s3Key - S3 key
    * @param {number} expiresIn - URL expiration time in seconds
@@ -441,6 +441,41 @@ class TenantS3Service {
       };
     } catch (error) {
       console.error('Failed to generate presigned URL:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Generate presigned URL for tenant bucket file preview (inline)
+   * @param {string} bucketName - Bucket name
+   * @param {string} s3Key - S3 key
+   * @param {string} fileName - Original file name
+   * @param {string} contentType - File content type
+   * @param {number} expiresIn - URL expiration time in seconds
+   * @returns {Promise<Object>} - Presigned URL result
+   */
+  async generatePreviewUrlForTenantBucket(bucketName, s3Key, fileName, contentType, expiresIn = 3600) {
+    try {
+      const getObjectCommand = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: s3Key,
+        ResponseContentType: contentType,
+        ResponseContentDisposition: 'inline'
+      });
+
+      const url = await getSignedUrl(s3Client, getObjectCommand, { expiresIn });
+
+      return {
+        success: true,
+        url: url,
+        bucket_name: bucketName,
+        expires_in: expiresIn
+      };
+    } catch (error) {
+      console.error('Failed to generate preview URL for tenant bucket:', error);
       return {
         success: false,
         error: error.message

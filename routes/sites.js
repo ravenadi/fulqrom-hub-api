@@ -537,29 +537,25 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
       });
     }
 
-    // Ensure tenant context exists
-    if (!req.tenant) {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
       return res.status(403).json({
         success: false,
         message: 'Tenant context required to update site'
       });
     }
 
-    // Build update query with tenant filtering
-    let updateQuery = { _id: req.params.id };
-
-    const isSuperAdmin = req.tenant.isSuperAdmin || false;
-    if (!isSuperAdmin) {
-      // Regular users can only update their tenant's sites
-      updateQuery.tenant_id = req.tenant.tenantId;
-    }
-
     // Prevent updating tenant_id
     const updateData = { ...req.body };
     delete updateData.tenant_id;
 
+    // Update ONLY if belongs to user's tenant
     const site = await Site.findOneAndUpdate(
-      updateQuery,
+      {
+        _id: req.params.id,
+        tenant_id: tenantId  // Ensure user owns this resource
+      },
       updateData,
       { new: true, runValidators: true }
     ).populate('customer_id', 'organisation.organisation_name');
@@ -567,7 +563,7 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
     if (!site) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: 'Site not found or you do not have permission to update it'
       });
     }
 
@@ -589,25 +585,21 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
 // DELETE /api/sites/:id - Soft delete site
 router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.params.id), tenantContext, async (req, res) => {
   try {
-    // Ensure tenant context exists
-    if (!req.tenant) {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
       return res.status(403).json({
         success: false,
         message: 'Tenant context required to delete site'
       });
     }
 
-    // Build delete query with tenant filtering
-    let deleteQuery = { _id: req.params.id };
-
-    const isSuperAdmin = req.tenant.isSuperAdmin || false;
-    if (!isSuperAdmin) {
-      // Regular users can only delete their tenant's sites
-      deleteQuery.tenant_id = req.tenant.tenantId;
-    }
-
+    // Soft delete ONLY if belongs to user's tenant
     const site = await Site.findOneAndUpdate(
-      deleteQuery,
+      {
+        _id: req.params.id,
+        tenant_id: tenantId  // Ensure user owns this resource
+      },
       { is_active: false },
       { new: true }
     );
@@ -615,7 +607,7 @@ router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.par
     if (!site) {
       return res.status(404).json({
         success: false,
-        message: 'Site not found'
+        message: 'Site not found or you do not have permission to delete it'
       });
     }
 

@@ -636,13 +636,30 @@ router.get('/:id/preview', validateObjectId, async (req, res) => {
 
     const fileMeta = document.file.file_meta;
 
-    // Generate preview URL with inline content disposition
-    const urlResult = await generatePreviewUrl(
-      fileMeta.file_key,
-      fileMeta.file_name,
-      fileMeta.file_type,
-      3600 // 1 hour expiry
-    );
+    let urlResult;
+
+    // Check if document is in tenant-specific bucket
+    if (fileMeta.bucket_name && fileMeta.bucket_name !== process.env.AWS_BUCKET) {
+      // Use tenant-specific S3 service
+      console.log(`🔍 Generating preview URL for tenant bucket: ${fileMeta.bucket_name}`);
+      const tenantS3Service = new TenantS3Service();
+      urlResult = await tenantS3Service.generatePreviewUrlForTenantBucket(
+        fileMeta.bucket_name,
+        fileMeta.file_key,
+        fileMeta.file_name,
+        fileMeta.file_type,
+        3600 // 1 hour expiry
+      );
+    } else {
+      // Use shared bucket
+      console.log('🔍 Generating preview URL for shared bucket');
+      urlResult = await generatePreviewUrl(
+        fileMeta.file_key,
+        fileMeta.file_name,
+        fileMeta.file_type,
+        3600 // 1 hour expiry
+      );
+    }
 
     if (!urlResult.success) {
       return res.status(500).json({
@@ -735,16 +752,16 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
           console.log(`✅ File uploaded to tenant bucket successfully`);
         } else {
           console.log('⚠️  Tenant bucket not available, falling back to shared bucket');
-          uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+          uploadResult = await uploadFileToS3(req.file, documentData.customer_id, null, tenantId);
         }
       } catch (tenantS3Error) {
         console.error('❌ Tenant bucket upload failed, falling back to shared bucket:', tenantS3Error.message);
-        uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+        uploadResult = await uploadFileToS3(req.file, documentData.customer_id, null, tenantId);
       }
     } else {
       // Fallback to shared bucket if no tenant ID
       console.log('📦 Using shared S3 bucket (no tenant ID)');
-      uploadResult = await uploadFileToS3(req.file, documentData.customer_id);
+      uploadResult = await uploadFileToS3(req.file, documentData.customer_id, null, tenantId);
     }
 
     if (!uploadResult.success) {
@@ -1162,16 +1179,29 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
       updateData.access_control = Object.keys(cleanedAccessControl).length > 0 ? cleanedAccessControl : {};
     }
 
-    const document = await Document.findByIdAndUpdate(
-      req.params.id,
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to update document'
+      });
+    }
+
+    // Update ONLY if belongs to user's tenant
+    const document = await Document.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        tenant_id: tenantId  // Ensure user owns this resource
+      },
       updateData,
       { new: true, runValidators: true }
-    ).setOptions({ _tenantId: req.tenant.tenantId }).lean();
+    ).lean();
 
     if (!document) {
       return res.status(404).json({
         success: false,
-        message: 'Document not found'
+        message: 'Document not found or you do not have permission to update it'
       });
     }
 
@@ -1397,20 +1427,25 @@ router.delete('/bulk', checkModulePermission('documents', 'delete'), async (req,
 // DELETE /api/documents/:id - Delete document
 router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, res) => {
   try {
-    // Verify tenant context exists
-    if (!req.tenant || !req.tenant.tenantId) {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
       return res.status(403).json({
         success: false,
-        message: 'No tenant context found. User must be associated with a tenant.'
+        message: 'Tenant context required to delete document'
       });
     }
 
-    const document = await Document.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
+    // Delete ONLY if belongs to user's tenant
+    const document = await Document.findOneAndDelete({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this resource
+    });
 
     if (!document) {
       return res.status(404).json({
         success: false,
-        message: 'Document not found'
+        message: 'Document not found or you do not have permission to delete it'
       });
     }
 
@@ -1421,9 +1456,6 @@ router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, 
 
       }
     }
-
-    // Delete document from database - scoped to tenant
-    await Document.findByIdAndDelete(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
 
     res.status(200).json({
       success: true,
@@ -2470,6 +2502,9 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     // Extract customer_id from different possible locations
     const customerId = currentDocument.customer?.customer_id || currentDocument.customer_id || 'unknown';
 
+    // Get tenant ID from request (set by auth middleware)
+    const tenantId = req.user?.tenant_id || req.tenantId || currentDocument.tenant_id;
+
     // Generate S3 key and file metadata immediately (without uploading)
     const s3Key = `documents/${documentGroupId}/${year}/${month}/${day}/${Date.now()}-${versionedFileName}`;
     const fileUrl = `${process.env.AWS_URL}/${s3Key}`;
@@ -2507,7 +2542,8 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
         const asyncUploadResult = await uploadFileToS3(
           fileForUpload,
           customerId,
-          `documents/${documentGroupId}/${year}/${month}/${day}`
+          `documents/${documentGroupId}/${year}/${month}/${day}`,
+          tenantId
         );
 
         if (!asyncUploadResult.success) {
@@ -2751,8 +2787,24 @@ router.get('/versions/:versionId/download', validateObjectId, async (req, res) =
       });
     }
 
-    // Generate presigned URL
-    const urlResult = await generatePresignedUrl(document.file.file_meta.file_key, 3600);
+    const fileMeta = document.file.file_meta;
+    let urlResult;
+
+    // Check if document version is in tenant-specific bucket
+    if (fileMeta.bucket_name && fileMeta.bucket_name !== process.env.AWS_BUCKET) {
+      // Use tenant-specific S3 service
+      console.log(`📥 Generating download URL for version in tenant bucket: ${fileMeta.bucket_name}`);
+      const tenantS3Service = new TenantS3Service();
+      urlResult = await tenantS3Service.generatePresignedUrlForTenantBucket(
+        fileMeta.bucket_name,
+        fileMeta.file_key,
+        3600 // 1 hour expiry
+      );
+    } else {
+      // Use shared bucket
+      console.log('📥 Generating download URL for version in shared bucket');
+      urlResult = await generatePresignedUrl(fileMeta.file_key, 3600);
+    }
 
     if (!urlResult.success) {
       return res.status(500).json({
@@ -3187,8 +3239,24 @@ router.get('/:id/download', validateObjectId, async (req, res) => {
       });
     }
 
-    // Generate presigned URL (expires in 1 hour)
-    const result = await generatePresignedUrl(document.file.file_meta.file_key, 3600);
+    const fileMeta = document.file.file_meta;
+    let result;
+
+    // Check if document is in tenant-specific bucket
+    if (fileMeta.bucket_name && fileMeta.bucket_name !== process.env.AWS_BUCKET) {
+      // Use tenant-specific S3 service
+      console.log(`📥 Generating download URL for tenant bucket: ${fileMeta.bucket_name}`);
+      const tenantS3Service = new TenantS3Service();
+      result = await tenantS3Service.generatePresignedUrlForTenantBucket(
+        fileMeta.bucket_name,
+        fileMeta.file_key,
+        3600 // 1 hour expiry
+      );
+    } else {
+      // Use shared bucket
+      console.log('📥 Generating download URL for shared bucket');
+      result = await generatePresignedUrl(fileMeta.file_key, 3600);
+    }
 
     if (!result.success) {
       return res.status(500).json({
