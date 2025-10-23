@@ -641,22 +641,20 @@
         {
           "method": "GET",
           "path": "/audit-logs",
-          "description": "Get audit logs with pagination and filtering",
+          "description": "Get audit logs with pagination and filtering (tenant-isolated)",
           "parameters": {
             "query": {
               "page": "number (optional, default: 1)",
-              "limit": "number (optional, default: 20)",
-              "search": "string (optional)",
+              "limit": "number (optional, default: 50)",
               "action": "string (optional)",
               "resource_type": "string (optional)",
               "status": "string (optional)",
               "user_id": "string (optional)",
               "start_date": "date (optional)",
-              "end_date": "date (optional)",
-              "sort_by": "string (optional, default: created_at)",
-              "sort_order": "string (optional, default: desc)"
+              "end_date": "date (optional)"
             }
-          }
+          },
+          "security": "Automatically filters by current user's tenant - no cross-tenant access"
         },
         {
           "method": "POST",

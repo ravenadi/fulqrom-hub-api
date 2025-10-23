@@ -19,6 +19,8 @@ async function logAudit(logData, req) {
 }
 
 // GET /api/audit-logs - Get audit logs with tenant filtering
+// SECURITY: This endpoint automatically filters by the current user's tenant
+// No tenant_id parameter is accepted to prevent cross-tenant data access
 router.get('/', async (req, res) => {
   try {
     const { 
@@ -29,17 +31,23 @@ router.get('/', async (req, res) => {
       status,
       user_id,
       start_date,
-      end_date,
-      tenant_id 
+      end_date
     } = req.query;
 
     // Build filter query
     let filterQuery = {};
 
-    // Tenant filtering - this is critical for multi-tenancy
-    if (tenant_id) {
-      filterQuery.tenant_id = tenant_id;
+    // Tenant filtering - CRITICAL: Use tenant from request context, NOT query params
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant context is required'
+      });
     }
+    
+    // Always filter by current user's tenant - ignore any tenant_id in query params
+    filterQuery.tenant_id = tenantId;
 
     // Action filter
     if (action) {
