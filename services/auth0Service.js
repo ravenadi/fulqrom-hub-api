@@ -15,6 +15,7 @@ const getAuth0Client = () => {
  * @param {Object} userData - User data
  * @param {string} userData.email - User email
  * @param {string} userData.full_name - User full name
+ * @param {string} [userData.password] - User password (if not provided, generates temporary password)
  * @param {string} [userData.phone] - User phone number
  * @param {boolean} [userData.is_active] - User active status
  * @returns {Promise<Object>} Auth0 user object
@@ -23,14 +24,17 @@ const createAuth0User = async (userData) => {
   try {
     const management = getAuth0Client();
 
-    // Generate a temporary password (user will reset on first login)
-    const tempPassword = `Temp${Math.random().toString(36).slice(-8)}@${Date.now()}`;
+    // Use provided password or generate a temporary one as fallback
+    const password = userData.password || `Temp${Math.random().toString(36).slice(-8)}@${Date.now()}`;
+
+    // If password was provided by admin, skip email verification for immediate login
+    const skipEmailVerification = !!userData.password;
 
     // Auth0 SDK v5 API - response is the user object directly (not wrapped in .data)
     const auth0User = await management.users.create({
       connection: process.env.AUTH0_CONNECTION || 'Username-Password-Authentication',
       email: userData.email,
-      password: tempPassword,
+      password: password,
       name: userData.full_name,
       user_metadata: {
         full_name: userData.full_name,
@@ -41,8 +45,8 @@ const createAuth0User = async (userData) => {
         is_active: userData.is_active !== undefined ? userData.is_active : true,
         role_ids: userData.role_ids || []
       },
-      email_verified: false,
-      verify_email: true, // Send verification email
+      email_verified: skipEmailVerification, // Skip verification if password provided
+      verify_email: !skipEmailVerification, // Only send verification if no password
       blocked: userData.is_active === false
     });
 

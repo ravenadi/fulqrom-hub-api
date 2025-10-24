@@ -1503,6 +1503,7 @@ const createTenantUser = async (req, res) => {
         email: email.trim(),
         full_name: name.trim(),
         phone: phone?.trim() || '',
+        password: password, // Use the password from admin form
         is_active: is_active !== undefined ? is_active : true,
         role_ids: roleIds,
         _id: newUser._id
