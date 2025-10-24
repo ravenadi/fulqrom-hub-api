@@ -220,8 +220,180 @@ router.post('/register', async (req, res) => {
 });
 
 /**
+ * POST /api/organizations/create
+ * Create organization from tenant data
+ * Creates a new Organization record for the current user's tenant
+ *
+ * Requires authentication
+ */
+router.post('/create', tenantContext, async (req, res) => {
+  try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'AUTHENTICATION_REQUIRED',
+        message: 'You must be logged in'
+      });
+    }
+
+    // Get user's tenant_id
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.tenant_id) {
+      return res.status(404).json({
+        success: false,
+        error: 'NO_TENANT',
+        message: 'No tenant association found for this user'
+      });
+    }
+
+    // Check if organization already exists for this tenant
+    const existingOrg = await Organization.findOne({ tenant_id: user.tenant_id });
+    if (existingOrg) {
+      return res.status(409).json({
+        success: false,
+        error: 'ORGANIZATION_EXISTS',
+        message: 'An organization already exists for this tenant'
+      });
+    }
+
+    const { name, email, phone, abn, acn, address } = req.body;
+
+    // Validation
+    const errors = [];
+
+    if (!name || name.trim().length < 2) {
+      errors.push('Organization name is required (minimum 2 characters)');
+    }
+
+    // Validate email if provided
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.push('Valid email address is required');
+    }
+
+    // Validate ABN if provided
+    if (abn && !/^\d{11}$/.test(abn)) {
+      errors.push('ABN must be exactly 11 digits');
+    }
+
+    // Validate ACN if provided
+    if (acn && !/^\d{9}$/.test(acn)) {
+      errors.push('ACN must be exactly 9 digits');
+    }
+
+    // Validate postcode if address provided
+    if (address && address.postcode && !/^\d{4}$/.test(address.postcode)) {
+      errors.push('Postcode must be 4 digits');
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    // Get tenant and plan info
+    const tenant = await Tenant.findById(user.tenant_id).populate('plan_id');
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        error: 'NO_TENANT',
+        message: 'Tenant not found'
+      });
+    }
+
+    // Generate unique slug from organization name
+    let slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    // Ensure slug is unique
+    let slugCounter = 1;
+    let uniqueSlug = slug;
+    while (await Organization.findOne({ slug: uniqueSlug })) {
+      uniqueSlug = `${slug}-${slugCounter}`;
+      slugCounter++;
+    }
+
+    // Create Organization
+    const organization = await Organization.create({
+      tenant_id: tenant._id,
+      name: name.trim(),
+      slug: uniqueSlug,
+      email: email || user.email, // Use provided email or fall back to user's email
+      phone,
+      abn,
+      acn,
+      address,
+      plan_id: tenant.plan_id,
+      status: tenant.status || 'active',
+      limits: tenant.plan_id ? {
+        users: tenant.plan_id.features?.max_users || 5,
+        buildings: tenant.plan_id.features?.max_buildings || 10,
+        sites: tenant.plan_id.features?.max_sites || 5,
+        storage_gb: tenant.plan_id.features?.storage_gb || 10
+      } : undefined,
+      current_usage: {
+        users: 1,
+        buildings: 0,
+        sites: 0,
+        storage_bytes: 0
+      },
+      owner_id: user._id,
+      is_active: true
+    });
+
+    // Populate for response
+    const populatedOrg = await Organization.findById(organization._id)
+      .populate('tenant_id', 'tenant_name status phone')
+      .populate('plan_id', 'name description features');
+
+    res.status(201).json({
+      success: true,
+      message: 'Organization created successfully',
+      data: {
+        id: populatedOrg._id,
+        tenant_id: populatedOrg.tenant_id._id,
+        tenant_name: populatedOrg.tenant_id.tenant_name,
+        name: populatedOrg.name,
+        slug: populatedOrg.slug,
+        email: populatedOrg.email,
+        phone: populatedOrg.phone,
+        abn: populatedOrg.abn,
+        acn: populatedOrg.acn,
+        address: populatedOrg.address,
+        status: populatedOrg.status,
+        branding: populatedOrg.branding,
+        settings: populatedOrg.settings,
+        limits: populatedOrg.limits,
+        current_usage: populatedOrg.current_usage,
+        plan: populatedOrg.plan_id ? {
+          name: populatedOrg.plan_id.name,
+          description: populatedOrg.plan_id.description,
+          features: populatedOrg.plan_id.features
+        } : null,
+        created_at: populatedOrg.created_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Create organization error:', error);
+
+    res.status(500).json({
+      success: false,
+      error: 'CREATE_FAILED',
+      message: 'Failed to create organization',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
  * GET /api/organizations/current
  * Get current user's organization (based on tenant_id)
+ * Falls back to tenant information if no Organization record exists
  *
  * Requires authentication
  */
@@ -240,53 +412,96 @@ router.get('/current', tenantContext, async (req, res) => {
     if (!user || !user.tenant_id) {
       return res.status(404).json({
         success: false,
-        error: 'NO_ORGANIZATION',
-        message: 'No organization found for this user'
+        error: 'NO_TENANT',
+        message: 'No tenant association found for this user'
       });
     }
 
     // Get organization for this tenant
     const organization = await Organization.findOne({ tenant_id: user.tenant_id })
-      .populate('tenant_id', 'tenant_name status')
+      .populate('tenant_id', 'tenant_name status phone')
       .populate('plan_id', 'name description features');
 
-    if (!organization) {
-      return res.status(404).json({
-        success: false,
-        error: 'NO_ORGANIZATION',
-        message: 'No organization found'
+    // If Organization exists, return full data
+    if (organization) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: organization._id,
+          tenant_id: organization.tenant_id._id,
+          tenant_name: organization.tenant_id.tenant_name,
+          name: organization.name,
+          slug: organization.slug,
+          email: organization.email,
+          phone: organization.phone,
+          abn: organization.abn,
+          acn: organization.acn,
+          address: organization.address,
+          status: organization.status,
+          branding: organization.branding,
+          settings: organization.settings,
+          limits: organization.limits,
+          current_usage: organization.current_usage,
+          trial_info: organization.status === 'trial' ? {
+            trial_ends_at: organization.trial_ends_at,
+            days_remaining: organization.trial_days_remaining,
+            is_active: organization.is_trial_active
+          } : null,
+          plan: organization.plan_id ? {
+            name: organization.plan_id.name,
+            description: organization.plan_id.description,
+            features: organization.plan_id.features
+          } : null,
+          created_at: organization.created_at
+        }
       });
     }
 
+    // Fallback: No Organization record, return Tenant information
+    const tenant = await Tenant.findById(user.tenant_id)
+      .populate('plan_id', 'name description features');
+
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        error: 'NO_TENANT',
+        message: 'Tenant not found'
+      });
+    }
+
+    // Return tenant data in Organization format for consistency
     res.status(200).json({
       success: true,
       data: {
-        id: organization._id,
-        tenant_id: organization.tenant_id._id,
-        tenant_name: organization.tenant_id.tenant_name,
-        name: organization.name,
-        slug: organization.slug,
-        email: organization.email,
-        phone: organization.phone,
-        abn: organization.abn,
-        acn: organization.acn,
-        address: organization.address,
-        status: organization.status,
-        branding: organization.branding,
-        settings: organization.settings,
-        limits: organization.limits,
-        current_usage: organization.current_usage,
-        trial_info: organization.status === 'trial' ? {
-          trial_ends_at: organization.trial_ends_at,
-          days_remaining: organization.trial_days_remaining,
-          is_active: organization.is_trial_active
+        id: null, // No organization record
+        tenant_id: tenant._id,
+        tenant_name: tenant.tenant_name,
+        name: tenant.tenant_name, // Use tenant name as organization name
+        slug: null,
+        email: user.email, // Use user's email
+        phone: tenant.phone,
+        abn: null,
+        acn: null,
+        address: null,
+        status: tenant.status || 'active',
+        branding: null,
+        settings: {
+          timezone: 'Australia/Sydney',
+          date_format: 'DD/MM/YYYY',
+          currency: 'AUD',
+          enable_analytics: true,
+          enable_notifications: true
+        },
+        limits: null,
+        current_usage: null,
+        trial_info: null,
+        plan: tenant.plan_id ? {
+          name: tenant.plan_id.name,
+          description: tenant.plan_id.description,
+          features: tenant.plan_id.features
         } : null,
-        plan: organization.plan_id ? {
-          name: organization.plan_id.name,
-          description: organization.plan_id.description,
-          features: organization.plan_id.features
-        } : null,
-        created_at: organization.created_at
+        created_at: tenant.created_at || tenant.createdAt,
+        _is_tenant_fallback: true // Flag to indicate this is tenant data, not organization data
       }
     });
 
@@ -343,15 +558,50 @@ router.put('/:id', tenantContext, async (req, res) => {
     const {
       name,
       phone,
+      abn,
+      acn,
+      status,
+      plan_id,
       address,
       branding,
       settings
     } = req.body;
 
+    // Validate ABN if provided
+    if (abn && !/^\d{11}$/.test(abn)) {
+      return res.status(400).json({
+        success: false,
+        error: 'VALIDATION_FAILED',
+        message: 'ABN must be exactly 11 digits'
+      });
+    }
+
+    // Validate ACN if provided
+    if (acn && !/^\d{9}$/.test(acn)) {
+      return res.status(400).json({
+        success: false,
+        error: 'VALIDATION_FAILED',
+        message: 'ACN must be exactly 9 digits'
+      });
+    }
+
+    // Validate status if provided
+    if (status && !['trial', 'active', 'suspended', 'cancelled'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'VALIDATION_FAILED',
+        message: 'Status must be one of: trial, active, suspended, cancelled'
+      });
+    }
+
     // Build update object
     const updateData = {};
     if (name && name.trim()) updateData.name = name.trim();
-    if (phone) updateData.phone = phone;
+    if (phone !== undefined) updateData.phone = phone;
+    if (abn !== undefined) updateData.abn = abn;
+    if (acn !== undefined) updateData.acn = acn;
+    if (status) updateData.status = status;
+    if (plan_id) updateData.plan_id = plan_id;
     if (address) updateData.address = address;
     if (branding) updateData.branding = branding;
     if (settings) updateData.settings = settings;
