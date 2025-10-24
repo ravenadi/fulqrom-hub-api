@@ -280,7 +280,7 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
   }
 });
 
-// DELETE /api/customers/:id - Delete customer (requires delete permission for this customer)
+// DELETE /api/customers/:id - Delete customer with cascading deletions (requires delete permission for this customer)
 router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     // Get tenant_id from authenticated user's context
@@ -292,12 +292,18 @@ router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req
       });
     }
 
-    // Delete ONLY if belongs to user's tenant
-    const customer = await Customer.findOneAndDelete({
-      _id: req.params.id,
-      tenant_id: tenantId  // Ensure user owns this resource
-    });
+    const customerId = req.params.id;
+    const {
+      delete_s3 = 'true',
+      immediate_s3_delete = 'false'
+    } = req.query;
 
+    // Convert query params to booleans
+    const shouldDeleteS3 = delete_s3 === 'true';
+    const isImmediateS3Delete = immediate_s3_delete === 'true';
+
+    // Verify customer exists and belongs to tenant
+    const customer = await Customer.findOne({ _id: customerId, tenant_id: tenantId });
     if (!customer) {
       return res.status(404).json({
         success: false,
@@ -305,12 +311,45 @@ router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req
       });
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Customer deleted successfully',
-      data: customer
+    // Use comprehensive deletion service
+    const CustomerDeletionService = require('../services/customerDeletionService');
+    const deletionService = new CustomerDeletionService();
+
+    console.log(`🗑️  Starting customer deletion: ${customerId}`);
+    console.log(`   S3 Strategy: ${isImmediateS3Delete ? 'IMMEDIATE DELETE' : 'TAG FOR EXPIRY (90 days)'}`);
+
+    const result = await deletionService.deleteCustomerCompletely(customerId, tenantId, {
+      deleteS3Files: shouldDeleteS3 && isImmediateS3Delete,
+      setS3Expiry: shouldDeleteS3 && !isImmediateS3Delete,
+      deleteDatabase: true,
+      adminUserId: req.user?.id,
+      adminEmail: req.user?.email
     });
+
+    if (result.success) {
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {
+          customer_id: result.customer_id,
+          customer_name: result.customer_name,
+          deletion_type: result.deletion_type,
+          records_deleted: result.counts,
+          s3_deletion_type: isImmediateS3Delete ? 'immediate' : 'tagged_for_expiry',
+          deletion_log: result.deletion_log,
+          errors: result.errors
+        }
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: result.message,
+        error: result.errors,
+        deletion_log: result.deletion_log
+      });
+    }
   } catch (error) {
+    console.error('Error deleting customer:', error);
     res.status(500).json({
       success: false,
       message: 'Error deleting customer',
