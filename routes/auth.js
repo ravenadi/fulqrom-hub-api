@@ -50,12 +50,36 @@ async function getUserTenantInfo(user) {
  */
 router.post('/sync-user', async (req, res) => {
   try {
-    const { auth0_id, email, full_name, phone } = req.body;
+    const { auth0_id, email, full_name, phone, roles } = req.body;
 
     if (!auth0_id || !email) {
       return res.status(400).json({
         success: false,
         message: 'auth0_id and email are required'
+      });
+    }
+
+    // Check if user is a super_admin (only exists in Auth0, not in database)
+    if (roles && Array.isArray(roles) && roles.includes('super_admin')) {
+      return res.status(200).json({
+        success: true,
+        message: 'Super admin authenticated via Auth0 only',
+        data: {
+          id: auth0_id,
+          _id: auth0_id,
+          email: email,
+          full_name: full_name || email.split('@')[0],
+          phone: phone,
+          auth0_id: auth0_id,
+          is_active: true,
+          role_ids: [{ name: 'super_admin', _id: 'super_admin' }],
+          role_name: 'super_admin',
+          resource_access: [],
+          tenant_id: null,
+          tenant_name: null,
+          organisations: [],
+          is_super_admin: true
+        }
       });
     }
 

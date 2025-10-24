@@ -20,6 +20,7 @@ const checkJwt = auth({
  * Attach User Middleware
  * After JWT validation, this middleware fetches the MongoDB user
  * and attaches it to req.user for use in permission checks
+ * For super_admin users, uses Auth0 claims directly without database lookup
  */
 const attachUser = async (req, res, next) => {
   try {
@@ -40,6 +41,27 @@ const attachUser = async (req, res, next) => {
     // Auth0 user ID is in the 'sub' claim (e.g., "auth0|abc123")
     const auth0UserId = payload.sub;
     console.log('✅ Found auth0UserId:', auth0UserId);
+
+    // Check if user is super_admin via Auth0 claims (no database record needed)
+    const auth0Roles = payload['https://fulqrom.com.au/roles'] || [];
+    if (auth0Roles.includes('super_admin')) {
+      console.log('✅ Super admin detected via Auth0 JWT claims - skipping database lookup');
+      // Super admin user - use Auth0 claims directly
+      req.user = {
+        id: auth0UserId,
+        userId: auth0UserId,
+        _id: auth0UserId,
+        auth0_id: auth0UserId,
+        email: payload.email || payload['https://fulqrom.com.au/email'] || '',
+        full_name: payload.name || payload['https://fulqrom.com.au/name'] || 'Super Admin',
+        role_ids: [{ name: 'super_admin', _id: 'super_admin' }],
+        resource_access: [],
+        is_active: true,
+        tenant_id: null,
+        is_super_admin: true
+      };
+      return next();
+    }
 
     // Find user in MongoDB by auth0_id
     const user = await User.findOne({ auth0_id: auth0UserId })

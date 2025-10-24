@@ -3,7 +3,7 @@ const Role = require('../models/v2/Role');
 
 /**
  * Super Admin Authentication Middleware
- * Checks if the authenticated user is a super admin
+ * Checks if the authenticated user is a super admin via Auth0 JWT claims
  */
 const checkSuperAdmin = async (req, res, next) => {
   try {
@@ -25,22 +25,49 @@ const checkSuperAdmin = async (req, res, next) => {
       return next();
     }
 
+    // Check Auth0 JWT claims first (primary method for super_admin)
+    const payload = req.auth?.payload || req.auth;
+    if (payload) {
+      // Auth0 stores custom roles in a namespaced claim
+      const auth0Roles = payload['https://fulqrom.com.au/roles'] || [];
+
+      if (auth0Roles.includes('super_admin')) {
+        // Super admin authenticated via Auth0 - no database record needed
+        req.superAdmin = {
+          id: payload.sub,
+          email: payload.email || payload['https://fulqrom.com.au/email'],
+          full_name: payload.name || payload['https://fulqrom.com.au/name'] || 'Super Admin',
+          auth0_id: payload.sub,
+          permissions: {
+            can_manage_tenants: true,
+            can_manage_users: true,
+            can_manage_plans: true,
+            can_view_analytics: true,
+            can_manage_roles: true,
+            can_view_audit_logs: true
+          }
+        };
+        return next();
+      }
+    }
+
+    // Fallback: Check database for existing super_admin users (legacy)
     const userId = req.user?.id || req.user?._id || req.body?.user_id || req.query?.user_id || req.headers?.['x-user-id'];
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required. Please provide user_id in request.',
-        hint: 'Add x-user-id header or user_id query parameter'
+        message: 'Authentication required. Super admin privileges required.',
+        hint: 'Provide valid Auth0 JWT token with super_admin role'
       });
     }
 
     const user = await User.findById(userId).populate('role_ids');
     if (!user) {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
-        message: 'User not found.',
-        error_code: 'USER_NOT_FOUND'
+        message: 'Access denied. Super admin privileges required.',
+        error_code: 'SUPER_ADMIN_REQUIRED'
       });
     }
 
@@ -53,8 +80,8 @@ const checkSuperAdmin = async (req, res, next) => {
     if (!superAdminRole) {
       return res.status(403).json({
         success: false,
-        message: 'Super admin role not configured.',
-        error_code: 'SUPER_ADMIN_ROLE_NOT_FOUND'
+        message: 'Access denied. Super admin privileges required.',
+        error_code: 'SUPER_ADMIN_REQUIRED'
       });
     }
 
