@@ -4,11 +4,28 @@ const nodemailer = require('nodemailer');
  * Create and configure nodemailer transport
  */
 const createTransporter = () => {
+  const port = parseInt(process.env.MAIL_PORT || '465');
+  const encryption = process.env.MAIL_ENCRYPTION?.toLowerCase();
+
   const config = {
     host: process.env.MAIL_HOST,
-    port: parseInt(process.env.MAIL_PORT || '465'),
-    secure: process.env.MAIL_ENCRYPTION === 'ssl', // true for 465, false for other ports
+    port: port,
+    secure: encryption === 'ssl' || port === 465, // true for 465/ssl, false for other ports
   };
+
+  // Add TLS options for better compatibility
+  if (encryption === 'tls' || port === 587) {
+    config.secure = false;
+    config.requireTLS = true;
+  }
+
+  // Add TLS configuration for SSL connections
+  if (config.secure) {
+    config.tls = {
+      rejectUnauthorized: true,
+      minVersion: 'TLSv1.2'
+    };
+  }
 
   // Only add auth if credentials are provided (not null/empty)
   if (process.env.MAIL_USERNAME && process.env.MAIL_USERNAME !== 'null' &&
