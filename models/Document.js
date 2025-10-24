@@ -295,6 +295,10 @@ const DocumentSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  review_date: {
+    type: String,
+    trim: true
+  },
   frequency: {
     type: String,
     enum: ['weekly', 'monthly', 'quarterly', 'annual', null],
@@ -481,6 +485,7 @@ DocumentSchema.index({ regulatory_framework: 1 });
 DocumentSchema.index({ compliance_status: 1 });
 DocumentSchema.index({ expiry_date: 1 });
 DocumentSchema.index({ issue_date: 1 });
+DocumentSchema.index({ review_date: 1 });
 DocumentSchema.index({ frequency: 1 });
 
 // Drawing Register indexes

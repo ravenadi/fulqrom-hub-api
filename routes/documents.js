@@ -803,24 +803,22 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
       // Location associations (IDs only - names populated dynamically)
       location: {},
 
-      // Compliance metadata - category restriction removed, allow for all documents
-      metadata: {
-        ...(documentData.engineering_discipline && documentData.engineering_discipline !== 'none' && { engineering_discipline: documentData.engineering_discipline }),
-        ...(documentData.regulatory_framework && documentData.regulatory_framework !== 'none' && { regulatory_framework: documentData.regulatory_framework }),
-        ...(documentData.certification_number && documentData.certification_number !== 'none' && { certification_number: documentData.certification_number }),
-        ...(documentData.compliance_framework && documentData.compliance_framework !== 'none' && { compliance_framework: documentData.compliance_framework }),
-        ...(documentData.compliance_status && documentData.compliance_status !== 'none' && { compliance_status: documentData.compliance_status }),
-        ...(documentData.issue_date && documentData.issue_date !== 'none' && { issue_date: documentData.issue_date }),
-        ...(documentData.expiry_date && documentData.expiry_date !== 'none' && { expiry_date: documentData.expiry_date }),
-        // Auto-populate review_date to today if category contains "report" and not provided
-        ...((documentData.review_date && documentData.review_date !== 'none')
-          ? { review_date: documentData.review_date }
-          : (documentData.category && documentData.category.toLowerCase().includes('report'))
-            ? { review_date: new Date().toISOString().split('T')[0] }
-            : {}
-        ),
-        ...(documentData.frequency && documentData.frequency !== 'none' && { frequency: documentData.frequency })
-      },
+      // Compliance fields at root level (NOT in metadata wrapper)
+      // metadata wrapper is deprecated - fields moved to root for consistency with PUT endpoint
+      ...(documentData.regulatory_framework && documentData.regulatory_framework !== 'none' && { regulatory_framework: documentData.regulatory_framework }),
+      ...(documentData.certification_number && documentData.certification_number !== 'none' && { certification_number: documentData.certification_number }),
+      ...(documentData.compliance_framework && documentData.compliance_framework !== 'none' && { compliance_framework: documentData.compliance_framework }),
+      ...(documentData.compliance_status && documentData.compliance_status !== 'none' && { compliance_status: documentData.compliance_status }),
+      ...(documentData.issue_date && documentData.issue_date !== 'none' && { issue_date: documentData.issue_date }),
+      ...(documentData.expiry_date && documentData.expiry_date !== 'none' && { expiry_date: documentData.expiry_date }),
+      // Auto-populate review_date to today if category contains "report" and not provided
+      ...((documentData.review_date && documentData.review_date !== 'none')
+        ? { review_date: documentData.review_date }
+        : (documentData.category && documentData.category.toLowerCase().includes('report'))
+          ? { review_date: new Date().toISOString().split('T')[0] }
+          : {}
+      ),
+      ...(documentData.frequency && documentData.frequency !== 'none' && { frequency: documentData.frequency }),
 
       // Drawing Register information - category restriction removed, allow for all documents
       drawing_info: {
@@ -1035,25 +1033,26 @@ router.put('/bulk-update', async (req, res) => {
     // Fetch entity names for the updates
     const entityNames = await fetchEntityNames(updates);
 
-    // Build location update object
-    const locationUpdate = {};
+    // Build update object for all fields
+    const updateObject = {};
 
+    // Location fields
     if (updates.site_id) {
-      locationUpdate['location.site'] = {
+      updateObject['location.site'] = {
         site_id: updates.site_id,
         ...(entityNames.site_name && { site_name: entityNames.site_name })
       };
     }
 
     if (updates.building_id) {
-      locationUpdate['location.building'] = {
+      updateObject['location.building'] = {
         building_id: updates.building_id,
         ...(entityNames.building_name && { building_name: entityNames.building_name })
       };
     }
 
     if (updates.floor_id) {
-      locationUpdate['location.floor'] = {
+      updateObject['location.floor'] = {
         floor_id: updates.floor_id,
         ...(entityNames.floor_name && { floor_name: entityNames.floor_name })
       };
@@ -1063,44 +1062,74 @@ router.put('/bulk-update', async (req, res) => {
     if (updates.asset_ids && Array.isArray(updates.asset_ids) && updates.asset_ids.length > 0) {
       // Fetch asset details from database
       const assets = await Asset.find({ _id: { $in: updates.asset_ids.map(id => id.toString()) } });
-      locationUpdate['location.assets'] = assets.map(asset => ({
+      updateObject['location.assets'] = assets.map(asset => ({
         asset_id: asset._id.toString(),
         asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
         asset_type: asset.type || asset.category
       }));
       // Clear legacy single asset field when using multiple assets
-      locationUpdate['location.asset'] = undefined;
+      updateObject['location.asset'] = undefined;
     }
     // Handle single asset (legacy backward compatibility)
     else if (updates.asset_id) {
-      locationUpdate['location.asset'] = {
+      updateObject['location.asset'] = {
         asset_id: updates.asset_id,
         ...(entityNames.asset_name && { asset_name: entityNames.asset_name }),
         ...(entityNames.asset_type && { asset_type: entityNames.asset_type })
       };
     }
 
+    // handle building tenant id update
     if (updates.tenant_id) {
-      locationUpdate['location.tenant'] = {
+      updateObject['location.tenant'] = {
         tenant_id: updates.tenant_id,
         ...(entityNames.tenant_name && { tenant_name: entityNames.tenant_name })
       };
     }
 
     if (updates.vendor_id) {
-      locationUpdate['location.vendor'] = {
+      updateObject['location.vendor'] = {
         vendor_id: updates.vendor_id,
         ...(entityNames.vendor_name && { vendor_name: entityNames.vendor_name })
       };
     }
 
+    // Customer
+    if (updates.customer_id) {
+      updateObject['customer.customer_id'] = updates.customer_id;
+      if (entityNames.customer_name) {
+        updateObject['customer.customer_name'] = entityNames.customer_name;
+      }
+    }
+
+    // Document properties
+    if (updates.tags && Array.isArray(updates.tags)) {
+      updateObject['tags.tags'] = updates.tags;
+    }
+
+    if (updates.status) {
+      updateObject.status = updates.status;
+    }
+
+    if (updates.category) {
+      updateObject.category = updates.category;
+    }
+
+    if (updates.type) {
+      updateObject.type = updates.type;
+    }
+
+    if (updates.engineering_discipline) {
+      updateObject.engineering_discipline = updates.engineering_discipline;
+    }
+
     // Add updated_at timestamp
-    locationUpdate.updated_at = new Date().toISOString();
+    updateObject.updated_at = new Date().toISOString();
 
     // Perform bulk update
     const result = await Document.updateMany(
       { _id: { $in: document_ids } },
-      { $set: locationUpdate }
+      { $set: updateObject }
     );
 
     res.status(200).json({
@@ -1123,6 +1152,73 @@ router.put('/bulk-update', async (req, res) => {
 
 // PUT /api/documents/:id - Update document
 router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId, async (req, res) => {
+
+  // Fields to store 
+ /* {
+    // Basic Information
+    name: string,
+    category: string,
+    type: string,
+    description?: string,
+
+    // Customer (ROOT LEVEL - needs restructuring)
+    customer_id: string,
+    customer_name: string,
+
+    // Tags (ALREADY NESTED)
+    tags: { tags: string[] },
+
+    // Location (NESTED OBJECT)
+    location: {
+      site?: { site_id, site_name },
+      building?: { building_id, building_name },
+      floor?: { floor_id, floor_name },
+      tenant?: { tenant_id, tenant_name }, // building tenant id
+      assets?: [{ asset_id, asset_name, asset_type }]
+    },
+
+    // Compliance & Regulatory (ROOT LEVEL)
+    engineering_discipline?: string,
+    regulatory_framework?: string,
+    certification_number?: string,
+    compliance_framework?: string,
+    compliance_status?: string,
+    issue_date?: string,  // ISO format
+    expiry_date?: string,  // ISO format
+    review_date?: string,  // ISO format
+    frequency?: string,
+
+    // Drawing Register Fields (ROOT LEVEL)
+    date_issued?: string,  // ISO format
+    drawing_status?: string,
+    prepared_by?: string,
+    drawing_scale?: string,
+    approved_by_user?: string,
+    related_drawings?: [{ document_id, document_name }],
+
+    // Access Control (ROOT LEVEL)
+    access_level?: string,
+    access_users?: string[],
+
+    // Approval Configuration (NESTED OBJECT)
+    approval_config: {
+      enabled: boolean,
+      status: string,
+      approvers: [{ user_id, user_name, user_email }]
+    },
+
+    // File Metadata (NESTED OBJECT)
+    file: {
+      ...existing_file_data,
+      file_meta: {
+        ...existing_file_meta,
+        version: string
+      }
+    }
+  }
+  */
+
+
   try {
     // Verify tenant context exists
     if (!req.tenant || !req.tenant.tenantId) {
@@ -1143,6 +1239,22 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
 
     // Remove metadata wrapper - fields are now at root level
     delete updateData.metadata;
+
+    // Handle customer fields - convert from root level to nested structure
+    if (updateData.customer_id) {
+      if (!updateData.customer) {
+        updateData.customer = {};
+      }
+      updateData.customer.customer_id = updateData.customer_id;
+      delete updateData.customer_id;
+    }
+    if (updateData.customer_name) {
+      if (!updateData.customer) {
+        updateData.customer = {};
+      }
+      updateData.customer.customer_name = updateData.customer_name;
+      delete updateData.customer_name;
+    }
 
     // Clean root-level compliance fields: remove "none" values and empty fields
     const rootFieldsToClean = [
@@ -1235,6 +1347,7 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
           asset_name: names.asset_name,
           asset_type: names.asset_type
         } : undefined,
+         // building tenant id
         tenant: document.location?.tenant?.tenant_id ? {
           tenant_id: document.location.tenant.tenant_id,
           tenant_name: names.tenant_name

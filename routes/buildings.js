@@ -530,7 +530,7 @@ router.delete('/:id', checkResourcePermission('building', 'delete', (req) => req
 });
 
 // GET /api/buildings/summary/stats - Get building summary statistics
-router.get('/summary/stats', async (req, res) => {
+router.get('/summary/stats', checkModulePermission('buildings', 'view'), async (req, res) => {
   try {
     const { customer_id, site_id } = req.query;
 
@@ -582,7 +582,7 @@ router.get('/summary/stats', async (req, res) => {
 });
 
 // GET /api/buildings/by-category - Group buildings by category
-router.get('/by-category', async (req, res) => {
+router.get('/by-category', checkModulePermission('buildings', 'view'), async (req, res) => {
   try {
     const { customer_id, site_id } = req.query;
 

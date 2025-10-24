@@ -355,7 +355,7 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
 });
 
 // GET /api/tenants/by-building/:buildingId - Get tenants by building
-router.get('/by-building/:buildingId', async (req, res) => {
+router.get('/by-building/:buildingId', checkModulePermission('tenants', 'view'), async (req, res) => {
   try {
     const tenants = await BuildingTenant.find({ building_id: req.params.buildingId })
       .populate('customer_id', 'organisation.organisation_name')
@@ -387,7 +387,7 @@ router.get('/by-building/:buildingId', async (req, res) => {
 });
 
 // GET /api/tenants/summary/stats - Get tenant summary statistics
-router.get('/summary/stats', async (req, res) => {
+router.get('/summary/stats', checkModulePermission('tenants', 'view'), async (req, res) => {
   try {
     const { customer_id, site_id, building_id } = req.query;
 
@@ -491,7 +491,7 @@ router.delete('/:id', checkResourcePermission('tenant', 'delete', (req) => req.p
 });
 
 // GET /api/tenants/by-industry - Group tenants by industry type
-router.get('/by-industry', async (req, res) => {
+router.get('/by-industry', checkModulePermission('tenants', 'view'), async (req, res) => {
   try {
     const { customer_id, site_id, building_id } = req.query;
 

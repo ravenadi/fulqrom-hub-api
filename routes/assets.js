@@ -691,7 +691,7 @@ router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.pa
 });
 
 // GET /api/assets/by-building/:buildingId - Get assets by building
-router.get('/by-building/:buildingId', async (req, res) => {
+router.get('/by-building/:buildingId', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
     const { buildingId } = req.params;
     const {
@@ -803,7 +803,7 @@ router.get('/by-building/:buildingId', async (req, res) => {
 });
 
 // GET /api/assets/by-category - Group assets by category
-router.get('/by-category', async (req, res) => {
+router.get('/by-category', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
     const { customer_id, site_id, building_id } = req.query;
 
@@ -858,7 +858,7 @@ router.get('/by-category', async (req, res) => {
 });
 
 // GET /api/assets/summary/stats - Get asset summary statistics
-router.get('/summary/stats', async (req, res) => {
+router.get('/summary/stats', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
     const { customer_id, site_id, building_id } = req.query;
 

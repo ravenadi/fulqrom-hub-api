@@ -172,7 +172,7 @@ router.get('/', checkModulePermission('vendors', 'view'), async (req, res) => {
 });
 
 // GET /api/vendors/stats - Get vendor statistics
-router.get('/stats', async (req, res) => {
+router.get('/stats', checkModulePermission('vendors', 'view'), async (req, res) => {
   try {
     // Get tenant ID from request context (mandatory for data isolation)
     const tenantId = req.tenant?.tenantId;
@@ -570,7 +570,7 @@ router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.p
 });
 
 // PATCH /api/vendors/:id/status - Update vendor status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', checkResourcePermission('vendor', 'edit', (req) => req.params.id), async (req, res) => {
   try {
     const vendorId = req.params.id;
     const { status } = req.body;

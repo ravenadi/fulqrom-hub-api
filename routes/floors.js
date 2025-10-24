@@ -383,7 +383,7 @@ router.delete('/:id', checkResourcePermission('floor', 'delete', (req) => req.pa
 });
 
 // GET /api/floors/by-building/:buildingId - Get floors by building
-router.get('/by-building/:buildingId', async (req, res) => {
+router.get('/by-building/:buildingId', checkModulePermission('floors', 'view'), async (req, res) => {
   try {
     const floors = await Floor.find({ building_id: req.params.buildingId })
       .populate('customer_id', 'organisation.organisation_name')
@@ -415,7 +415,7 @@ router.get('/by-building/:buildingId', async (req, res) => {
 });
 
 // GET /api/floors/summary/stats - Get floor summary statistics
-router.get('/summary/stats', async (req, res) => {
+router.get('/summary/stats', checkModulePermission('floors', 'view'), async (req, res) => {
   try {
     const { customer_id, site_id, building_id } = req.query;
 
@@ -468,7 +468,7 @@ router.get('/summary/stats', async (req, res) => {
 });
 
 // GET /api/floors/by-type - Group floors by type
-router.get('/by-type', async (req, res) => {
+router.get('/by-type', checkModulePermission('floors', 'view'), async (req, res) => {
   try {
     const { customer_id, site_id, building_id } = req.query;
 
