@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const Role = require('../models/Role');
 const Tenant = require('../models/Tenant');
+const resilientAuthService = require('../services/resilientAuthService');
 
 const router = express.Router();
 
@@ -88,9 +89,100 @@ async function getUserTenantInfo(user) {
 }
 
 /**
+ * POST /api/auth/prepare-login
+ * RESILIENT: Prepare user for login by ensuring MongoDB/Auth0 sync
+ * Call this BEFORE Auth0 login to ensure user can authenticate
+ */
+router.post('/prepare-login', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    // Use resilient service to prepare login
+    const result = await resilientAuthService.prepareLogin(email);
+
+    if (!result.success) {
+      return res.status(404).json({
+        success: false,
+        message: result.message,
+        warnings: result.warnings
+      });
+    }
+
+    // Return success with sync actions performed
+    return res.status(200).json({
+      success: true,
+      message: 'User prepared for login',
+      actions: result.actions,
+      warnings: result.warnings,
+      status: result.status
+    });
+
+  } catch (error) {
+    console.error('Login preparation error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error preparing login',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/auth/password-reset
+ * RESILIENT: Request password reset with auto-sync
+ * Ensures user is synced before sending reset email
+ */
+router.post('/password-reset', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    // Use resilient service to handle password reset
+    const result = await resilientAuthService.handlePasswordReset(email);
+
+    if (!result.success) {
+      return res.status(404).json({
+        success: false,
+        message: result.message,
+        error: result.error
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      actions: result.actions,
+      warnings: result.warnings
+    });
+
+  } catch (error) {
+    console.error('Password reset error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error processing password reset',
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/auth/sync-user
- * Sync or create user from Auth0 authentication
+ * RESILIENT: Sync or create user from Auth0 authentication
  * This endpoint is called by the frontend after Auth0 login
+ * Now uses resilient post-login sync
  */
 router.post('/sync-user', async (req, res) => {
   try {
@@ -127,92 +219,30 @@ router.post('/sync-user', async (req, res) => {
       });
     }
 
-    // Check if user already exists by auth0_id
-    let user = await User.findOne({ auth0_id }).populate('role_ids');
+    // Use resilient post-login sync
+    const syncResult = await resilientAuthService.postLoginSync({
+      user_id: auth0_id,
+      email: email,
+      name: full_name,
+      phone: phone
+    });
 
-    if (!user) {
-      // Check if user exists by email (might have been created before Auth0 integration)
-      user = await User.findOne({ email }).populate('role_ids');
-
-      if (user) {
-        // Update existing user with auth0_id
-        user.auth0_id = auth0_id;
-        if (full_name) user.full_name = full_name;
-        if (phone) user.phone = phone;
-        user.updated_at = new Date();
-        await user.save();
-
-        // Get tenant information
-        const tenantInfo = await getUserTenantInfo(user);
-
-        return res.status(200).json({
-          success: true,
-          message: 'User synced with Auth0',
-          data: {
-            _id: user._id.toString(),
-            id: user._id.toString(),
-            email: user.email,
-            full_name: user.full_name,
-            phone: user.phone,
-            auth0_id: user.auth0_id,
-            is_active: user.is_active,
-            role_ids: user.role_ids,
-            role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
-            resource_access: user.resource_access,
-            tenant_id: tenantInfo.tenant_id,
-            tenant_name: tenantInfo.tenant_name,
-            organisations: tenantInfo.organisation ? [tenantInfo.organisation] : []
-          }
-        });
-      }
-
-      // User doesn't exist - create new user with default role
-      const defaultRole = await Role.findOne({ name: 'User' });
-
-      user = new User({
-        auth0_id,
-        email,
-        full_name: full_name || email.split('@')[0],
-        phone,
-        is_active: true,
-        role_ids: defaultRole ? [defaultRole._id] : [],
-        resource_access: []
-      });
-
-      await user.save();
-      await user.populate('role_ids');
-
-      // Get tenant information for new user
-      const tenantInfo = await getUserTenantInfo(user);
-
-      return res.status(201).json({
-        success: true,
-        message: 'User created from Auth0',
-        data: {
-          _id: user._id.toString(),
-          id: user._id.toString(),
-          email: user.email,
-          full_name: user.full_name,
-          phone: user.phone,
-          auth0_id: user.auth0_id,
-          is_active: user.is_active,
-          role_ids: user.role_ids,
-          role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
-          resource_access: user.resource_access,
-          tenant_id: tenantInfo.tenant_id,
-          tenant_name: tenantInfo.tenant_name,
-          organisations: tenantInfo.organisation ? [tenantInfo.organisation] : []
-        }
+    if (!syncResult.success) {
+      // User not found in MongoDB - this shouldn't happen if prepare-login was called
+      return res.status(404).json({
+        success: false,
+        message: syncResult.message
       });
     }
 
-    // User exists and already has auth0_id
+    const user = syncResult.user;
+
     // Get tenant information
     const tenantInfo = await getUserTenantInfo(user);
 
     return res.status(200).json({
       success: true,
-      message: 'User already synced',
+      message: 'User synced successfully',
       data: {
         _id: user._id.toString(),
         id: user._id.toString(),

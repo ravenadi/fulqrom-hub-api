@@ -69,10 +69,26 @@ const updateAuth0User = async (auth0UserId, updateData) => {
 
     const auth0UpdateData = {};
 
+    // Handle email updates - skip verification if admin is updating
     if (updateData.email) {
       auth0UpdateData.email = updateData.email;
-      auth0UpdateData.email_verified = false; // Re-verify email if changed
-      auth0UpdateData.verify_email = true;
+      // If admin provides password with email update, skip verification
+      if (updateData.password) {
+        auth0UpdateData.email_verified = true;  // Auto-verify for admin updates
+        auth0UpdateData.verify_email = false;   // Don't send verification email
+      } else {
+        auth0UpdateData.email_verified = false; // Re-verify email if changed by user
+        auth0UpdateData.verify_email = true;    // Send verification email
+      }
+    }
+
+    // Handle password updates
+    if (updateData.password) {
+      auth0UpdateData.password = updateData.password;
+      // Ensure email is verified when password is set by admin
+      if (!updateData.email) {
+        auth0UpdateData.email_verified = true;
+      }
     }
 
     if (updateData.full_name) {

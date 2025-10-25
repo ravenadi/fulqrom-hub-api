@@ -1474,15 +1474,11 @@ const createTenantUser = async (req, res) => {
       });
     }
 
-    // Create user in MongoDB
-    const bcrypt = require('bcrypt');
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+    // Create user in MongoDB (password only stored in Auth0)
     const newUser = new User({
       full_name: name.trim(),
       email: email.trim(),
       phone: phone?.trim() || '',
-      password: hashedPassword,
       tenant_id: tenant,
       role_ids: roleIds,
       is_active: is_active !== undefined ? is_active : true
@@ -1623,17 +1619,11 @@ const updateTenantUser = async (req, res) => {
       });
     }
 
-    // Update fields
+    // Update fields (password only stored in Auth0, not MongoDB)
     if (name) user.full_name = name.trim();
     if (phone !== undefined) user.phone = phone?.trim() || '';
     if (roleIds) user.role_ids = roleIds;
     if (is_active !== undefined) user.is_active = is_active;
-
-    // Update password if provided
-    if (password) {
-      const bcrypt = require('bcrypt');
-      user.password = await bcrypt.hash(password, 10);
-    }
 
     user.updated_at = new Date();
     await user.save();
@@ -1651,6 +1641,7 @@ const updateTenantUser = async (req, res) => {
         if (name) auth0UpdateData.full_name = name.trim();
         if (phone !== undefined) auth0UpdateData.phone = phone?.trim() || '';
         if (is_active !== undefined) auth0UpdateData.is_active = is_active;
+        if (password) auth0UpdateData.password = password; // Password sent to Auth0 only
 
         await auth0Service.updateAuth0User(user.auth0_id, auth0UpdateData);
 

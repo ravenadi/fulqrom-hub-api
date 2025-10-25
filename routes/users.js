@@ -134,10 +134,23 @@ router.get('/:id', async (req, res) => {
       });
     }
 
+    // Convert to object and ensure all fields are included
+    const userObject = user.toObject();
+
+    // Log what we're sending
+    console.log('📤 Sending user data:', {
+      _id: userObject._id,
+      email: userObject.email,
+      full_name: userObject.full_name,
+      hasResourceAccess: !!userObject.resource_access,
+      resourceAccessCount: userObject.resource_access?.length || 0,
+      roleCount: userObject.role_ids?.length || 0
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        ...user.toObject(),
+        ...userObject,
         role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User'
       }
     });
@@ -167,7 +180,11 @@ router.post('/', validateUserCreation, async (req, res) => {
       role_ids,
       roleIds,
       is_active,
-      isActive
+      isActive,
+      resource_access,
+      replace_resource_access,
+      document_categories,
+      engineering_disciplines
     } = req.body;
 
     // Normalize camelCase to snake_case
@@ -233,14 +250,122 @@ router.post('/', validateUserCreation, async (req, res) => {
       }
     }
 
+    // Validate resource_access if provided
+    if (resource_access !== undefined) {
+      if (!Array.isArray(resource_access)) {
+        return res.status(400).json({
+          success: false,
+          message: 'resource_access must be an array'
+        });
+      }
+
+      // Validate each resource access entry
+      const validResourceTypes = ['org', 'site', 'building', 'floor', 'tenant', 'document', 'asset', 'vendor', 'customer', 'user', 'analytics', 'document_category', 'document_discipline'];
+      
+      for (const access of resource_access) {
+        if (!access.resource_type || !validResourceTypes.includes(access.resource_type)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid resource_type: ${access.resource_type}. Must be one of: ${validResourceTypes.join(', ')}`
+          });
+        }
+        
+        if (!access.resource_id || typeof access.resource_id !== 'string') {
+          return res.status(400).json({
+            success: false,
+            message: 'resource_id is required and must be a string'
+          });
+        }
+
+        if (!access.permissions || typeof access.permissions !== 'object') {
+          return res.status(400).json({
+            success: false,
+            message: 'permissions object is required'
+          });
+        }
+
+        // Validate permissions structure
+        const requiredPermissions = ['can_view', 'can_create', 'can_edit', 'can_delete'];
+        for (const perm of requiredPermissions) {
+          if (typeof access.permissions[perm] !== 'boolean') {
+            return res.status(400).json({
+              success: false,
+              message: `permissions.${perm} must be a boolean`
+            });
+          }
+        }
+      }
+    }
+
+    // Validate document_categories if provided
+    if (document_categories !== undefined) {
+      if (!Array.isArray(document_categories)) {
+        return res.status(400).json({
+          success: false,
+          message: 'document_categories must be an array'
+        });
+      }
+
+      // Validate each document category is a string
+      for (const category of document_categories) {
+        if (typeof category !== 'string') {
+          return res.status(400).json({
+            success: false,
+            message: 'Each document_category must be a string'
+          });
+        }
+      }
+    }
+
+    // Validate engineering_disciplines if provided
+    if (engineering_disciplines !== undefined) {
+      if (!Array.isArray(engineering_disciplines)) {
+        return res.status(400).json({
+          success: false,
+          message: 'engineering_disciplines must be an array'
+        });
+      }
+
+      // Validate each engineering discipline is a string
+      for (const discipline of engineering_disciplines) {
+        if (typeof discipline !== 'string') {
+          return res.status(400).json({
+            success: false,
+            message: 'Each engineering_discipline must be a string'
+          });
+        }
+      }
+    }
+
     // Create user
-    const user = new User({
+    const userData = {
       email: email.toLowerCase().trim(),
       full_name: full_name.trim(),
       phone: phone?.trim(),
       role_ids: role_ids || [],
-      is_active: is_active !== undefined ? is_active : true
-    });
+      is_active: is_active !== undefined ? is_active : true,
+      tenant_id: req.tenant?.tenantId // Add tenant_id from request context
+    };
+
+    // Add resource_access if provided
+    if (resource_access !== undefined) {
+      userData.resource_access = resource_access.map(access => ({
+        ...access,
+        granted_at: new Date()
+      }));
+    }
+
+    // Add document_categories if provided
+    if (document_categories !== undefined) {
+      userData.document_categories = document_categories.map(category => category.trim()).filter(category => category.length > 0);
+    }
+
+    // Add engineering_disciplines if provided
+    if (engineering_disciplines !== undefined) {
+      userData.engineering_disciplines = engineering_disciplines.map(discipline => discipline.trim()).filter(discipline => discipline.length > 0);
+    }
+
+    const user = new User(userData);
 
     await user.save();
 
@@ -324,7 +449,11 @@ router.put('/:id', validateUserElevation, async (req, res) => {
       role_ids,
       roleIds,
       is_active,
-      isActive
+      isActive,
+      resource_access,
+      replace_resource_access,
+      document_categories,
+      engineering_disciplines
     } = req.body;
 
     // Normalize camelCase to snake_case
@@ -381,6 +510,93 @@ router.put('/:id', validateUserElevation, async (req, res) => {
       }
     }
 
+    // Validate resource_access if provided
+    if (resource_access !== undefined) {
+      if (!Array.isArray(resource_access)) {
+        return res.status(400).json({
+          success: false,
+          message: 'resource_access must be an array'
+        });
+      }
+
+      // Validate each resource access entry
+      const validResourceTypes = ['org', 'site', 'building', 'floor', 'tenant', 'document', 'asset', 'vendor', 'customer', 'user', 'analytics', 'document_category', 'document_discipline'];
+      
+      for (const access of resource_access) {
+        if (!access.resource_type || !validResourceTypes.includes(access.resource_type)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid resource_type: ${access.resource_type}. Must be one of: ${validResourceTypes.join(', ')}`
+          });
+        }
+        
+        if (!access.resource_id || typeof access.resource_id !== 'string') {
+          return res.status(400).json({
+            success: false,
+            message: 'resource_id is required and must be a string'
+          });
+        }
+
+        if (!access.permissions || typeof access.permissions !== 'object') {
+          return res.status(400).json({
+            success: false,
+            message: 'permissions object is required'
+          });
+        }
+
+        // Validate permissions structure
+        const requiredPermissions = ['can_view', 'can_create', 'can_edit', 'can_delete'];
+        for (const perm of requiredPermissions) {
+          if (typeof access.permissions[perm] !== 'boolean') {
+            return res.status(400).json({
+              success: false,
+              message: `permissions.${perm} must be a boolean`
+            });
+          }
+        }
+      }
+    }
+
+    // Validate document_categories if provided
+    if (document_categories !== undefined) {
+      if (!Array.isArray(document_categories)) {
+        return res.status(400).json({
+          success: false,
+          message: 'document_categories must be an array'
+        });
+      }
+
+      // Validate each document category is a string
+      for (const category of document_categories) {
+        if (typeof category !== 'string') {
+          return res.status(400).json({
+            success: false,
+            message: 'Each document_category must be a string'
+          });
+        }
+      }
+    }
+
+    // Validate engineering_disciplines if provided
+    if (engineering_disciplines !== undefined) {
+      if (!Array.isArray(engineering_disciplines)) {
+        return res.status(400).json({
+          success: false,
+          message: 'engineering_disciplines must be an array'
+        });
+      }
+
+      // Validate each engineering discipline is a string
+      for (const discipline of engineering_disciplines) {
+        if (typeof discipline !== 'string') {
+          return res.status(400).json({
+            success: false,
+            message: 'Each engineering_discipline must be a string'
+          });
+        }
+      }
+    }
+
     // Prepare update data
     const updateData = {};
     if (email) updateData.email = email.toLowerCase().trim();
@@ -389,6 +605,15 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     if (role_ids !== undefined) updateData.role_ids = role_ids;
     if (is_active !== undefined) updateData.is_active = is_active;
 
+    // Log role_ids update for debugging
+    if (role_ids !== undefined) {
+      console.log(`📝 Updating user ${user.email} roles:`, {
+        previous_roles: user.role_ids,
+        new_roles: role_ids,
+        role_count: role_ids.length
+      });
+    }
+
     // Update MongoDB user
     if (email) user.email = email.toLowerCase().trim();
     if (full_name) user.full_name = full_name.trim();
@@ -396,8 +621,43 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     if (role_ids !== undefined) user.role_ids = role_ids;
     if (is_active !== undefined) user.is_active = is_active;
 
+    // Handle resource_access update
+    if (resource_access !== undefined) {
+      if (replace_resource_access === true) {
+        // Replace all existing resource access with new ones
+        user.resource_access = resource_access.map(access => ({
+          ...access,
+          granted_at: new Date()
+        }));
+        console.log(`🔄 Replaced resource access for user ${user.email} with ${resource_access.length} entries`);
+      } else {
+        // Append new resource access to existing ones
+        const newAccess = resource_access.map(access => ({
+          ...access,
+          granted_at: new Date()
+        }));
+        user.resource_access = [...(user.resource_access || []), ...newAccess];
+        console.log(`➕ Added ${resource_access.length} resource access entries to user ${user.email}`);
+      }
+    }
+
+    // Handle document_categories update
+    if (document_categories !== undefined) {
+      user.document_categories = document_categories.map(category => category.trim()).filter(category => category.length > 0);
+      console.log(`📄 Updated document_categories for user ${user.email} with ${user.document_categories.length} categories`);
+    }
+
+    // Handle engineering_disciplines update
+    if (engineering_disciplines !== undefined) {
+      user.engineering_disciplines = engineering_disciplines.map(discipline => discipline.trim()).filter(discipline => discipline.length > 0);
+      console.log(`🔧 Updated engineering_disciplines for user ${user.email} with ${user.engineering_disciplines.length} disciplines`);
+    }
+
     user.updated_at = new Date();
     await user.save();
+
+    // Verify the save was successful
+    console.log(`✅ User ${user.email} saved successfully with ${user.role_ids.length} roles`);
 
     // Update user in Auth0 (if auth0_id exists)
     let auth0Updated = false;

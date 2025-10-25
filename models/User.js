@@ -90,6 +90,16 @@ const UserSchema = new mongoose.Schema({
   // Resource access assignments
   resource_access: [ResourceAccessSchema],
 
+  // Document categories and engineering disciplines
+  document_categories: [{
+    type: String,
+    trim: true
+  }],
+  engineering_disciplines: [{
+    type: String,
+    trim: true
+  }],
+
   // Audit fields
   created_at: {
     type: Date,
