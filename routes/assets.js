@@ -52,8 +52,10 @@ router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
       sort_order = 'desc'
     } = req.query;
 
-    // Build filter query
-    let filterQuery = {};
+    // Build filter query with mandatory tenant filter
+    let filterQuery = {
+      tenant_id: req.tenant.tenantId
+    };
 
     if (customer_id) {
       // Support multiple customer IDs (comma-separated)
@@ -693,6 +695,14 @@ router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.pa
 // GET /api/assets/by-building/:buildingId - Get assets by building
 router.get('/by-building/:buildingId', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const { buildingId } = req.params;
     const {
       category,
@@ -712,8 +722,11 @@ router.get('/by-building/:buildingId', checkModulePermission('assets', 'view'), 
       });
     }
 
-    // Build filter query
-    let filterQuery = { building_id: new mongoose.Types.ObjectId(buildingId) };
+    // Build filter query with mandatory tenant filter
+    let filterQuery = { 
+      building_id: new mongoose.Types.ObjectId(buildingId),
+      tenant_id: req.tenant.tenantId
+    };
 
     if (category) filterQuery.category = category;
     if (status) filterQuery.status = status;
@@ -805,9 +818,21 @@ router.get('/by-building/:buildingId', checkModulePermission('assets', 'view'), 
 // GET /api/assets/by-category - Group assets by category
 router.get('/by-category', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const { customer_id, site_id, building_id } = req.query;
 
-    let matchQuery = {};
+    // Build match query with mandatory tenant filter
+    let matchQuery = {
+      tenant_id: req.tenant.tenantId
+    };
+    
     if (customer_id && mongoose.Types.ObjectId.isValid(customer_id)) {
       matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
     }
@@ -860,9 +885,21 @@ router.get('/by-category', checkModulePermission('assets', 'view'), async (req, 
 // GET /api/assets/summary/stats - Get asset summary statistics
 router.get('/summary/stats', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const { customer_id, site_id, building_id } = req.query;
 
-    let matchQuery = {};
+    // Build match query with mandatory tenant filter
+    let matchQuery = {
+      tenant_id: req.tenant.tenantId
+    };
+    
     if (customer_id && mongoose.Types.ObjectId.isValid(customer_id)) {
       matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
     }

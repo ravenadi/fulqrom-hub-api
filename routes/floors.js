@@ -8,6 +8,14 @@ const router = express.Router();
 // GET /api/floors - List all floors with pagination and search
 router.get('/', checkModulePermission('floors', 'view'), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const {
       page = 1,
       per_page = 10,
@@ -20,8 +28,10 @@ router.get('/', checkModulePermission('floors', 'view'), async (req, res) => {
       sort_order = 'asc'
     } = req.query;
 
-    // Build filter query
-    let filterQuery = {};
+    // Build filter query with mandatory tenant filter
+    let filterQuery = {
+      tenant_id: req.tenant.tenantId
+    };
 
     // Search functionality
     if (search) {
@@ -122,7 +132,19 @@ router.get('/', checkModulePermission('floors', 'view'), async (req, res) => {
 // GET /api/floors/:id - Get single floor
 router.get('/:id', checkResourcePermission('floor', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    const floor = await Floor.findById(req.params.id)
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Find floor ONLY if it belongs to the user's tenant
+    const floor = await Floor.findOne({
+      _id: req.params.id,
+      tenant_id: req.tenant.tenantId
+    })
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address status')
       .populate('building_id', 'building_name building_code category building_grade');
@@ -385,7 +407,19 @@ router.delete('/:id', checkResourcePermission('floor', 'delete', (req) => req.pa
 // GET /api/floors/by-building/:buildingId - Get floors by building
 router.get('/by-building/:buildingId', checkModulePermission('floors', 'view'), async (req, res) => {
   try {
-    const floors = await Floor.find({ building_id: req.params.buildingId })
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Find floors ONLY if they belong to the user's tenant
+    const floors = await Floor.find({ 
+      building_id: req.params.buildingId,
+      tenant_id: req.tenant.tenantId
+    })
       .populate('customer_id', 'organisation.organisation_name')
       .populate('site_id', 'site_name')
       .sort({ floor_number: 1 });
@@ -417,9 +451,21 @@ router.get('/by-building/:buildingId', checkModulePermission('floors', 'view'), 
 // GET /api/floors/summary/stats - Get floor summary statistics
 router.get('/summary/stats', checkModulePermission('floors', 'view'), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const { customer_id, site_id, building_id } = req.query;
 
-    let matchQuery = {};
+    // Build match query with mandatory tenant filter
+    let matchQuery = {
+      tenant_id: req.tenant.tenantId
+    };
+    
     if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
     if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
     if (building_id) matchQuery.building_id = new mongoose.Types.ObjectId(building_id);
@@ -470,9 +516,21 @@ router.get('/summary/stats', checkModulePermission('floors', 'view'), async (req
 // GET /api/floors/by-type - Group floors by type
 router.get('/by-type', checkModulePermission('floors', 'view'), async (req, res) => {
   try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
     const { customer_id, site_id, building_id } = req.query;
 
-    let matchQuery = {};
+    // Build match query with mandatory tenant filter
+    let matchQuery = {
+      tenant_id: req.tenant.tenantId
+    };
+    
     if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
     if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
     if (building_id) matchQuery.building_id = new mongoose.Types.ObjectId(building_id);

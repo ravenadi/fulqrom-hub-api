@@ -302,7 +302,20 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
 // GET /api/buildings/:id - Get single building
 router.get('/:id', checkResourcePermission('building', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    const building = await Building.findById(req.params.id)
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to view building'
+      });
+    }
+
+    // Find building ONLY if it belongs to the user's tenant
+    const building = await Building.findOne({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this building
+    })
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address status');
 
@@ -313,9 +326,14 @@ router.get('/:id', checkResourcePermission('building', 'view', (req) => req.para
       });
     }
 
+    // Add raw IDs to the response for convenience
+    const responseData = building.toObject();
+    responseData.site_id_raw = building.site_id;
+    responseData.customer_id_raw = building.customer_id;
+
     res.status(200).json({
       success: true,
-      data: building
+      data: responseData
     });
   } catch (error) {
     res.status(500).json({
@@ -466,9 +484,7 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       },
       req.body,
       { new: true, runValidators: true }
-    )
-    .populate('site_id', 'site_name address')
-    .populate('customer_id', 'organisation.organisation_name');
+    );
 
     if (!building) {
       return res.status(404).json({
@@ -477,10 +493,15 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       });
     }
 
+    // Add raw IDs to the response for convenience
+    const responseData = building.toObject();
+    responseData.site_id_raw = building.site_id;
+    responseData.customer_id_raw = building.customer_id;
+
     res.status(200).json({
       success: true,
       message: 'Building updated successfully',
-      data: building
+      data: responseData
     });
   } catch (error) {
     res.status(400).json({
@@ -532,9 +553,22 @@ router.delete('/:id', checkResourcePermission('building', 'delete', (req) => req
 // GET /api/buildings/summary/stats - Get building summary statistics
 router.get('/summary/stats', checkModulePermission('buildings', 'view'), async (req, res) => {
   try {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to view building statistics'
+      });
+    }
+
     const { customer_id, site_id } = req.query;
 
-    let matchQuery = {};
+    // Build match query with mandatory tenant filter
+    let matchQuery = {
+      tenant_id: tenantId
+    };
+    
     if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
     if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
 
@@ -584,9 +618,22 @@ router.get('/summary/stats', checkModulePermission('buildings', 'view'), async (
 // GET /api/buildings/by-category - Group buildings by category
 router.get('/by-category', checkModulePermission('buildings', 'view'), async (req, res) => {
   try {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to view building categories'
+      });
+    }
+
     const { customer_id, site_id } = req.query;
 
-    let matchQuery = {};
+    // Build match query with mandatory tenant filter
+    let matchQuery = {
+      tenant_id: tenantId
+    };
+    
     if (customer_id) matchQuery.customer_id = new mongoose.Types.ObjectId(customer_id);
     if (site_id) matchQuery.site_id = new mongoose.Types.ObjectId(site_id);
 

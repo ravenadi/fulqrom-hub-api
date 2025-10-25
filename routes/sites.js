@@ -19,7 +19,6 @@ router.get('/', checkModulePermission('sites', 'view'), tenantContext, async (re
       state,
       search,
       is_active,
-      tenant_id, // Allow explicit tenant_id for super admins
       page = 1,
       limit = 20,
       sort_by = 'created_date',
@@ -35,13 +34,14 @@ router.get('/', checkModulePermission('sites', 'view'), tenantContext, async (re
       const isSuperAdmin = req.tenant.isSuperAdmin || false;
 
       if (isSuperAdmin) {
-        // Super admins can filter by specific tenant or see all
-        if (tenant_id) {
-          filterQuery.tenant_id = mongoose.Types.ObjectId.isValid(tenant_id)
-            ? new mongoose.Types.ObjectId(tenant_id)
-            : tenant_id;
+        // Super admins can see all tenants (no filtering)
+        // They can use x-tenant-id header to impersonate specific tenant
+        if (req.headers['x-tenant-id']) {
+          filterQuery.tenant_id = mongoose.Types.ObjectId.isValid(req.headers['x-tenant-id'])
+            ? new mongoose.Types.ObjectId(req.headers['x-tenant-id'])
+            : req.headers['x-tenant-id'];
         }
-        // If no tenant_id specified, super admin sees all tenants
+        // If no x-tenant-id header, super admin sees all tenants
       } else {
         // Regular users can only see their tenant's data
         filterQuery.tenant_id = req.tenant.tenantId;
