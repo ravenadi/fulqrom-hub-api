@@ -6,7 +6,7 @@ const ResourceAccessSchema = new mongoose.Schema({
   resource_type: {
     type: String,
     required: true,
-    enum: ['org', 'site', 'building', 'floor', 'tenant', 'document', 'asset', 'vendor', 'customer', 'user', 'analytics'],
+    enum: ['org', 'site', 'building', 'floor', 'tenant', 'document', 'asset', 'vendor', 'customer', 'user', 'analytics', 'document_category', 'document_discipline'],
     trim: true
   },
   resource_id: {

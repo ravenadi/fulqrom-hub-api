@@ -16,13 +16,19 @@ const getAccessibleResources = async (creatorUserId, resourceType) => {
       throw new Error('Creator user not found');
     }
 
+    // IMPORTANT: Admin users have full access - bypass all resource filtering
+    const isAdmin = creator.role_ids?.some(role => role.is_active && role.name === 'Admin');
+    if (isAdmin) {
+      return { hasFullAccess: true };
+    }
+
     const accessibleResources = [];
 
     // Check if creator has module-level access
     const moduleNameMap = {
       'org': 'org',
       'site': 'sites',
-      'building': 'buildings', 
+      'building': 'buildings',
       'floor': 'floors',
       'tenant': 'tenants',
       'document': 'documents',
@@ -37,7 +43,7 @@ const getAccessibleResources = async (creatorUserId, resourceType) => {
     let hasModuleAccess = false;
     for (const role of creator.role_ids) {
       if (!role.is_active) continue;
-      
+
       const modulePermission = role.permissions?.find(p => p.module_name === moduleName);
       if (modulePermission && modulePermission.can_view) {
         hasModuleAccess = true;
@@ -112,11 +118,17 @@ const filterByUserScope = async (userId, query, resourceType) => {
       throw new Error('User not found');
     }
 
+    // IMPORTANT: Admin users have full access - bypass all scope filtering
+    const isAdmin = user.role_ids?.some(role => role.is_active && role.name === 'Admin');
+    if (isAdmin) {
+      return query; // Return original query without filtering
+    }
+
     // Check if user has module-level access
     const moduleNameMap = {
       'org': 'org',
       'site': 'sites',
-      'building': 'buildings', 
+      'building': 'buildings',
       'floor': 'floors',
       'tenant': 'tenants',
       'document': 'documents',
@@ -131,7 +143,7 @@ const filterByUserScope = async (userId, query, resourceType) => {
     let hasModuleAccess = false;
     for (const role of user.role_ids) {
       if (!role.is_active) continue;
-      
+
       const modulePermission = role.permissions?.find(p => p.module_name === moduleName);
       if (modulePermission && modulePermission.can_view) {
         hasModuleAccess = true;
@@ -311,12 +323,78 @@ const validateUserElevation = async (req, res, next) => {
   }
 };
 
+// Document-specific filtering by category and discipline
+const filterDocumentsByAccess = async (userId) => {
+  try {
+    const user = await User.findById(userId).populate('role_ids');
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // IMPORTANT: Admin users have full access - bypass all permission checks
+    const isAdmin = user.role_ids?.some(role => role.is_active && role.name === 'Admin');
+    if (isAdmin) {
+      return {
+        hasFullAccess: true,
+        allowedCategories: [],
+        allowedDisciplines: [],
+        categoryPermissions: [],
+        disciplinePermissions: []
+      };
+    }
+
+    // Check if user has module-level document access
+    let hasModuleAccess = false;
+    for (const role of user.role_ids) {
+      if (!role.is_active) continue;
+
+      const modulePermission = role.permissions?.find(p => p.module_name === 'documents');
+      if (modulePermission && modulePermission.can_view) {
+        hasModuleAccess = true;
+        break;
+      }
+    }
+
+    if (hasModuleAccess) {
+      // Has module access - check for category/discipline restrictions
+      const categoryRestrictions = user.resource_access?.filter(
+        ra => ra.resource_type === 'document_category' && ra.permissions?.can_view
+      ) || [];
+
+      const disciplineRestrictions = user.resource_access?.filter(
+        ra => ra.resource_type === 'document_discipline' && ra.permissions?.can_view
+      ) || [];
+
+      return {
+        hasFullAccess: categoryRestrictions.length === 0 && disciplineRestrictions.length === 0,
+        allowedCategories: categoryRestrictions.map(ra => ra.resource_id),
+        allowedDisciplines: disciplineRestrictions.map(ra => ra.resource_id),
+        categoryPermissions: categoryRestrictions,
+        disciplinePermissions: disciplineRestrictions
+      };
+    }
+
+    // No module access - return empty filters
+    return {
+      hasFullAccess: false,
+      allowedCategories: [],
+      allowedDisciplines: [],
+      categoryPermissions: [],
+      disciplinePermissions: []
+    };
+
+  } catch (error) {
+    console.error('Error filtering documents by access:', error);
+    throw error;
+  }
+};
+
 // Middleware to apply scope filtering (Rule 5)
 const applyScopeFiltering = (resourceType) => {
   return async (req, res, next) => {
     try {
       const userId = req.user?.id || req.user?._id || req.headers?.['x-user-id'];
-      
+
       if (!userId) {
         return res.status(401).json({
           success: false,
@@ -326,10 +404,16 @@ const applyScopeFiltering = (resourceType) => {
 
       // Store original query
       req.originalQuery = req.query;
-      
+
       // Apply scope filtering
       const filteredQuery = await filterByUserScope(userId, req.query, resourceType);
       req.query = filteredQuery;
+
+      // For documents, also apply category/discipline filtering
+      if (resourceType === 'document') {
+        const documentFilters = await filterDocumentsByAccess(userId);
+        req.documentFilters = documentFilters; // Attach to request for use in routes
+      }
 
       next();
 
@@ -350,6 +434,7 @@ module.exports = {
   canDownloadDocument,
   canElevateUserAccess,
   filterByUserScope,
+  filterDocumentsByAccess,
   validateUserCreation,
   validateUserElevation,
   applyScopeFiltering

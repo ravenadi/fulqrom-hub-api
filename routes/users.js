@@ -718,7 +718,7 @@ router.post('/resource-access', async (req, res) => {
     }
 
     // Validate resource_type
-    const validResourceTypes = ['customer', 'site', 'building', 'floor', 'asset', 'tenant', 'vendor'];
+    const validResourceTypes = ['customer', 'site', 'building', 'floor', 'asset', 'tenant', 'vendor', 'document_category', 'document_discipline'];
     if (!validResourceTypes.includes(resource_type)) {
       return res.status(400).json({
         success: false,

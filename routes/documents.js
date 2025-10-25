@@ -148,6 +148,136 @@ async function fetchEntityNames(documentData) {
   return entityNames;
 }
 
+// Batch fetch entity names for multiple documents to avoid N+1 query problem
+async function batchFetchEntityNames(documents) {
+  if (!documents || documents.length === 0) {
+    return [];
+  }
+
+  // Step 1: Collect all unique IDs from all documents
+  const customerIds = new Set();
+  const siteIds = new Set();
+  const buildingIds = new Set();
+  const floorIds = new Set();
+  const assetIds = new Set();
+  const tenantIds = new Set();
+  const vendorIds = new Set();
+
+  documents.forEach(doc => {
+    const customerId = doc.customer?.customer_id;
+    const siteId = doc.location?.site?.site_id;
+    const buildingId = doc.location?.building?.building_id;
+    const floorId = doc.location?.floor?.floor_id;
+    const assetId = doc.location?.asset?.asset_id;
+    const tenantId = doc.location?.tenant?.tenant_id;
+    const vendorId = doc.location?.vendor?.vendor_id;
+
+    if (customerId) customerIds.add(customerId.toString());
+    if (siteId) siteIds.add(siteId.toString());
+    if (buildingId) buildingIds.add(buildingId.toString());
+    if (floorId) floorIds.add(floorId.toString());
+    if (assetId) assetIds.add(assetId.toString());
+    if (tenantId) tenantIds.add(tenantId.toString());
+    if (vendorId) vendorIds.add(vendorId.toString());
+
+    // Collect multiple assets if present
+    const docAssetIds = doc.location?.assets?.map(a => a.asset_id) || [];
+    docAssetIds.forEach(id => {
+      if (id) assetIds.add(id.toString());
+    });
+  });
+
+  // Step 2: Fetch ALL entities in parallel with batch queries
+  const [customers, sites, buildings, floors, assets, tenants, vendors] = await Promise.all([
+    customerIds.size > 0 ? Customer.find({ _id: { $in: Array.from(customerIds) } }).lean().exec() : [],
+    siteIds.size > 0 ? Site.find({ _id: { $in: Array.from(siteIds) } }).lean().exec() : [],
+    buildingIds.size > 0 ? Building.find({ _id: { $in: Array.from(buildingIds) } }).lean().exec() : [],
+    floorIds.size > 0 ? Floor.find({ _id: { $in: Array.from(floorIds) } }).lean().exec() : [],
+    assetIds.size > 0 ? Asset.find({ _id: { $in: Array.from(assetIds) } }).lean().exec() : [],
+    tenantIds.size > 0 ? BuildingTenant.find({ _id: { $in: Array.from(tenantIds) } }).lean().exec() : [],
+    vendorIds.size > 0 ? Vendor.find({ _id: { $in: Array.from(vendorIds) } }).lean().exec() : []
+  ]);
+
+  // Step 3: Create lookup maps for O(1) access
+  const customerMap = new Map(customers.map(c => [c._id.toString(), c]));
+  const siteMap = new Map(sites.map(s => [s._id.toString(), s]));
+  const buildingMap = new Map(buildings.map(b => [b._id.toString(), b]));
+  const floorMap = new Map(floors.map(f => [f._id.toString(), f]));
+  const assetMap = new Map(assets.map(a => [a._id.toString(), a]));
+  const tenantMap = new Map(tenants.map(t => [t._id.toString(), t]));
+  const vendorMap = new Map(vendors.map(v => [v._id.toString(), v]));
+
+  // Step 4: Populate documents using the maps (no additional DB queries)
+  return documents.map(doc => {
+    const customer = customerMap.get(doc.customer?.customer_id?.toString());
+    const site = siteMap.get(doc.location?.site?.site_id?.toString());
+    const building = buildingMap.get(doc.location?.building?.building_id?.toString());
+    const floor = floorMap.get(doc.location?.floor?.floor_id?.toString());
+    const asset = assetMap.get(doc.location?.asset?.asset_id?.toString());
+    const tenant = tenantMap.get(doc.location?.tenant?.tenant_id?.toString());
+    const vendor = vendorMap.get(doc.location?.vendor?.vendor_id?.toString());
+
+    // Handle multiple assets
+    const docAssetIds = doc.location?.assets?.map(a => a.asset_id) || [];
+    const populatedAssets = docAssetIds
+      .map(assetId => {
+        const assetData = assetMap.get(assetId.toString());
+        if (assetData) {
+          return {
+            asset_id: assetData._id.toString(),
+            asset_name: assetData.asset_no || assetData.device_id || assetData.asset_id || 'Unknown Asset',
+            asset_type: assetData.type || assetData.category || ''
+          };
+        }
+        return null;
+      })
+      .filter(a => a !== null);
+
+    return {
+      ...doc,
+      customer: {
+        customer_id: doc.customer?.customer_id,
+        customer_name: customer
+          ? (customer.organisation?.organisation_name ||
+             customer.company_profile?.trading_name ||
+             customer.company_profile?.organisation_name ||
+             'Unknown Customer')
+          : 'Unknown Customer'
+      },
+      location: {
+        site: doc.location?.site?.site_id ? {
+          site_id: doc.location.site.site_id,
+          site_name: site?.site_name || null
+        } : undefined,
+        building: doc.location?.building?.building_id ? {
+          building_id: doc.location.building.building_id,
+          building_name: building?.building_name || null
+        } : undefined,
+        floor: doc.location?.floor?.floor_id ? {
+          floor_id: doc.location.floor.floor_id,
+          floor_name: floor?.floor_name || null
+        } : undefined,
+        // Multiple assets support
+        assets: populatedAssets.length > 0 ? populatedAssets : undefined,
+        // Legacy single asset (for backward compatibility)
+        asset: doc.location?.asset?.asset_id ? {
+          asset_id: doc.location.asset.asset_id,
+          asset_name: asset?.asset_no || asset?.device_id || asset?.asset_id || 'Unknown Asset',
+          asset_type: asset?.type || asset?.category
+        } : undefined,
+        tenant: doc.location?.tenant?.tenant_id ? {
+          tenant_id: doc.location.tenant.tenant_id,
+          tenant_name: tenant?.tenant_name || null
+        } : undefined,
+        vendor: doc.location?.vendor?.vendor_id ? {
+          vendor_id: doc.location.vendor.vendor_id,
+          vendor_name: vendor?.contractor_name || null
+        } : undefined
+      }
+    };
+  });
+}
+
 // GET /api/documents - List all documents with advanced search and filtering
 router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering('document'), validateQueryParams, async (req, res) => {
   try {
@@ -278,6 +408,59 @@ router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering(
       filterQuery.engineering_discipline = Array.isArray(disciplines) ? { $in: disciplines } : disciplines;
     }
 
+    // Apply document category/discipline access restrictions (Fine-Grained Permissions)
+    if (req.documentFilters && !req.documentFilters.hasFullAccess) {
+      // User has category restrictions - apply them
+      if (req.documentFilters.allowedCategories && req.documentFilters.allowedCategories.length > 0) {
+        // If user already specified a category filter, intersect with allowed categories
+        if (filterQuery.category) {
+          const existingCategories = Array.isArray(filterQuery.category.$in)
+            ? filterQuery.category.$in
+            : [filterQuery.category];
+          const allowedSet = new Set(req.documentFilters.allowedCategories);
+          const intersection = existingCategories.filter(cat => allowedSet.has(cat));
+
+          if (intersection.length === 0) {
+            // No overlap - user has no access
+            filterQuery.category = { $in: [] };
+          } else {
+            filterQuery.category = { $in: intersection };
+          }
+        } else {
+          // No user filter - apply allowed categories restriction
+          filterQuery.category = { $in: req.documentFilters.allowedCategories };
+        }
+      }
+
+      // User has discipline restrictions - apply them
+      if (req.documentFilters.allowedDisciplines && req.documentFilters.allowedDisciplines.length > 0) {
+        // If user already specified a discipline filter, intersect with allowed disciplines
+        if (filterQuery.engineering_discipline) {
+          const existingDisciplines = Array.isArray(filterQuery.engineering_discipline.$in)
+            ? filterQuery.engineering_discipline.$in
+            : [filterQuery.engineering_discipline];
+          const allowedSet = new Set(req.documentFilters.allowedDisciplines);
+          const intersection = existingDisciplines.filter(disc => allowedSet.has(disc));
+
+          if (intersection.length === 0) {
+            // No overlap - user has no access
+            filterQuery.engineering_discipline = { $in: [] };
+          } else {
+            filterQuery.engineering_discipline = { $in: intersection };
+          }
+        } else {
+          // No user filter - apply allowed disciplines restriction
+          filterQuery.engineering_discipline = { $in: req.documentFilters.allowedDisciplines };
+        }
+      }
+
+      // If user has NO allowed categories and NO allowed disciplines, they shouldn't see any documents
+      if (req.documentFilters.allowedCategories.length === 0 &&
+          req.documentFilters.allowedDisciplines.length === 0) {
+        filterQuery._id = { $in: [] }; // Return empty result set
+      }
+    }
+
     // Compliance filters (multi-select support)
     if (regulatory_framework) {
       const frameworks = regulatory_framework.includes(',')
@@ -367,49 +550,8 @@ router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering(
       ]).exec()
     ]);
 
-    // Populate entity names dynamically for each document
-    const documentsWithNames = await Promise.all(
-      documents.map(async (doc) => {
-        const names = await fetchEntityNames(doc);
-        return {
-          ...doc,
-          customer: {
-            customer_id: doc.customer?.customer_id,
-            customer_name: names.customer_name
-          },
-          location: {
-            site: doc.location?.site?.site_id ? {
-              site_id: doc.location.site.site_id,
-              site_name: names.site_name
-            } : undefined,
-            building: doc.location?.building?.building_id ? {
-              building_id: doc.location.building.building_id,
-              building_name: names.building_name
-            } : undefined,
-            floor: doc.location?.floor?.floor_id ? {
-              floor_id: doc.location.floor.floor_id,
-              floor_name: names.floor_name
-            } : undefined,
-            // Multiple assets support
-            assets: names.assets && names.assets.length > 0 ? names.assets : undefined,
-            // Legacy single asset (for backward compatibility)
-            asset: doc.location?.asset?.asset_id ? {
-              asset_id: doc.location.asset.asset_id,
-              asset_name: names.asset_name,
-              asset_type: names.asset_type
-            } : undefined,
-            tenant: doc.location?.tenant?.tenant_id ? {
-              tenant_id: doc.location.tenant.tenant_id,
-              tenant_name: names.tenant_name
-            } : undefined,
-            vendor: doc.location?.vendor?.vendor_id ? {
-              vendor_id: doc.location.vendor.vendor_id,
-              vendor_name: names.vendor_name
-            } : undefined
-          }
-        };
-      })
-    );
+    // Batch populate entity names for all documents (optimized to avoid N+1 queries)
+    const documentsWithNames = await batchFetchEntityNames(documents);
 
     // Build category summary
     const documentsByCategory = {};
