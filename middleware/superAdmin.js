@@ -1,5 +1,20 @@
 const User = require('../models/User');
 const Role = require('../models/v2/Role');
+const mongoose = require('mongoose');
+
+/**
+ * Helper function to fetch user with proper ID handling
+ * Handles both MongoDB ObjectId and Auth0 ID strings
+ */
+const fetchUserById = async (userId) => {
+  // If userId is already a valid ObjectId, use it directly
+  if (mongoose.Types.ObjectId.isValid(userId)) {
+    return await User.findById(userId).populate('role_ids');
+  }
+  
+  // Otherwise, treat it as an auth0_id
+  return await User.findOne({ auth0_id: userId }).populate('role_ids');
+};
 
 /**
  * Super Admin Authentication Middleware
@@ -62,7 +77,7 @@ const checkSuperAdmin = async (req, res, next) => {
       });
     }
 
-    const user = await User.findById(userId).populate('role_ids');
+    const user = await fetchUserById(userId);
     if (!user) {
       return res.status(403).json({
         success: false,

@@ -42,25 +42,52 @@ const attachUser = async (req, res, next) => {
     const auth0UserId = payload.sub;
     console.log('✅ Found auth0UserId:', auth0UserId);
 
-    // Check if user is super_admin via Auth0 claims (no database record needed)
+    // Check if user is super_admin via Auth0 claims
     const auth0Roles = payload['https://fulqrom.com.au/roles'] || [];
     if (auth0Roles.includes('super_admin')) {
-      console.log('✅ Super admin detected via Auth0 JWT claims - skipping database lookup');
-      // Super admin user - use Auth0 claims directly
-      req.user = {
-        id: auth0UserId,
-        userId: auth0UserId,
-        _id: auth0UserId,
-        auth0_id: auth0UserId,
-        email: payload.email || payload['https://fulqrom.com.au/email'] || '',
-        full_name: payload.name || payload['https://fulqrom.com.au/name'] || 'Super Admin',
-        role_ids: [{ name: 'super_admin', _id: 'super_admin' }],
-        resource_access: [],
-        is_active: true,
-        tenant_id: null,
-        is_super_admin: true
-      };
-      return next();
+      console.log('✅ Super admin detected via Auth0 JWT claims - checking database for user record');
+      
+      // Even super_admin users should have a database record for consistency
+      // Try to find the user in MongoDB first
+      const user = await User.findOne({ auth0_id: auth0UserId })
+        .populate('role_ids', 'name description permissions is_active');
+
+      if (user) {
+        // Super admin user found in database - use database record
+        console.log('✅ Super admin user found in database - using database record');
+        req.user = {
+          id: user._id.toString(),
+          userId: user._id.toString(),
+          _id: user._id, // MongoDB ObjectId for database queries
+          auth0_id: user.auth0_id,
+          email: user.email,
+          full_name: user.full_name,
+          role_ids: user.role_ids,
+          resource_access: user.resource_access,
+          is_active: user.is_active,
+          tenant_id: user.tenant_id,
+          is_super_admin: true
+        };
+        return next();
+      } else {
+        // Super admin user not in database - this shouldn't happen in production
+        console.log('⚠️ Super admin user not found in database - creating fallback user object');
+        // Create a fallback user object with a special ID that won't cause ObjectId issues
+        req.user = {
+          id: 'super_admin_fallback',
+          userId: 'super_admin_fallback',
+          _id: 'super_admin_fallback', // Special ID that won't be used in MongoDB queries
+          auth0_id: auth0UserId,
+          email: payload.email || payload['https://fulqrom.com.au/email'] || '',
+          full_name: payload.name || payload['https://fulqrom.com.au/name'] || 'Super Admin',
+          role_ids: [{ name: 'super_admin', _id: 'super_admin' }],
+          resource_access: [],
+          is_active: true,
+          tenant_id: null,
+          is_super_admin: true
+        };
+        return next();
+      }
     }
 
     // Find user in MongoDB by auth0_id

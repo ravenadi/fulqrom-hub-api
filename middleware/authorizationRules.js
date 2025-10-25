@@ -3,6 +3,20 @@ const Role = require('../models/Role');
 const mongoose = require('mongoose');
 
 /**
+ * Helper function to fetch user with proper ID handling
+ * Handles both MongoDB ObjectId and Auth0 ID strings
+ */
+const fetchUserById = async (userId) => {
+  // If userId is already a valid ObjectId, use it directly
+  if (mongoose.Types.ObjectId.isValid(userId)) {
+    return await User.findById(userId).populate('role_ids');
+  }
+  
+  // Otherwise, treat it as an auth0_id
+  return await User.findOne({ auth0_id: userId }).populate('role_ids');
+};
+
+/**
  * Authorization Rules Middleware
  * Enforces the 5 authorization rules from the spreadsheet
  */
@@ -11,7 +25,7 @@ const mongoose = require('mongoose');
 // When creating a user, filter available resources by creator's access
 const getAccessibleResources = async (creatorUserId, resourceType) => {
   try {
-    const creator = await User.findById(creatorUserId).populate('role_ids');
+    const creator = await fetchUserById(creatorUserId);
     if (!creator) {
       throw new Error('Creator user not found');
     }
@@ -113,7 +127,7 @@ const canElevateUserAccess = (creatorRole, targetRole) => {
 // Filter analytics and documents by user's assigned resources
 const filterByUserScope = async (userId, query, resourceType) => {
   try {
-    const user = await User.findById(userId).populate('role_ids');
+    const user = await fetchUserById(userId);
     if (!user) {
       throw new Error('User not found');
     }
@@ -190,7 +204,7 @@ const validateUserCreation = async (req, res, next) => {
     }
 
     // Get creator's role
-    const creator = await User.findById(creatorUserId).populate('role_ids');
+    const creator = await fetchUserById(creatorUserId);
     if (!creator) {
       return res.status(404).json({
         success: false,
@@ -271,7 +285,7 @@ const validateUserElevation = async (req, res, next) => {
     }
 
     // Get creator's role
-    const creator = await User.findById(creatorUserId).populate('role_ids');
+    const creator = await fetchUserById(creatorUserId);
     if (!creator) {
       return res.status(404).json({
         success: false,
@@ -326,7 +340,7 @@ const validateUserElevation = async (req, res, next) => {
 // Document-specific filtering by category and discipline
 const filterDocumentsByAccess = async (userId) => {
   try {
-    const user = await User.findById(userId).populate('role_ids');
+    const user = await fetchUserById(userId);
     if (!user) {
       throw new Error('User not found');
     }

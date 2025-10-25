@@ -3,6 +3,26 @@ const Role = require('../models/Role');
 const mongoose = require('mongoose');
 
 /**
+ * Helper function to fetch user with proper ID handling
+ * Handles both MongoDB ObjectId and Auth0 ID strings
+ * Also handles super admin fallback IDs
+ */
+const fetchUserById = async (userId) => {
+  // Handle super admin fallback ID (created when super admin not in database)
+  if (userId === 'super_admin_fallback' || userId === 'super_admin') {
+    return null; // Return null - super admin bypass handled in calling code
+  }
+  
+  // If userId is already a valid ObjectId, use it directly
+  if (mongoose.Types.ObjectId.isValid(userId)) {
+    return await User.findById(userId).populate('role_ids');
+  }
+  
+  // Otherwise, treat it as an auth0_id
+  return await User.findOne({ auth0_id: userId }).populate('role_ids');
+};
+
+/**
  * Check if user has permission for a specific resource
  * This middleware checks both:
  * 1. Resource-specific permissions (user.resource_access)
@@ -40,9 +60,16 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         });
       }
 
+      // CHECK 0: Check for super admin first (before database query)
+      if (req.user.is_super_admin) {
+        console.log(`✅ Super admin bypass: ${req.user.email || req.user.full_name} has super admin privileges - granting access to ${resourceType}`);
+        req.permissionSource = 'super_admin';
+        return next();
+      }
+
       // req.user already has the user data from MongoDB with populated roles
       // We need to re-fetch to ensure role_ids are populated with full role objects
-      const user = await User.findById(req.user._id).populate('role_ids');
+      const user = await fetchUserById(req.user._id);
 
       if (!user) {
         return res.status(404).json({
@@ -195,9 +222,16 @@ const checkModulePermission = (moduleName, action) => {
         });
       }
 
+      // CHECK 0: Check for super admin first (before database query)
+      if (req.user.is_super_admin) {
+        console.log(`✅ Super admin bypass: ${req.user.email || req.user.full_name} has super admin privileges - granting access to ${moduleName}`);
+        req.permissionSource = 'super_admin';
+        return next();
+      }
+
       // req.user already has the user data from MongoDB with populated roles
       // We need to re-fetch to ensure role_ids are populated with full role objects
-      const user = await User.findById(req.user._id).populate('role_ids');
+      const user = await fetchUserById(req.user._id);
 
       if (!user) {
         return res.status(404).json({

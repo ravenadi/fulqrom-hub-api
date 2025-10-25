@@ -18,6 +18,21 @@
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const Tenant = require('../models/Tenant');
+const mongoose = require('mongoose');
+
+/**
+ * Helper function to fetch user with proper ID handling
+ * Handles both MongoDB ObjectId and Auth0 ID strings
+ */
+const fetchUserById = async (userId) => {
+  // If userId is already a valid ObjectId, use it directly
+  if (mongoose.Types.ObjectId.isValid(userId)) {
+    return await User.findById(userId);
+  }
+  
+  // Otherwise, treat it as an auth0_id
+  return await User.findOne({ auth0_id: userId });
+};
 
 /**
  * Tenant context middleware
@@ -48,13 +63,15 @@ async function tenantContext(req, res, next) {
 
     // Check if this is a super admin user
     // Super admins can bypass tenant context or switch tenants via header
-    const isSuperAdmin = req.user.isSuperAdmin || false;
+    const isSuperAdmin = req.user.is_super_admin || req.user.isSuperAdmin || false;
 
-    // Allow super admins to bypass tenant context with a special header
-    if (isSuperAdmin && req.headers['x-bypass-tenant']) {
+    // Super admins bypass tenant context
+    if (isSuperAdmin) {
       req.tenant = {
         tenantId: null,
+        organizationId: null,
         tenantSlug: null,
+        tenantName: 'Super Admin',
         organization: null,
         tenant: null,
         isSuperAdmin: true,
@@ -64,7 +81,7 @@ async function tenantContext(req, res, next) {
     }
 
     // Get user from database to retrieve tenant_id
-    const user = await User.findById(userId);
+    const user = await fetchUserById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -204,7 +221,7 @@ async function optionalTenantContext(req, res, next) {
     const userId = req.user.userId || req.user.id;
 
     // Get user from database
-    const user = await User.findById(userId);
+    const user = await fetchUserById(userId);
 
     if (!user || !user.tenant_id) {
       req.tenant = null;
