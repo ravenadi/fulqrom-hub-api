@@ -44,8 +44,8 @@ const getAccessibleResources = async (creatorUserId, resourceType) => {
     for (const role of creator.role_ids) {
       if (!role.is_active) continue;
 
-      const modulePermission = role.permissions?.find(p => p.module_name === moduleName);
-      if (modulePermission && modulePermission.can_view) {
+      const modulePermission = role.permissions?.find(p => p.entity === moduleName);
+      if (modulePermission && modulePermission.view) {
         hasModuleAccess = true;
         break;
       }
@@ -144,8 +144,8 @@ const filterByUserScope = async (userId, query, resourceType) => {
     for (const role of user.role_ids) {
       if (!role.is_active) continue;
 
-      const modulePermission = role.permissions?.find(p => p.module_name === moduleName);
-      if (modulePermission && modulePermission.can_view) {
+      const modulePermission = role.permissions?.find(p => p.entity === moduleName);
+      if (modulePermission && modulePermission.view) {
         hasModuleAccess = true;
         break;
       }
@@ -348,8 +348,8 @@ const filterDocumentsByAccess = async (userId) => {
     for (const role of user.role_ids) {
       if (!role.is_active) continue;
 
-      const modulePermission = role.permissions?.find(p => p.module_name === 'documents');
-      if (modulePermission && modulePermission.can_view) {
+      const modulePermission = role.permissions?.find(p => p.entity === 'documents');
+      if (modulePermission && modulePermission.view) {
         hasModuleAccess = true;
         break;
       }
@@ -365,12 +365,29 @@ const filterDocumentsByAccess = async (userId) => {
         ra => ra.resource_type === 'document_discipline' && ra.permissions?.can_view
       ) || [];
 
+      // Also check user's document_categories field (new approach)
+      const userDocumentCategories = user.document_categories || [];
+      const userEngineeringDisciplines = user.engineering_disciplines || [];
+
+      // Combine resource access categories with user field categories
+      const allAllowedCategories = [
+        ...categoryRestrictions.map(ra => ra.resource_id),
+        ...userDocumentCategories
+      ];
+
+      const allAllowedDisciplines = [
+        ...disciplineRestrictions.map(ra => ra.resource_id),
+        ...userEngineeringDisciplines
+      ];
+
       return {
-        hasFullAccess: categoryRestrictions.length === 0 && disciplineRestrictions.length === 0,
-        allowedCategories: categoryRestrictions.map(ra => ra.resource_id),
-        allowedDisciplines: disciplineRestrictions.map(ra => ra.resource_id),
+        hasFullAccess: categoryRestrictions.length === 0 && disciplineRestrictions.length === 0 && userDocumentCategories.length === 0 && userEngineeringDisciplines.length === 0,
+        allowedCategories: allAllowedCategories,
+        allowedDisciplines: allAllowedDisciplines,
         categoryPermissions: categoryRestrictions,
-        disciplinePermissions: disciplineRestrictions
+        disciplinePermissions: disciplineRestrictions,
+        userDocumentCategories: userDocumentCategories,
+        userEngineeringDisciplines: userEngineeringDisciplines
       };
     }
 
