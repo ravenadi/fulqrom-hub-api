@@ -1,16 +1,37 @@
 {
   "api_info": {
     "title": "Fulqrom Hub REST API",
-    "version": "1.0.0",
-    "description": "Comprehensive API reference for Fulqrom Hub - Multi-tenant facility management system",
+    "version": "2.0.0",
+    "description": "Comprehensive API reference for Fulqrom Hub - Multi-tenant facility management system with resilient authentication",
     "base_url": "/api",
     "authentication": "Auth0 JWT Bearer Token",
-    "authorization": "Role-based permissions with tenant isolation"
+    "authorization": "Role-based permissions with tenant isolation",
+    "last_updated": "2024-12-19"
   },
   "endpoints": {
     "auth": {
-      "description": "Authentication and user management",
+      "description": "Authentication and user management with resilient Auth0 integration",
       "endpoints": [
+        {
+          "method": "POST",
+          "path": "/auth/prepare-login",
+          "description": "Prepare user for login by ensuring MongoDB/Auth0 sync (call before Auth0 login)",
+          "parameters": {
+            "body": {
+              "email": "string (required)"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/auth/password-reset",
+          "description": "Request password reset with auto-sync",
+          "parameters": {
+            "body": {
+              "email": "string (required)"
+            }
+          }
+        },
         {
           "method": "POST",
           "path": "/auth/sync-user",
@@ -19,7 +40,9 @@
             "body": {
               "auth0_id": "string (required)",
               "email": "string (required)",
-              "name": "string (required)"
+              "full_name": "string (optional)",
+              "phone": "string (optional)",
+              "roles": "array (optional)"
             }
           }
         },
@@ -32,11 +55,23 @@
               "auth0_id": "string (required)"
             }
           }
+        },
+        {
+          "method": "POST",
+          "path": "/auth/change-password",
+          "description": "Change user password in Auth0",
+          "parameters": {
+            "body": {
+              "auth0_id": "string (required)",
+              "current_password": "string (required)",
+              "new_password": "string (required)"
+            }
+          }
         }
       ]
     },
     "analytics": {
-      "description": "Analytics and reporting",
+      "description": "Analytics and reporting with tenant isolation",
       "endpoints": [
         {
           "method": "GET",
@@ -58,11 +93,16 @@
           "method": "GET",
           "path": "/analytics/kpis",
           "description": "Get KPI calculations (placeholder)"
+        },
+        {
+          "method": "GET",
+          "path": "/analytics/buildings/coordinates",
+          "description": "Get building coordinates for map display"
         }
       ]
     },
     "assets": {
-      "description": "Asset management",
+      "description": "Asset management with comprehensive filtering and tenant isolation",
       "endpoints": [
         {
           "method": "GET",
@@ -71,12 +111,34 @@
           "parameters": {
             "query": {
               "page": "number (optional, default: 1)",
-              "limit": "number (optional, default: 20)",
+              "limit": "number (optional, default: 50)",
               "search": "string (optional)",
               "category": "string (optional)",
               "status": "string (optional)",
+              "condition": "string (optional)",
+              "criticality_level": "string (optional)",
               "building_id": "string (optional)",
               "floor_id": "string (optional)",
+              "customer_id": "string (optional)",
+              "site_id": "string (optional)",
+              "make": "string (optional)",
+              "model": "string (optional)",
+              "level": "string (optional)",
+              "area": "string (optional)",
+              "device_id": "string (optional)",
+              "asset_no": "string (optional)",
+              "asset_id": "string (optional)",
+              "refrigerant": "string (optional)",
+              "owner": "string (optional)",
+              "service_status": "string (optional)",
+              "age_min": "number (optional)",
+              "age_max": "number (optional)",
+              "purchase_cost_min": "number (optional)",
+              "purchase_cost_max": "number (optional)",
+              "current_value_min": "number (optional)",
+              "current_value_max": "number (optional)",
+              "test_result": "string (optional)",
+              "is_active": "boolean (optional)",
               "sort_by": "string (optional)",
               "sort_order": "string (optional)"
             }
@@ -101,7 +163,9 @@
               "asset_name": "string (required)",
               "asset_code": "string (required)",
               "category": "string (required)",
-              "building_id": "string (required)",
+              "customer_id": "string (required)",
+              "site_id": "string (optional)",
+              "building_id": "string (optional)",
               "floor_id": "string (optional)"
             }
           }
@@ -144,19 +208,28 @@
           "parameters": {
             "query": {
               "building_id": "string (optional)",
-              "floor_id": "string (optional)"
+              "floor_id": "string (optional)",
+              "customer_id": "string (optional)",
+              "site_id": "string (optional)"
             }
           }
         },
         {
           "method": "GET",
           "path": "/assets/summary/stats",
-          "description": "Get overall asset summary statistics"
+          "description": "Get overall asset summary statistics",
+          "parameters": {
+            "query": {
+              "customer_id": "string (optional)",
+              "site_id": "string (optional)",
+              "building_id": "string (optional)"
+            }
+          }
         }
       ]
     },
     "buildings": {
-      "description": "Building management",
+      "description": "Building management with comprehensive filtering and tenant isolation",
       "endpoints": [
         {
           "method": "GET",
@@ -165,11 +238,14 @@
           "parameters": {
             "query": {
               "page": "number (optional, default: 1)",
-              "limit": "number (optional, default: 20)",
+              "per_page": "number (optional, default: 10)",
               "search": "string (optional)",
-              "category": "string (optional)",
-              "status": "string (optional)",
+              "customer_id": "string (optional)",
               "site_id": "string (optional)",
+              "building_type": "string (optional)",
+              "operational_status": "string (optional)",
+              "status": "string (optional)",
+              "is_active": "boolean (optional)",
               "sort_by": "string (optional)",
               "sort_order": "string (optional)"
             }
@@ -194,7 +270,13 @@
               "building_name": "string (required)",
               "building_code": "string (required)",
               "site_id": "string (required)",
-              "category": "string (required)"
+              "customer_id": "string (required)",
+              "primary_use": "string (required)",
+              "building_type": "string (optional)",
+              "address": "object (required)",
+              "last_inspection_date": "date (optional)",
+              "accessibility_features": "array (optional)",
+              "parking_spaces": "number (optional)"
             }
           }
         },
@@ -222,7 +304,13 @@
         {
           "method": "GET",
           "path": "/buildings/summary/stats",
-          "description": "Get building summary statistics"
+          "description": "Get building summary statistics",
+          "parameters": {
+            "query": {
+              "customer_id": "string (optional)",
+              "site_id": "string (optional)"
+            }
+          }
         },
         {
           "method": "GET",
@@ -230,6 +318,7 @@
           "description": "Group buildings by category with statistics",
           "parameters": {
             "query": {
+              "customer_id": "string (optional)",
               "site_id": "string (optional)"
             }
           }
@@ -237,7 +326,7 @@
       ]
     },
     "customers": {
-      "description": "Customer (tenant) management",
+      "description": "Customer (tenant) management with comprehensive operations",
       "endpoints": [
         {
           "method": "GET",
@@ -310,17 +399,21 @@
         {
           "method": "DELETE",
           "path": "/customers/:id",
-          "description": "Delete customer",
+          "description": "Delete customer with cascading deletions",
           "parameters": {
             "path": {
               "id": "string (required)"
+            },
+            "query": {
+              "delete_s3": "boolean (optional, default: true)",
+              "immediate_s3_delete": "boolean (optional, default: false)"
             }
           }
         }
       ]
     },
     "floors": {
-      "description": "Floor management",
+      "description": "Floor management with comprehensive filtering",
       "endpoints": [
         {
           "method": "GET",
@@ -329,10 +422,12 @@
           "parameters": {
             "query": {
               "page": "number (optional, default: 1)",
-              "limit": "number (optional, default: 20)",
+              "per_page": "number (optional, default: 10)",
               "search": "string (optional)",
-              "floor_type": "string (optional)",
+              "customer_id": "string (optional)",
+              "site_id": "string (optional)",
               "building_id": "string (optional)",
+              "floor_type": "string (optional)",
               "sort_by": "string (optional)",
               "sort_order": "string (optional)"
             }
@@ -357,7 +452,9 @@
               "floor_name": "string (required)",
               "floor_number": "string (required)",
               "building_id": "string (required)",
-              "floor_type": "string (required)"
+              "floor_type": "string (required)",
+              "customer_id": "string (required)",
+              "site_id": "string (optional)"
             }
           }
         },
@@ -403,7 +500,9 @@
           "description": "Group floors by type with statistics",
           "parameters": {
             "query": {
-              "building_id": "string (optional)"
+              "building_id": "string (optional)",
+              "customer_id": "string (optional)",
+              "site_id": "string (optional)"
             }
           }
         }
@@ -418,11 +517,16 @@
           "description": "Register new organization (public endpoint)",
           "parameters": {
             "body": {
-              "organisation_name": "string (required)",
+              "name": "string (required)",
               "email": "string (required)",
-              "password": "string (required)",
-              "full_name": "string (required)",
-              "phone": "string (optional)"
+              "abn": "string (optional)",
+              "acn": "string (optional)",
+              "phone": "string (optional)",
+              "address": "object (optional)",
+              "owner_email": "string (required)",
+              "owner_name": "string (required)",
+              "owner_phone": "string (optional)",
+              "plan_name": "string (optional, default: Starter)"
             }
           }
         },
@@ -455,7 +559,7 @@
       ]
     },
     "sites": {
-      "description": "Site management",
+      "description": "Site management with comprehensive filtering and tenant isolation",
       "endpoints": [
         {
           "method": "GET",
@@ -467,8 +571,11 @@
               "limit": "number (optional, default: 20)",
               "search": "string (optional)",
               "status": "string (optional)",
+              "site_type": "string (optional)",
+              "state": "string (optional)",
               "customer_id": "string (optional)",
               "tenant_id": "string (optional, super admin only)",
+              "is_active": "boolean (optional)",
               "sort_by": "string (optional)",
               "sort_order": "string (optional)"
             }
@@ -492,7 +599,9 @@
             "body": {
               "site_name": "string (required)",
               "customer_id": "string (required)",
-              "address": "object (required)"
+              "address": "object (required)",
+              "site_type": "string (optional)",
+              "status": "string (optional)"
             }
           }
         },
@@ -520,7 +629,7 @@
       ]
     },
     "users": {
-      "description": "User account and permission management",
+      "description": "User account and permission management with resource-level access control",
       "endpoints": [
         {
           "method": "GET",
@@ -529,6 +638,9 @@
           "parameters": {
             "path": {
               "id": "string (required)"
+            },
+            "query": {
+              "resource_type": "string (optional)"
             }
           }
         },
@@ -539,7 +651,7 @@
           "parameters": {
             "query": {
               "page": "number (optional, default: 1)",
-              "limit": "number (optional, default: 20)",
+              "limit": "number (optional, default: 50)",
               "search": "string (optional)",
               "role_id": "string (optional)",
               "is_active": "boolean (optional)"
@@ -565,7 +677,10 @@
               "email": "string (required)",
               "full_name": "string (required)",
               "role_ids": "array (required)",
-              "phone": "string (optional)"
+              "phone": "string (optional)",
+              "resource_access": "array (optional)",
+              "document_categories": "array (optional)",
+              "engineering_disciplines": "array (optional)"
             }
           }
         },
@@ -597,6 +712,9 @@
           "parameters": {
             "path": {
               "id": "string (required)"
+            },
+            "body": {
+              "deactivated_by": "string (optional)"
             }
           }
         },
@@ -619,7 +737,9 @@
               "user_id": "string (required)",
               "resource_type": "string (required)",
               "resource_id": "string (required)",
-              "permissions": "array (required)"
+              "resource_name": "string (optional)",
+              "granted_by": "string (optional)",
+              "permissions": "object (optional)"
             }
           }
         },
@@ -630,13 +750,16 @@
           "parameters": {
             "path": {
               "id": "string (required)"
+            },
+            "query": {
+              "user_id": "string (required)"
             }
           }
         }
       ]
     },
     "audit_logs": {
-      "description": "Audit logs management",
+      "description": "Audit logs management with tenant isolation",
       "endpoints": [
         {
           "method": "GET",
@@ -693,7 +816,8 @@
               "customerId": "string (required)"
             },
             "query": {
-              "search": "string (optional)",
+              "q": "string (optional)",
+              "role_type": "string (optional)",
               "contact_type": "string (optional)"
             }
           }
@@ -813,7 +937,7 @@
       ]
     },
     "dropdowns": {
-      "description": "Dynamic and static dropdown data",
+      "description": "Dynamic and static dropdown data with tenant isolation",
       "endpoints": [
         {
           "method": "GET",
@@ -991,10 +1115,13 @@
           "description": "Get notifications for current user with filtering and pagination",
           "parameters": {
             "query": {
-              "page": "number (optional, default: 1)",
-              "limit": "number (optional, default: 20)",
-              "type": "string (optional)",
-              "is_read": "boolean (optional)"
+              "limit": "number (optional, default: 50)",
+              "skip": "number (optional, default: 0)",
+              "offset": "number (optional, default: 0)",
+              "unreadOnly": "boolean (optional, default: false)",
+              "types": "string (optional)",
+              "startDate": "date (optional)",
+              "endDate": "date (optional)"
             }
           }
         },
@@ -1046,7 +1173,7 @@
       ]
     },
     "tenants": {
-      "description": "Building tenant management",
+      "description": "Building tenant management with comprehensive validation",
       "endpoints": [
         {
           "method": "GET",
@@ -1063,7 +1190,11 @@
               "industry_type": "string (optional)",
               "lease_expiring_soon": "boolean (optional)",
               "is_active": "boolean (optional)",
-              "search": "string (optional)"
+              "search": "string (optional)",
+              "page": "number (optional, default: 1)",
+              "limit": "number (optional, default: 20)",
+              "sort_by": "string (optional)",
+              "sort_order": "string (optional)"
             }
           }
         },
@@ -1163,7 +1294,7 @@
       ]
     },
     "vendors": {
-      "description": "Vendor management",
+      "description": "Vendor management with comprehensive filtering and tenant isolation",
       "endpoints": [
         {
           "method": "GET",
@@ -1206,8 +1337,8 @@
           "description": "Create new vendor",
           "parameters": {
             "body": {
-              "contractor_name": "string (required)",
-              "contractor_type": "string (required)",
+              "name": "string (required)",
+              "category": "string (required)",
               "address": "object (required)",
               "businessType": "string (required)",
               "contacts": "array (required)",
@@ -1260,7 +1391,7 @@
       ]
     },
     "documents": {
-      "description": "Document management with S3 file storage",
+      "description": "Document management with S3 file storage and comprehensive filtering",
       "endpoints": [
         {
           "method": "GET",
@@ -1419,7 +1550,14 @@
         {
           "method": "GET",
           "path": "/roles",
-          "description": "Get all roles with user counts"
+          "description": "Get all roles with user counts",
+          "parameters": {
+            "query": {
+              "page": "number (optional, default: 1)",
+              "limit": "number (optional, default: 50)",
+              "is_active": "boolean (optional)"
+            }
+          }
         },
         {
           "method": "GET",
@@ -1439,7 +1577,8 @@
             "body": {
               "name": "string (required)",
               "description": "string (optional)",
-              "permissions": "array (optional)"
+              "permissions": "array (optional)",
+              "is_active": "boolean (optional)"
             }
           }
         },
@@ -1471,6 +1610,10 @@
           "parameters": {
             "path": {
               "id": "string (required)"
+            },
+            "query": {
+              "page": "number (optional, default: 1)",
+              "limit": "number (optional, default: 50)"
             }
           }
         }
@@ -1738,6 +1881,20 @@
             "query": {
               "limit": "number (optional)",
               "skipExisting": "boolean (optional, default: true)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/admin/tenants/:tenant/audit-logs",
+          "description": "Get audit logs for specific tenant",
+          "parameters": {
+            "path": {
+              "tenant": "string (required)"
+            },
+            "query": {
+              "limit": "number (optional, default: 10)",
+              "page": "number (optional, default: 1)"
             }
           }
         },
@@ -2011,6 +2168,12 @@
     "type": "JWT Bearer Token",
     "provider": "Auth0",
     "header": "Authorization: Bearer <token>",
+    "resilient_features": [
+      "prepare-login endpoint for pre-auth sync",
+      "password-reset with auto-sync",
+      "post-login sync with fallback handling",
+      "Auth0 Management API integration"
+    ],
     "middleware": [
       "authMiddleware - Validates JWT token",
       "authorizationMiddleware - Checks user permissions",
@@ -2027,6 +2190,19 @@
       "documents", "assets", "vendors", "customers", 
       "users", "analytics"
     ],
+    "resource_access": {
+      "description": "Fine-grained resource-level permissions",
+      "supported_types": [
+        "customer", "site", "building", "floor", "asset", 
+        "tenant", "vendor", "document_category", "document_discipline"
+      ],
+      "permission_structure": {
+        "can_view": "boolean",
+        "can_create": "boolean", 
+        "can_edit": "boolean",
+        "can_delete": "boolean"
+      }
+    },
     "middleware": [
       "checkModulePermission - Module-level permissions",
       "checkResourcePermission - Resource-level permissions",
@@ -2041,8 +2217,14 @@
       "Data isolation by tenant",
       "Tenant-specific S3 buckets",
       "Tenant-specific configurations",
-      "Cross-tenant access prevention"
-    ]
+      "Cross-tenant access prevention",
+      "Super admin cross-tenant access with X-Tenant-Id header"
+    ],
+    "tenant_context": {
+      "automatic": "Set from authenticated user's tenant_id",
+      "super_admin_bypass": "Can access any tenant with proper headers",
+      "isolation_enforcement": "All queries automatically filtered by tenant_id"
+    }
   },
   "file_storage": {
     "provider": "AWS S3",
@@ -2051,10 +2233,15 @@
       "Presigned URLs for secure access",
       "File preview generation",
       "Automatic file cleanup",
-      "Storage analytics"
+      "Storage analytics",
+      "S3 deletion strategies (immediate vs tagged expiry)"
     ],
     "max_file_size": "10GB",
-    "supported_formats": "All file types"
+    "supported_formats": "All file types",
+    "deletion_strategies": {
+      "immediate": "Delete files immediately",
+      "tagged_expiry": "Tag files for 90-day expiry"
+    }
   },
   "validation": {
     "middleware": [
@@ -2066,7 +2253,8 @@
       "Required field validation",
       "Data type validation",
       "Business rule validation",
-      "Custom validation rules"
+      "Custom validation rules",
+      "Australian-specific validations (ABN, postcode)"
     ]
   },
   "pagination": {
@@ -2075,6 +2263,7 @@
     "parameters": {
       "page": "Page number (1-based)",
       "limit": "Items per page",
+      "per_page": "Alternative to limit",
       "sort_by": "Field to sort by",
       "sort_order": "asc or desc"
     }
@@ -2084,7 +2273,8 @@
       "Full-text search across multiple fields",
       "Case-insensitive search",
       "Regex pattern matching",
-      "Filtered search results"
+      "Filtered search results",
+      "Multi-select filtering with comma-separated values"
     ],
     "parameters": {
       "search": "Search term",
@@ -2123,11 +2313,46 @@
       "Audit logging for user actions",
       "System health monitoring",
       "Usage analytics",
-      "Error tracking"
+      "Error tracking",
+      "Tenant-isolated audit logs"
     ],
     "endpoints": [
       "/health - System health check",
       "/ - API documentation endpoint"
     ]
+  },
+  "new_features": {
+    "resilient_authentication": {
+      "description": "Enhanced authentication system with Auth0 resilience",
+      "endpoints": [
+        "/auth/prepare-login",
+        "/auth/password-reset", 
+        "/auth/sync-user"
+      ]
+    },
+    "resource_level_permissions": {
+      "description": "Fine-grained permissions for specific resources",
+      "endpoints": [
+        "/users/:id/accessible-resources",
+        "/users/resource-access",
+        "/users/:id/resource-access"
+      ]
+    },
+    "comprehensive_filtering": {
+      "description": "Enhanced filtering capabilities across all endpoints",
+      "features": [
+        "Multi-select filtering",
+        "Range filtering",
+        "Advanced search",
+        "Tenant isolation"
+      ]
+    },
+    "analytics_enhancements": {
+      "description": "Improved analytics with tenant isolation",
+      "endpoints": [
+        "/analytics/dashboard",
+        "/analytics/buildings/coordinates"
+      ]
+    }
   }
 }
