@@ -159,6 +159,14 @@ router.get('/', checkModulePermission('vendors', 'view'), async (req, res) => {
         limit: limitNumber,
         total: totalVendors,
         total_pages: Math.ceil(totalVendors / limitNumber)
+      },
+      meta: {
+        current_page: pageNumber,
+        per_page: limitNumber,
+        total: totalVendors,
+        last_page: Math.ceil(totalVendors / limitNumber),
+        from: skip + 1,
+        to: Math.min(skip + limitNumber, totalVendors)
       }
     });
   } catch (error) {
@@ -261,30 +269,19 @@ router.get('/stats', checkModulePermission('vendors', 'view'), async (req, res) 
 // GET /api/vendors/:id - Get single vendor by ID
 router.get('/:id', checkResourcePermission('vendor', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    const vendorId = req.params.id;
-
-    // Get tenant ID from request context (mandatory for data isolation)
+    // Get tenant_id from authenticated user's context
     const tenantId = req.tenant?.tenantId;
-
     if (!tenantId) {
-      return res.status(400).json({
+      return res.status(403).json({
         success: false,
-        message: 'Tenant ID is required'
+        message: 'Tenant context required to view vendor'
       });
     }
 
-    // Validate ObjectId
-    if (!mongoose.Types.ObjectId.isValid(vendorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid vendor ID format'
-      });
-    }
-
-    // Find vendor within tenant scope only
+    // Find vendor ONLY if it belongs to the user's tenant
     const vendor = await Vendor.findOne({
-      _id: vendorId,
-      tenant_id: tenantId
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this vendor
     });
 
     if (!vendor) {
@@ -299,7 +296,6 @@ router.get('/:id', checkResourcePermission('vendor', 'view', (req) => req.params
       data: vendor
     });
   } catch (error) {
-
     res.status(500).json({
       success: false,
       message: 'Error fetching vendor',
@@ -311,13 +307,12 @@ router.get('/:id', checkResourcePermission('vendor', 'view', (req) => req.params
 // POST /api/vendors - Create new vendor
 router.post('/', checkModulePermission('vendors', 'create'), async (req, res) => {
   try {
-    // Get tenant ID from request context (mandatory for data isolation)
+    // Get tenant_id from authenticated user's context
     const tenantId = req.tenant?.tenantId;
-
     if (!tenantId) {
-      return res.status(400).json({
+      return res.status(403).json({
         success: false,
-        message: 'Tenant ID is required'
+        message: 'Tenant context required to create vendor'
       });
     }
 
@@ -330,14 +325,6 @@ router.post('/', checkModulePermission('vendors', 'create'), async (req, res) =>
 
     if (!req.body.contractor_type && !req.body.category) {
       errors.push('Contractor type is required');
-    }
-
-    if (!req.body.address) {
-      errors.push('Address is required');
-    }
-
-    if (!req.body.businessType) {
-      errors.push('Business type is required');
     }
 
     // Validate contacts array (at least one contact required)
@@ -391,11 +378,13 @@ router.post('/', checkModulePermission('vendors', 'create'), async (req, res) =>
       }
     }
 
-    // Create new vendor with tenant_id
-    const vendor = new Vendor({
+    // Create vendor with tenant_id from authenticated user
+    const vendorData = {
       ...req.body,
       tenant_id: tenantId
-    });
+    };
+
+    const vendor = new Vendor(vendorData);
     await vendor.save();
 
     res.status(201).json({
@@ -430,23 +419,12 @@ router.post('/', checkModulePermission('vendors', 'create'), async (req, res) =>
 // PUT /api/vendors/:id - Update vendor
 router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params.id), async (req, res) => {
   try {
-    const vendorId = req.params.id;
-
-    // Get tenant ID from request context (mandatory for data isolation)
+    // Get tenant_id from authenticated user's context
     const tenantId = req.tenant?.tenantId;
-
     if (!tenantId) {
-      return res.status(400).json({
+      return res.status(403).json({
         success: false,
-        message: 'Tenant ID is required'
-      });
-    }
-
-    // Validate ObjectId
-    if (!mongoose.Types.ObjectId.isValid(vendorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid vendor ID format'
+        message: 'Tenant context required to update vendor'
       });
     }
 
@@ -456,7 +434,7 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
       const existingVendor = await Vendor.findOne({
         abn: cleanedABN,
         tenant_id: tenantId,
-        _id: { $ne: vendorId }
+        _id: { $ne: req.params.id }
       });
 
       if (existingVendor) {
@@ -468,20 +446,17 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
       }
     }
 
-    // Update vendor within tenant scope only
+    // Update vendor ONLY if it belongs to the user's tenant
     const vendor = await Vendor.findOneAndUpdate(
-      { _id: vendorId, tenant_id: tenantId },
+      { _id: req.params.id, tenant_id: tenantId },
       req.body,
-      {
-        new: true,
-        runValidators: true
-      }
+      { new: true, runValidators: true }
     );
 
     if (!vendor) {
       return res.status(404).json({
         success: false,
-        message: 'Vendor not found'
+        message: 'Vendor not found or you do not have permission to update it'
       });
     }
 
@@ -514,50 +489,36 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
   }
 });
 
-// DELETE /api/vendors/:id - Soft delete vendor
+// DELETE /api/vendors/:id - Delete vendor
 router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     const vendorId = req.params.id;
 
-    // Get tenant ID from request context (mandatory for data isolation)
+    // Get tenant_id from authenticated user's context
     const tenantId = req.tenant?.tenantId;
-
     if (!tenantId) {
-      return res.status(400).json({
+      return res.status(403).json({
         success: false,
-        message: 'Tenant ID is required'
+        message: 'Tenant context required to delete vendor'
       });
     }
 
-    // Validate ObjectId
-    if (!mongoose.Types.ObjectId.isValid(vendorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid vendor ID format'
-      });
-    }
-
-    // Soft delete vendor within tenant scope only
-    const vendor = await Vendor.findOneAndUpdate(
-      { _id: vendorId, tenant_id: tenantId },
-      {
-        is_active: false,
-        status: 'inactive'
-      },
-      { new: true }
-    );
+    // Delete vendor ONLY if it belongs to the user's tenant
+    const vendor = await Vendor.findOneAndDelete({
+      _id: vendorId,
+      tenant_id: tenantId  // Ensure user owns this vendor
+    });
 
     if (!vendor) {
       return res.status(404).json({
         success: false,
-        message: 'Vendor not found'
+        message: 'Vendor not found or you do not have permission to delete it'
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Vendor deleted successfully (soft delete)',
-      data: vendor
+      message: 'Vendor deleted successfully'
     });
   } catch (error) {
 

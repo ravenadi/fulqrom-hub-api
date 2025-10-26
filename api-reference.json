@@ -6,7 +6,7 @@
     "base_url": "/api",
     "authentication": "Auth0 JWT Bearer Token",
     "authorization": "Role-based permissions with tenant isolation",
-    "last_updated": "2024-12-19"
+    "last_updated": "2024-12-20"
   },
   "endpoints": {
     "auth": {
@@ -1172,12 +1172,12 @@
         }
       ]
     },
-    "tenants": {
+    "building_tenants": {
       "description": "Building tenant management with comprehensive validation",
       "endpoints": [
         {
           "method": "GET",
-          "path": "/tenants",
+          "path": "/building-tenants",
           "description": "List all tenants with comprehensive filtering",
           "parameters": {
             "query": {
@@ -1200,7 +1200,7 @@
         },
         {
           "method": "GET",
-          "path": "/tenants/:id",
+          "path": "/building-tenants/:id",
           "description": "Get single tenant by ID",
           "parameters": {
             "path": {
@@ -1210,7 +1210,7 @@
         },
         {
           "method": "POST",
-          "path": "/tenants",
+          "path": "/building-tenants",
           "description": "Create new tenant",
           "parameters": {
             "body": {
@@ -1238,7 +1238,7 @@
         },
         {
           "method": "PUT",
-          "path": "/tenants/:id",
+          "path": "/building-tenants/:id",
           "description": "Update existing tenant",
           "parameters": {
             "path": {
@@ -1249,7 +1249,7 @@
         },
         {
           "method": "DELETE",
-          "path": "/tenants/:id",
+          "path": "/building-tenants/:id",
           "description": "Delete tenant",
           "parameters": {
             "path": {
@@ -1259,7 +1259,7 @@
         },
         {
           "method": "GET",
-          "path": "/tenants/by-building/:buildingId",
+          "path": "/building-tenants/by-building/:buildingId",
           "description": "Get tenants filtered by building ID",
           "parameters": {
             "path": {
@@ -1269,7 +1269,7 @@
         },
         {
           "method": "GET",
-          "path": "/tenants/summary/stats",
+          "path": "/building-tenants/summary/stats",
           "description": "Get tenant summary statistics",
           "parameters": {
             "query": {
@@ -1281,7 +1281,7 @@
         },
         {
           "method": "GET",
-          "path": "/tenants/by-industry",
+          "path": "/building-tenants/by-industry",
           "description": "Group tenants by industry type with statistics",
           "parameters": {
             "query": {
@@ -1541,11 +1541,247 @@
               "building_id": "string (optional)"
             }
           }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/tags",
+          "description": "Get all unique document tags",
+          "parameters": {
+            "query": {
+              "customer_id": "string (optional)",
+              "site_id": "string (optional)",
+              "building_id": "string (optional)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/stats",
+          "description": "Get simple document count statistics"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/:id/preview",
+          "description": "Get preview URL for document",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/:id/download",
+          "description": "Download document file",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/documents/bulk-update",
+          "description": "Bulk update multiple documents",
+          "parameters": {
+            "body": {
+              "document_ids": "array (required)",
+              "updates": "object (required)"
+            }
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/documents/bulk",
+          "description": "Bulk delete multiple documents",
+          "parameters": {
+            "body": {
+              "document_ids": "array (required)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/by-type/:type",
+          "description": "Get documents by specific type",
+          "parameters": {
+            "path": {
+              "type": "string (required)"
+            },
+            "query": {
+              "page": "number (optional)",
+              "limit": "number (optional)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/by-building/:buildingId",
+          "description": "Get documents by building ID",
+          "parameters": {
+            "path": {
+              "buildingId": "string (required)"
+            },
+            "query": {
+              "page": "number (optional)",
+              "limit": "number (optional)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/storage/stats",
+          "description": "Get storage statistics for documents"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/options/entities",
+          "description": "Get available entity options for document filtering"
+        },
+        {
+          "method": "POST",
+          "path": "/documents/:id/request-approval",
+          "description": "Request document approval",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            },
+            "body": {
+              "approver_id": "string (required)",
+              "comment": "string (optional)"
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/documents/:id/approve",
+          "description": "Approve document",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            },
+            "body": {
+              "comment": "string (optional)"
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/documents/:id/reject",
+          "description": "Reject document",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            },
+            "body": {
+              "comment": "string (required)"
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/documents/:id/revoke-approval",
+          "description": "Revoke document approval",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            },
+            "body": {
+              "comment": "string (optional)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/pending-approval",
+          "description": "Get documents pending approval"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/:id/approval-history",
+          "description": "Get document approval history",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/documents/:id/versions",
+          "description": "Create new document version",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            },
+            "form": {
+              "file": "file (required)",
+              "comment": "string (optional)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/versions/:documentGroupId",
+          "description": "Get all versions of a document group",
+          "parameters": {
+            "path": {
+              "documentGroupId": "string (required)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/versions/:versionId/download",
+          "description": "Download specific document version",
+          "parameters": {
+            "path": {
+              "versionId": "string (required)"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/documents/versions/:versionId/restore",
+          "description": "Restore document to specific version",
+          "parameters": {
+            "path": {
+              "versionId": "string (required)"
+            },
+            "body": {
+              "comment": "string (optional)"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/documents/:id/comments",
+          "description": "Get document comments",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/documents/:id/review",
+          "description": "Add document review/comment",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            },
+            "body": {
+              "comment": "string (required)",
+              "rating": "number (optional)"
+            }
+          }
         }
       ]
     },
-    "roles": {
-      "description": "Role management (LEGACY - marked for removal)",
+    "roles_legacy": {
+      "description": "LEGACY Role management - marked for removal (Use /api/v2/roles instead)",
+      "status": "deprecated",
       "endpoints": [
         {
           "method": "GET",
@@ -1619,12 +1855,12 @@
         }
       ]
     },
-    "roles_v2": {
-      "description": "Role management V2 (new implementation)",
+    "roles": {
+      "description": "Role management (current implementation)",
       "endpoints": [
         {
           "method": "GET",
-          "path": "/v2/roles",
+          "path": "/roles",
           "description": "Get all predefined roles",
           "parameters": {
             "query": {
@@ -1636,7 +1872,7 @@
         },
         {
           "method": "GET",
-          "path": "/v2/roles/:id",
+          "path": "/roles/:id",
           "description": "Get role by ID",
           "parameters": {
             "path": {
@@ -1646,7 +1882,7 @@
         },
         {
           "method": "GET",
-          "path": "/v2/roles/name/:name",
+          "path": "/roles/name/:name",
           "description": "Get role by name",
           "parameters": {
             "path": {
@@ -1656,12 +1892,12 @@
         },
         {
           "method": "POST",
-          "path": "/v2/roles/initialize",
+          "path": "/roles/initialize",
           "description": "Initialize predefined roles (Admin only)"
         },
         {
           "method": "GET",
-          "path": "/v2/roles/permissions/matrix",
+          "path": "/roles/permissions/matrix",
           "description": "Get permissions matrix for all roles"
         }
       ]

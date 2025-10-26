@@ -384,7 +384,6 @@ These endpoints correctly filter by `tenant_id` automatically:
 
 1. **Auth0 JWT Authentication** ✅
 2. **Role-based permissions** ✅
-3. **Soft deletes** ✅
 4. **Audit logging** ✅
 5. **Presigned URLs for S3** ✅
 6. **Tenant isolation middleware** ✅

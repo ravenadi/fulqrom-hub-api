@@ -191,13 +191,15 @@ const VendorSchema = new mongoose.Schema({
   abn: {
     type: String,
     trim: true,
+    default: '',
     validate: {
       validator: function(v) {
-        if (!v) return true; // Optional
+        // Allow empty string or undefined - ABN is optional
+        if (!v || v.trim() === '') return true;
         const cleaned = v.replace(/\s/g, '');
         return /^\d{11}$/.test(cleaned);
       },
-      message: 'ABN must be 11 digits'
+      message: 'ABN must be 11 digits if provided'
     },
     index: true
   },
@@ -231,8 +233,7 @@ const VendorSchema = new mongoose.Schema({
   },
 
   address: {
-    type: VendorAddressSchema,
-    required: true
+    type: VendorAddressSchema
   },
 
   // Contractor Type - loaded from GET /api/dropdowns
@@ -381,8 +382,7 @@ const VendorSchema = new mongoose.Schema({
 
   // Business Details - loaded from GET /api/dropdowns
   businessType: {
-    type: String,
-    required: [true, 'Business type is required']
+    type: String
   },
 
   yearsInBusiness: {
