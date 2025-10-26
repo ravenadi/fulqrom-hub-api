@@ -26,6 +26,12 @@ const authorize = (req, res, next) => {
     return next();
   }
 
+  // Skip authorization for dropdowns (read-only data, no module-specific permissions needed)
+  if (req.path.startsWith('/dropdowns')) {
+    console.log(`⚠️  Skipping permission check for dropdowns endpoint: ${req.method} ${req.path}`);
+    return next();
+  }
+
   // Skip authorization if user is not authenticated
   if (!req.user) {
     return next();

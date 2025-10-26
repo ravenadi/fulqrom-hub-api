@@ -80,7 +80,8 @@ AuditLogSchema.index({ action: 1 });
 AuditLogSchema.index({ created_at: -1 });
 AuditLogSchema.index({ status: 1 });
 
-// Apply tenant plugin for multi-tenancy support
-AuditLogSchema.plugin(tenantPlugin);
+// Apply tenant plugin for multi-tenancy support but make tenant_id optional
+// since audit logs can track global operations (e.g., admin role management)
+AuditLogSchema.plugin(tenantPlugin, { required: false });
 
 module.exports = mongoose.model('AuditLog', AuditLogSchema);

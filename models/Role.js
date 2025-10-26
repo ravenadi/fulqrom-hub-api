@@ -183,6 +183,14 @@ RoleSchema.statics.initializePredefinedRoles = async function() {
   }
 };
 
-// Roles are global and not tenant-scoped
+// Add created_by field for tracking who created the role
+RoleSchema.add({
+  created_by: {
+    type: String,
+    trim: true
+  }
+});
+
+// Roles are global and not tenant-scoped (tenant_id not needed)
 
 module.exports = mongoose.model('Role', RoleSchema);
