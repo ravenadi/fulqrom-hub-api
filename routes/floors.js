@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Floor = require('../models/Floor');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -249,6 +250,9 @@ router.post('/', checkModulePermission('floors', 'create'), async (req, res) => 
     await floor.populate('site_id', 'site_name address');
     await floor.populate('building_id', 'building_name building_code');
 
+    // Log audit for floor creation
+    await logCreate({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
+
     res.status(201).json({
       success: true,
       message: 'Floor created successfully',
@@ -352,6 +356,9 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
       });
     }
 
+    // Log audit for floor update
+    await logUpdate({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
+
     res.status(200).json({
       success: true,
       message: 'Floor updated successfully',
@@ -378,10 +385,10 @@ router.delete('/:id', checkResourcePermission('floor', 'delete', (req) => req.pa
       });
     }
 
-    // Delete ONLY if belongs to user's tenant
-    const floor = await Floor.findOneAndDelete({
+    // Get floor before deletion for audit log
+    const floor = await Floor.findOne({
       _id: req.params.id,
-      tenant_id: tenantId  // Ensure user owns this resource
+      tenant_id: tenantId
     });
 
     if (!floor) {
@@ -390,6 +397,15 @@ router.delete('/:id', checkResourcePermission('floor', 'delete', (req) => req.pa
         message: 'Floor not found or you do not have permission to delete it'
       });
     }
+
+    // Log audit for floor deletion (before deletion)
+    await logDelete({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
+
+    // Delete the floor
+    await Floor.findOneAndDelete({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this resource
+    });
 
     res.status(200).json({
       success: true,

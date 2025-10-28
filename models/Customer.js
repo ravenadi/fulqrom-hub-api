@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const tenantPlugin = require('../plugins/tenantPlugin');
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
 
 // Organisation schema
 const OrganisationSchema = new mongoose.Schema({
@@ -288,4 +289,12 @@ CustomerSchema.set('toObject', { virtuals: true });
 // Apply tenant plugin for multi-tenancy support
 CustomerSchema.plugin(tenantPlugin);
 
-module.exports = mongoose.model('Customer', CustomerSchema);
+const Customer = mongoose.model('Customer', CustomerSchema);
+
+// Setup audit hooks
+addAuditContextHelper(Customer);
+setupAuditHooks(Customer, {
+  module: 'customer'
+});
+
+module.exports = Customer;

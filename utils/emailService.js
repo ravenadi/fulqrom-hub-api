@@ -136,12 +136,17 @@ class EmailService {
 
       // Send email based on provider
       let result;
+      console.log(`📧 Email Service: Sending ${template} email to ${to} via ${this.provider}`);
+      
       if (this.provider === 'smtp') {
         result = await this.sendViaSMTP({ to, subject, html });
+        console.log(`✅ Email sent via SMTP. Message ID: ${result.messageId}`);
       } else if (this.provider === 'sendgrid') {
         result = await this.sendViaSendGrid({ to, subject, html });
+        console.log(`✅ Email sent via SendGrid. Message ID: ${result.messageId}`);
       } else if (this.provider === 'ses') {
         result = await this.sendViaSES({ to, subject, html });
+        console.log(`✅ Email sent via SES. Message ID: ${result.messageId}`);
       } else {
         // Console logging (development)
         result = await this.sendViaConsole({ to, subject, html });
@@ -237,6 +242,17 @@ class EmailService {
    * Log email to console (development mode)
    */
   async sendViaConsole({ to, subject, html }) {
+    console.log('\n' + '='.repeat(80));
+    console.log('📧 EMAIL NOTIFICATION (Console Mode)');
+    console.log('='.repeat(80));
+    console.log(`To: ${to}`);
+    console.log(`From: ${this.fromName} <${this.fromAddress}>`);
+    console.log(`Subject: ${subject}`);
+    console.log(`\nBody:\n`);
+    // Extract just text from HTML for better readability
+    const textContent = html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    console.log(textContent.substring(0, 500) + (textContent.length > 500 ? '...' : ''));
+    console.log('\n' + '='.repeat(80) + '\n');
 
     return {
       messageId: 'console-' + Date.now()

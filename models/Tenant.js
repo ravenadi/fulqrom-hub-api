@@ -144,4 +144,11 @@ TenantSchema.virtual('is_active_label').get(function() {
 TenantSchema.set('toJSON', { virtuals: true });
 TenantSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Tenant', TenantSchema);
+const Tenant = mongoose.model('Tenant', TenantSchema);
+
+// Setup audit hooks
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
+addAuditContextHelper(Tenant);
+setupAuditHooks(Tenant, { module: 'tenant' });
+
+module.exports = Tenant;

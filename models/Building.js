@@ -306,4 +306,11 @@ BuildingSchema.set('toObject', { virtuals: true });
 // Apply tenant plugin for multi-tenancy support
 BuildingSchema.plugin(tenantPlugin);
 
-module.exports = mongoose.model('Building', BuildingSchema);
+const Building = mongoose.model('Building', BuildingSchema);
+
+// Setup audit hooks
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
+addAuditContextHelper(Building);
+setupAuditHooks(Building, { module: 'building' });
+
+module.exports = Building;

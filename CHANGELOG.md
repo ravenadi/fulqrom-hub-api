@@ -5,6 +5,34 @@ All notable changes to the Fulqrom Hub REST API project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2024-12-20
+
+### Fixed
+- Vendor API: Removed required validation for `address` and `businessType` fields to align with frontend form
+  - Address is now optional (can be added later if needed)
+  - Business type requirement removed (using contractor_type instead)
+
+### Changed
+- Vendor DELETE endpoint: Changed from soft delete to hard delete (completely removes vendor from database)
+- Vendor API endpoints: Updated to match buildings API pattern for consistency
+  - All endpoints now return 403 for tenant context issues (instead of 400)
+  - Error messages standardized to say "Tenant context required to..."
+  - DELETE endpoint returns only success message (no data object)
+  - Consistent commenting and code structure across all endpoints
+  - Added `meta` object to GET list response to match buildings API structure
+
+### Updated
+- Verified and updated API reference documentation (`api-reference.json`)
+  - Corrected building-tenants path from `/tenants` to `/building-tenants` to match actual route configuration
+  - Updated roles endpoints to reflect current implementation (removed v2 prefix, marked legacy routes as deprecated)
+  - Added 15+ missing document management endpoints including:
+    - Approval workflow endpoints (`request-approval`, `approve`, `reject`, `revoke-approval`)
+    - Version management endpoints (`versions`, `versions/:documentGroupId`, `versions/:versionId/download`, `versions/:versionId/restore`)
+    - Additional utility endpoints (`tags`, `stats`, `preview`, `storage/stats`, `options/entities`)
+    - Bulk operations (`bulk-update`, `bulk` delete)
+    - Comments and reviews (`comments`, `review`)
+  - Updated last_updated date to 2024-12-20
+
 ## [1.0.0] - 2025-10-10
 
 ### Added

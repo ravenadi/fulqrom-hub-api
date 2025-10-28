@@ -2,9 +2,19 @@ const express = require('express');
 const Customer = require('../models/Customer');
 const Site = require('../models/Site');
 const Building = require('../models/Building');
+const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
 const Document = require('../models/Document');
+const BuildingTenant = require('../models/BuildingTenant');
+const Vendor = require('../models/Vendor');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
+const {
+  buildPagination,
+  buildSort,
+  buildApiResponse,
+  handleError
+} = require('../middleware/searchHelpers');
 
 const router = express.Router();
 
@@ -64,40 +74,6 @@ router.get('/', checkModulePermission('customers', 'view'), async (req, res) => 
   }
 });
 
-// GET /api/customers/:id - Get single customer (requires view permission for this customer)
-router.get('/:id', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
-  try {
-    // Verify tenant context exists
-    if (!req.tenant || !req.tenant.tenantId) {
-      return res.status(403).json({
-        success: false,
-        message: 'No tenant context found. User must be associated with a tenant.'
-      });
-    }
-
-    // Find customer within tenant scope only
-    const customer = await Customer.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
-
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer not found'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: customer
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching customer',
-      error: error.message
-    });
-  }
-});
-
 // GET /api/customers/:id/stats - Get customer statistics (requires view permission)
 router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
@@ -152,6 +128,210 @@ router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => re
   }
 });
 
+// Helper function to batch fetch entity names for documents (reused from documents route)
+async function batchFetchEntityNames(documents) {
+  if (!documents || documents.length === 0) {
+    return [];
+  }
+
+  // Step 1: Collect all unique IDs from all documents
+  const customerIds = new Set();
+  const siteIds = new Set();
+  const buildingIds = new Set();
+  const floorIds = new Set();
+  const assetIds = new Set();
+  const tenantIds = new Set();
+  const vendorIds = new Set();
+
+  documents.forEach(doc => {
+    const customerId = doc.customer?.customer_id;
+    const siteId = doc.location?.site?.site_id;
+    const buildingId = doc.location?.building?.building_id;
+    const floorId = doc.location?.floor?.floor_id;
+    const assetId = doc.location?.asset?.asset_id;
+    const tenantId = doc.location?.tenant?.tenant_id;
+    const vendorId = doc.location?.vendor?.vendor_id;
+
+    if (customerId) customerIds.add(customerId.toString());
+    if (siteId) siteIds.add(siteId.toString());
+    if (buildingId) buildingIds.add(buildingId.toString());
+    if (floorId) floorIds.add(floorId.toString());
+    if (assetId) assetIds.add(assetId.toString());
+    if (tenantId) tenantIds.add(tenantId.toString());
+    if (vendorId) vendorIds.add(vendorId.toString());
+
+    // Collect multiple assets if present
+    const docAssetIds = doc.location?.assets?.map(a => a.asset_id) || [];
+    docAssetIds.forEach(id => {
+      if (id) assetIds.add(id.toString());
+    });
+  });
+
+  // Step 2: Fetch ALL entities in parallel with batch queries
+  const [customers, sites, buildings, floors, assets, tenants, vendors] = await Promise.all([
+    customerIds.size > 0 ? Customer.find({ _id: { $in: Array.from(customerIds) } }).lean().exec() : [],
+    siteIds.size > 0 ? Site.find({ _id: { $in: Array.from(siteIds) } }).lean().exec() : [],
+    buildingIds.size > 0 ? Building.find({ _id: { $in: Array.from(buildingIds) } }).lean().exec() : [],
+    floorIds.size > 0 ? Floor.find({ _id: { $in: Array.from(floorIds) } }).lean().exec() : [],
+    assetIds.size > 0 ? Asset.find({ _id: { $in: Array.from(assetIds) } }).lean().exec() : [],
+    tenantIds.size > 0 ? BuildingTenant.find({ _id: { $in: Array.from(tenantIds) } }).lean().exec() : [],
+    vendorIds.size > 0 ? Vendor.find({ _id: { $in: Array.from(vendorIds) } }).lean().exec() : []
+  ]);
+
+  // Step 3: Create lookup maps for O(1) access
+  const customerMap = new Map(customers.map(c => [c._id.toString(), c]));
+  const siteMap = new Map(sites.map(s => [s._id.toString(), s]));
+  const buildingMap = new Map(buildings.map(b => [b._id.toString(), b]));
+  const floorMap = new Map(floors.map(f => [f._id.toString(), f]));
+  const assetMap = new Map(assets.map(a => [a._id.toString(), a]));
+  const tenantMap = new Map(tenants.map(t => [t._id.toString(), t]));
+  const vendorMap = new Map(vendors.map(v => [v._id.toString(), v]));
+
+  // Step 4: Populate documents using the maps (no additional DB queries)
+  return documents.map(doc => {
+    const customer = customerMap.get(doc.customer?.customer_id?.toString());
+    const site = siteMap.get(doc.location?.site?.site_id?.toString());
+    const building = buildingMap.get(doc.location?.building?.building_id?.toString());
+    const floor = floorMap.get(doc.location?.floor?.floor_id?.toString());
+    const asset = assetMap.get(doc.location?.asset?.asset_id?.toString());
+    const tenant = tenantMap.get(doc.location?.tenant?.tenant_id?.toString());
+    const vendor = vendorMap.get(doc.location?.vendor?.vendor_id?.toString());
+
+    // Handle multiple assets
+    const docAssetIds = doc.location?.assets?.map(a => a.asset_id) || [];
+    const populatedAssets = docAssetIds
+      .map(assetId => {
+        const assetData = assetMap.get(assetId.toString());
+        if (assetData) {
+          return {
+            asset_id: assetData._id.toString(),
+            asset_name: assetData.asset_no || assetData.device_id || assetData.asset_id || 'Unknown Asset',
+            asset_type: assetData.type || assetData.category || ''
+          };
+        }
+        return null;
+      })
+      .filter(a => a !== null);
+
+    return {
+      ...doc,
+      customer: {
+        customer_id: doc.customer?.customer_id,
+        customer_name: customer
+          ? (customer.organisation?.organisation_name ||
+             customer.company_profile?.trading_name ||
+             customer.company_profile?.organisation_name ||
+             'Unknown Customer')
+          : 'Unknown Customer'
+      },
+      location: {
+        site: doc.location?.site?.site_id ? {
+          site_id: doc.location.site.site_id,
+          site_name: site?.site_name || null
+        } : undefined,
+        building: doc.location?.building?.building_id ? {
+          building_id: doc.location.building.building_id,
+          building_name: building?.building_name || null
+        } : undefined,
+        floor: doc.location?.floor?.floor_id ? {
+          floor_id: doc.location.floor.floor_id,
+          floor_name: floor?.floor_name || null
+        } : undefined,
+        // Multiple assets support
+        assets: populatedAssets.length > 0 ? populatedAssets : undefined,
+        // Legacy single asset (for backward compatibility)
+        asset: doc.location?.asset?.asset_id ? {
+          asset_id: doc.location.asset.asset_id,
+          asset_name: asset?.asset_no || asset?.device_id || asset?.asset_id || 'Unknown Asset',
+          asset_type: asset?.type || asset?.category
+        } : undefined,
+        tenant: doc.location?.tenant?.tenant_id ? {
+          tenant_id: doc.location.tenant.tenant_id,
+          tenant_name: tenant?.tenant_name || null
+        } : undefined,
+        vendor: doc.location?.vendor?.vendor_id ? {
+          vendor_id: doc.location.vendor.vendor_id,
+          vendor_name: vendor?.contractor_name || null
+        } : undefined
+      }
+    };
+  });
+}
+
+// GET /api/customers/:id/documents - Get all documents for a specific customer
+router.get('/:id/documents', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
+  try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    const customerId = req.params.id;
+    const { page = 1, limit = 50, sort = 'created_at', order = 'desc' } = req.query;
+
+    // Find customer within tenant scope
+    const customer = await Customer.findById(customerId).setOptions({ _tenantId: req.tenant.tenantId });
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    // Build filter query for documents
+    let filterQuery = {
+      'customer.customer_id': customerId
+    };
+
+    // Pagination and sorting
+    const pagination = buildPagination(page, limit);
+    const sortObj = buildSort(sort, order);
+
+    // Execute queries in parallel
+    const [documents, totalDocuments] = await Promise.all([
+      Document.find(filterQuery)
+        .setOptions({ _tenantId: req.tenant.tenantId })
+        .sort(sortObj)
+        .skip(pagination.skip)
+        .limit(pagination.limitNum)
+        .lean()
+        .exec(),
+      Document.countDocuments(filterQuery).setOptions({ _tenantId: req.tenant.tenantId }).exec()
+    ]);
+
+    // Batch populate entity names for all documents
+    const documentsWithNames = await batchFetchEntityNames(documents);
+
+    // Build response with customer info (read-only) and documents
+    const response = {
+      success: true,
+      customer: {
+        _id: customer._id,
+        customer_id: customer._id,
+        customer_name: customer.organisation?.organisation_name || 
+                      customer.company_profile?.trading_name || 
+                      customer.company_profile?.organisation_name || 
+                      'Unknown Customer',
+        read_only: true
+      },
+      data: documentsWithNames,
+      pagination: {
+        total: totalDocuments,
+        page: pagination.pageNum,
+        limit: pagination.limitNum,
+        total_pages: Math.ceil(totalDocuments / pagination.limitNum)
+      }
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    handleError(error, res, 'fetching customer documents');
+  }
+});
+
 // GET /api/customers/:id/contacts/primary - Get primary contact (requires view permission)
 router.get('/:id/contacts/primary', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
   try {
@@ -196,6 +376,41 @@ router.get('/:id/contacts/primary', checkResourcePermission('customer', 'view', 
   }
 });
 
+// GET /api/customers/:id - Get single customer (requires view permission for this customer)
+// NOTE: This route must come AFTER more specific routes like /:id/documents, /:id/stats, /:id/contacts/primary
+router.get('/:id', checkResourcePermission('customer', 'view', (req) => req.params.id), async (req, res) => {
+  try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Find customer within tenant scope only
+    const customer = await Customer.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: customer
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching customer',
+      error: error.message
+    });
+  }
+});
+
 // POST /api/customers - Create new customer (requires module-level create permission)
 router.post('/', checkModulePermission('customers', 'create'), async (req, res) => {
   try {
@@ -215,6 +430,10 @@ router.post('/', checkModulePermission('customers', 'create'), async (req, res) 
 
     const customer = new Customer(customerData);
     await customer.save();
+
+    // Log audit for customer creation
+    const customerName = customer.organisation?.organisation_name || customer.company_profile?.trading_name || 'New Customer';
+    await logCreate({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
 
     res.status(201).json({
       success: true,
@@ -265,6 +484,10 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
         message: 'Customer not found or you do not have permission to update it'
       });
     }
+
+    // Log audit for customer update
+    const customerName = customer.organisation?.organisation_name || customer.company_profile?.trading_name || 'Customer';
+    await logUpdate({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
 
     res.status(200).json({
       success: true,
@@ -317,6 +540,10 @@ router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req
 
     console.log(`🗑️  Starting customer deletion: ${customerId}`);
     console.log(`   S3 Strategy: ${isImmediateS3Delete ? 'IMMEDIATE DELETE' : 'TAG FOR EXPIRY (90 days)'}`);
+
+    // Log audit for customer deletion (before deletion completes)
+    const customerName = customer.organisation?.organisation_name || customer.company_profile?.trading_name || 'Customer';
+    await logDelete({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
 
     const result = await deletionService.deleteCustomerCompletely(customerId, tenantId, {
       deleteS3Files: shouldDeleteS3 && isImmediateS3Delete,

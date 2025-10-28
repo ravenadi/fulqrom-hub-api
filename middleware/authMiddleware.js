@@ -14,19 +14,27 @@ const { isPublicRoute } = require('../config/middleware.config');
 const authenticate = (req, res, next) => {
   // Skip authentication for public endpoints
   if (isPublicRoute(req.path)) {
-    console.log(`✓ Bypassing auth for public endpoint: ${req.method} ${req.path}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`✓ Bypassing auth for public endpoint: ${req.method} ${req.path}`);
+    }
     return next();
   }
 
-  console.log(`🔒 Applying auth for protected endpoint: ${req.method} ${req.path}`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`🔒 Applying auth for protected endpoint: ${req.method} ${req.path}`);
+  }
 
   // Apply Auth0 JWT authentication
   requireAuth[0](req, res, (err) => {
     if (err) {
-      console.log('❌ JWT validation failed:', err.message);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('❌ JWT validation failed:', err.message);
+      }
       return next(err);
     }
-    console.log('✅ JWT validation succeeded, attaching user...');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ JWT validation succeeded, attaching user...');
+    }
     requireAuth[1](req, res, next);
   });
 };

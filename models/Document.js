@@ -532,4 +532,11 @@ DocumentSchema.set('toObject', { virtuals: true });
 // Apply tenant isolation plugin
 DocumentSchema.plugin(tenantPlugin);
 
-module.exports = mongoose.model('Document', DocumentSchema);
+const Document = mongoose.model('Document', DocumentSchema);
+
+// Setup audit hooks
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
+addAuditContextHelper(Document);
+setupAuditHooks(Document, { module: 'document' });
+
+module.exports = Document;

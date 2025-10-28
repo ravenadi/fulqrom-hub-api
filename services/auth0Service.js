@@ -535,6 +535,90 @@ const ensureAuth0User = async (userData) => {
   }
 };
 
+/**
+ * Set or update user password in Auth0 using Management API
+ * Works with M2M applications (doesn't require password grant type)
+ * Uses direct fetch API call like the change-password endpoint
+ * @param {string} auth0_id - Auth0 user ID
+ * @param {string} password - New password
+ * @returns {Promise<Object>} Success object
+ */
+const setAuth0Password = async (auth0_id, password) => {
+  try {
+    console.log(`[setAuth0Password] Starting password update for auth0_id: ${auth0_id}`);
+    
+    // Validate password length
+    if (!password || password.length < 8) {
+      throw new Error('Password must be at least 8 characters long');
+    }
+
+    // Get Management API token using the same method as change-password endpoint
+    // Use direct fetch for consistency with working change-password endpoint
+    console.log(`[setAuth0Password] Getting Management API token from: ${process.env.AUTH0_DOMAIN}`);
+    const tokenResponse = await fetch(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        grant_type: 'client_credentials',
+        client_id: process.env.AUTH0_CLIENT_ID,
+        client_secret: process.env.AUTH0_CLIENT_SECRET,
+        audience: process.env.AUTH0_MANAGEMENT_API_AUDIENCE || `https://${process.env.AUTH0_DOMAIN}/api/v2/`
+      })
+    });
+
+    if (!tokenResponse.ok) {
+      const tokenError = await tokenResponse.json().catch(() => ({}));
+      console.error('[setAuth0Password] Token request failed:', tokenError);
+      throw new Error('Failed to get Auth0 Management API token: ' + (tokenError.error_description || tokenError.message || 'Unknown error'));
+    }
+
+    const tokenData = await tokenResponse.json();
+    const managementToken = tokenData.access_token;
+    console.log(`[setAuth0Password] Successfully obtained management token`);
+
+    // Update password using Auth0 Management API (same approach as change-password)
+    console.log(`[setAuth0Password] Updating password for user: ${auth0_id}`);
+    const updateResponse = await fetch(
+      `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${auth0_id}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${managementToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          password: password,
+          connection: process.env.AUTH0_CONNECTION || 'Username-Password-Authentication'
+        })
+      }
+    );
+
+    if (!updateResponse.ok) {
+      const errorData = await updateResponse.json().catch(() => ({}));
+      const errorMessage = errorData.message || errorData.description || 'Failed to update password';
+      console.error('[setAuth0Password] Password update failed:', errorMessage);
+      console.error('[setAuth0Password] Full error response:', errorData);
+      
+      // Handle specific Auth0 errors
+      if (errorMessage.includes('PasswordStrengthError') || 
+          errorMessage.includes('Password is too weak')) {
+        throw new Error('Password does not meet Auth0 password strength requirements');
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    console.log(`[setAuth0Password] Password updated successfully for: ${auth0_id}`);
+    return { success: true, message: 'Password set successfully' };
+  } catch (error) {
+    console.error('[setAuth0Password] Error:', error.message || error);
+    const errorMessage = error.message || 'Failed to update password';
+    throw new Error(errorMessage);
+  }
+};
+
 module.exports = {
   createAuth0User,
   updateAuth0User,
@@ -548,5 +632,6 @@ module.exports = {
   ensureAuth0User,
   assignRolesToUser,
   removeRolesFromUser,
-  syncUserRoles
+  syncUserRoles,
+  setAuth0Password
 };

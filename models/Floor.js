@@ -197,4 +197,11 @@ FloorSchema.set('toObject', { virtuals: true });
 // Apply tenant plugin for multi-tenancy support
 FloorSchema.plugin(tenantPlugin);
 
-module.exports = mongoose.model('Floor', FloorSchema);
+const Floor = mongoose.model('Floor', FloorSchema);
+
+// Setup audit hooks
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
+addAuditContextHelper(Floor);
+setupAuditHooks(Floor, { module: 'floor' });
+
+module.exports = Floor;

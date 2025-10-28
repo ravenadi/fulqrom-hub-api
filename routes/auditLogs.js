@@ -28,7 +28,6 @@ router.get('/', async (req, res) => {
       limit = 50,
       action,
       resource_type,
-      status,
       user_id,
       start_date,
       end_date
@@ -78,19 +77,14 @@ router.get('/', async (req, res) => {
       filterQuery.action = action;
     }
 
-    // Resource type filter
-    if (resource_type) {
-      filterQuery.resource_type = resource_type;
-    }
-
-    // Status filter
-    if (status) {
-      filterQuery.status = status;
-    }
-
-    // User filter
+    // User filter (using nested user.id path)
     if (user_id) {
-      filterQuery.user_id = user_id;
+      filterQuery['user.id'] = user_id;
+    }
+
+    // Resource type filter (map to module field)
+    if (resource_type) {
+      filterQuery.module = resource_type;
     }
 
     // Date range filter
@@ -110,12 +104,16 @@ router.get('/', async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Fetch audit logs with user population
+    // Default: Sort by created_at descending (newest first)
+    const sortOrder = req.query.sort_order === 'asc' ? 1 : -1;
+    const sortField = req.query.sort_by || 'created_at';
+    
     const [auditLogs, totalLogs] = await Promise.all([
       AuditLog.find(filterQuery)
-        .sort({ created_at: -1 })
+        .sort({ [sortField]: sortOrder })
         .skip(skip)
         .limit(limitNum)
-        .populate('user_id', 'full_name email')
+        .populate('user.id', 'full_name email')
         .lean(),
       AuditLog.countDocuments(filterQuery)
     ]);
@@ -147,7 +145,6 @@ router.get('/', async (req, res) => {
         filters_applied: {
           action: action || null,
           resource_type: resource_type || null,
-          status: status || null,
           user_id: user_id || null,
           date_range: (start_date || end_date) ? {
             start: start_date || null,
@@ -194,14 +191,10 @@ router.get('/stats', async (req, res) => {
             { $group: { _id: '$action', count: { $sum: 1 } } },
             { $sort: { count: -1 } }
           ],
-          // Activity by resource type
-          by_resource: [
-            { $group: { _id: '$resource_type', count: { $sum: 1 } } },
+          // Activity by module
+          by_module: [
+            { $group: { _id: '$module', count: { $sum: 1 } } },
             { $sort: { count: -1 } }
-          ],
-          // Activity by status
-          by_status: [
-            { $group: { _id: '$status', count: { $sum: 1 } } }
           ],
           // Activity by date (last 30 days)
           by_date: [
@@ -225,8 +218,9 @@ router.get('/stats', async (req, res) => {
             {
               $project: {
                 action: 1,
-                resource_type: 1,
-                user_email: 1,
+                module: 1,
+                description: 1,
+                'user.name': 1,
                 created_at: 1
               }
             }
@@ -309,15 +303,13 @@ router.get('/tenants', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      user_id,
-      user_email,
-      user_name,
       action,
-      resource_type,
-      resource_id,
-      resource_name,
-      details,
-      status
+      description,
+      module,
+      module_id,
+      user_id,
+      user_name,
+      detail
     } = req.body;
 
     // Validate required fields
@@ -328,15 +320,22 @@ router.post('/', async (req, res) => {
       });
     }
 
-    if (!resource_type) {
+    if (!description) {
       return res.status(400).json({
         success: false,
-        message: 'resource_type is required'
+        message: 'description is required'
+      });
+    }
+
+    if (!module) {
+      return res.status(400).json({
+        success: false,
+        message: 'module is required'
       });
     }
 
     // Get tenant_id from authenticated user's context
-    const tenantId = req.tenant?.tenantId;
+    const tenantId = req.tenant?.tenantId || req.user?.tenant_id;
     if (!tenantId) {
       return res.status(403).json({
         success: false,
@@ -344,20 +343,33 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Create audit log with tenant_id from authenticated user
+    // Get user info from request if not provided
+    const userId = user_id || req.user?.userId || req.user?.id || req.user?._id;
+    const userName = user_name || req.user?.full_name || req.user?.name || 'Unknown User';
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'user_id is required'
+      });
+    }
+
+    // Create audit log with new schema
+    const mongoose = require('mongoose');
     const auditLog = new AuditLog({
-      user_id,
-      user_email,
-      user_name,
       action,
-      resource_type,
-      resource_id,
-      resource_name,
-      details,
-      status: status || 'success',
+      description,
+      module,
+      module_id: module_id || null,
+      user: {
+        id: userId,
+        name: userName
+      },
+      ip: req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || 'unknown',
+      agent: req.get('user-agent') || 'unknown',
+      detail: detail || undefined,
       tenant_id: tenantId,
-      ip_address: req.ip || req.connection.remoteAddress,
-      user_agent: req.get('user-agent')
+      created_at: new Date()
     });
 
     await auditLog.save();

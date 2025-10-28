@@ -448,4 +448,11 @@ BuildingTenantSchema.set('toJSON', {
 });
 BuildingTenantSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('BuildingTenant', BuildingTenantSchema, 'building_tenants');
+const BuildingTenant = mongoose.model('BuildingTenant', BuildingTenantSchema, 'building_tenants');
+
+// Setup audit hooks
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
+addAuditContextHelper(BuildingTenant);
+setupAuditHooks(BuildingTenant, { module: 'building_tenant' });
+
+module.exports = BuildingTenant;

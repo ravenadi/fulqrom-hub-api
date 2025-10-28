@@ -4,6 +4,7 @@ const Asset = require('../models/Asset');
 const Document = require('../models/Document');
 const { validateCreateAsset, validateUpdateAsset } = require('../middleware/assetValidation');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -505,8 +506,13 @@ router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset,
     // Populate references before returning
     await asset.populate('customer_id', 'organisation.organisation_name');
     await asset.populate('site_id', 'site_name address');
+
+    // Populate remaining references
     await asset.populate('building_id', 'building_name building_code');
     await asset.populate('floor_id', 'floor_name floor_level');
+
+    // Log audit for asset creation
+    await logCreate({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id, resource: asset.toObject() });
 
     // Convert to plain object and add backward compatibility fields
     const assetObj = asset.toObject();
@@ -611,6 +617,9 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
       });
     }
 
+    // Log audit for asset update
+    await logUpdate({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id.toString(), resource: asset });
+
     // Add backward compatibility fields for frontend
     const assetWithCompatibility = {
       ...asset,
@@ -656,10 +665,10 @@ router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.pa
       });
     }
 
-    // Delete ONLY if belongs to user's tenant
-    const asset = await Asset.findOneAndDelete({
+    // Get asset before deletion for audit log
+    const asset = await Asset.findOne({
       _id: req.params.id,
-      tenant_id: tenantId  // Ensure user owns this resource
+      tenant_id: tenantId
     });
 
     if (!asset) {
@@ -668,6 +677,15 @@ router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.pa
         message: 'Asset not found or you do not have permission to delete it'
       });
     }
+
+    // Log audit for asset deletion (before deletion)
+    await logDelete({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id, resource: asset.toObject() });
+
+    // Delete the asset
+    await Asset.findOneAndDelete({
+      _id: req.params.id,
+      tenant_id: tenantId  // Ensure user owns this resource
+    });
 
     // Store asset info for response
     const deletedAssetInfo = {

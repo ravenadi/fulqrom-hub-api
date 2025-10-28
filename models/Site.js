@@ -324,4 +324,11 @@ SiteSchema.set('toObject', { virtuals: true });
 // Apply tenant plugin for multi-tenancy support
 SiteSchema.plugin(tenantPlugin);
 
-module.exports = mongoose.model('Site', SiteSchema);
+const Site = mongoose.model('Site', SiteSchema);
+
+// Setup audit hooks
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
+addAuditContextHelper(Site);
+setupAuditHooks(Site, { module: 'site' });
+
+module.exports = Site;

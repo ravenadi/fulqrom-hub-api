@@ -45,11 +45,12 @@ class NotificationService {
     actionUrl = null,
     sendEmail = false,
     emailTemplate = null,
-    emailVariables = {}
+    emailVariables = {},
+    tenantId = null
   }) {
     try {
       // Create in-app notification
-      const notification = await Notification.create({
+      const notificationData = {
         user_id: userId,
         user_email: userEmail,
         title,
@@ -65,11 +66,19 @@ class NotificationService {
         customer,
         action_url: actionUrl,
         is_read: false
-      });
+      };
+
+      // Add tenant_id if provided (required for multi-tenancy)
+      if (tenantId) {
+        notificationData.tenant_id = tenantId;
+      }
+
+      const notification = await Notification.create(notificationData);
 
       // Send email notification if requested
       if (sendEmail && emailTemplate && userEmail) {
         try {
+          console.log(`📨 Notification Service: Attempting to send email to ${userEmail} for document ${documentId || documentName}`);
           notification.email_status = 'pending';
           await notification.save();
 
@@ -86,9 +95,11 @@ class NotificationService {
             notification.email_status = 'sent';
             notification.email_provider_id = emailResult.messageId;
             notification.email_sent_at = new Date();
+            console.log(`✅ Email sent successfully to ${userEmail}`);
           } else {
             notification.email_status = 'failed';
             notification.email_error = emailResult.error;
+            console.error(`❌ Email send failed to ${userEmail}: ${emailResult.error}`);
           }
           await notification.save();
         } catch (emailError) {

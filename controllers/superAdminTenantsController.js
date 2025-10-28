@@ -1572,6 +1572,16 @@ const updateTenantUser = async (req, res) => {
   try {
     const { tenant, userId } = req.params;
     const { name, phone, roleIds, password, is_active } = req.body;
+    
+    // Debug: Log incoming request data
+    console.log('[Tenant User Update] Request body:', {
+      name,
+      phone,
+      roleIds,
+      password: password ? '***' : 'NOT PROVIDED',
+      is_active,
+      passwordLength: password ? password.length : 0
+    });
 
     // Validate tenant ID
     if (!tenant.match(/^[0-9a-fA-F]{24}$/)) {
@@ -1604,8 +1614,8 @@ const updateTenantUser = async (req, res) => {
     if (name !== undefined && (!name || !name.trim())) {
       validationErrors.name = ['Name is required'];
     }
-    if (password !== undefined && password && password.length < 6) {
-      validationErrors.password = ['Password must be at least 6 characters'];
+    if (password !== undefined && password && password.length < 8) {
+      validationErrors.password = ['Password must be at least 8 characters'];
     }
     if (roleIds !== undefined && (!roleIds || roleIds.length === 0)) {
       validationErrors.roleIds = ['At least one role is required'];
@@ -1631,17 +1641,74 @@ const updateTenantUser = async (req, res) => {
     // Populate roles for response
     await user.populate('role_ids', 'name description permissions');
 
-    // Update user in Auth0
+    // Update password in Auth0 if provided (use dedicated function)
+    let passwordUpdated = false;
+    if (password !== undefined && password && password.trim().length > 0) {
+      console.log(`[Tenant User Update] Password update requested for user: ${user.email}, auth0_id: ${user.auth0_id || 'N/A'}`);
+      
+      // Validate password length
+      if (password.length < 8) {
+        return res.status(422).json({
+          success: false,
+          message: 'Validation failed',
+          errors: {
+            password: ['Password must be at least 8 characters']
+          }
+        });
+      }
+      
+      if (!user.auth0_id) {
+        console.warn(`[Tenant User Update] User ${user.email} does not have auth0_id. Creating Auth0 user first.`);
+        try {
+          const auth0Service = require('../services/auth0Service');
+          const auth0User = await auth0Service.ensureAuth0User({
+            _id: user._id,
+            email: user.email,
+            full_name: user.full_name,
+            phone: user.phone,
+            password: password,
+            is_active: user.is_active,
+            role_ids: user.role_ids || []
+          });
+          
+          if (auth0User) {
+            user.auth0_id = auth0User.user_id;
+            await user.save();
+            passwordUpdated = true;
+            console.log(`[Tenant User Update] Auth0 user created with password: ${auth0User.user_id}`);
+          }
+        } catch (auth0Error) {
+          console.error('[Tenant User Update] Failed to create Auth0 user:', auth0Error.message);
+          console.error('[Tenant User Update] Full error:', auth0Error);
+          // Don't return error - allow other updates to succeed
+          // Just log the error and continue
+        }
+      } else {
+        try {
+          console.log(`[Tenant User Update] Updating password for auth0_id: ${user.auth0_id}`);
+          const auth0Service = require('../services/auth0Service');
+          await auth0Service.setAuth0Password(user.auth0_id, password);
+          passwordUpdated = true;
+          console.log(`[Tenant User Update] Password updated successfully for: ${user.email}`);
+        } catch (passwordError) {
+          console.error('[Tenant User Update] Failed to update password:', passwordError.message);
+          console.error('[Tenant User Update] Full error:', passwordError);
+          // Don't return error - allow other updates to succeed
+          // Just log the error and continue
+        }
+      }
+    }
+
+    // Update user in Auth0 (if auth0_id exists)
+    // Note: password is handled separately above using setAuth0Password
     if (user.auth0_id) {
       try {
-        console.log(`🔐 Updating Auth0 user: ${user.auth0_id}`);
         const auth0Service = require('../services/auth0Service');
 
         const auth0UpdateData = {};
         if (name) auth0UpdateData.full_name = name.trim();
         if (phone !== undefined) auth0UpdateData.phone = phone?.trim() || '';
         if (is_active !== undefined) auth0UpdateData.is_active = is_active;
-        if (password) auth0UpdateData.password = password; // Password sent to Auth0 only
 
         await auth0Service.updateAuth0User(user.auth0_id, auth0UpdateData);
 
@@ -1649,14 +1716,10 @@ const updateTenantUser = async (req, res) => {
         if (roleIds) {
           await auth0Service.syncUserRoles(user.auth0_id, roleIds);
         }
-
-        console.log(`✅ Auth0 user updated successfully`);
       } catch (auth0Error) {
-        console.error('❌ Failed to update Auth0 user:', auth0Error.message);
+        console.error('[Tenant User Update] Failed to update Auth0 user:', auth0Error.message);
         // Don't fail the entire operation if Auth0 fails
       }
-    } else {
-      console.log('⚠️ User does not have auth0_id, skipping Auth0 update');
     }
 
     // Log audit
@@ -1675,9 +1738,19 @@ const updateTenantUser = async (req, res) => {
       }
     });
 
+    // Build response message
+    let message = 'User updated successfully';
+    if (password !== undefined && password && !passwordUpdated) {
+      message = 'User updated successfully, but password update failed';
+    } else if (password !== undefined && password && passwordUpdated) {
+      message = 'User updated successfully, password updated in Auth0';
+    }
+    
+    console.log(`[Tenant User Update] Final status - passwordProvided: ${password !== undefined && password}, passwordUpdated: ${passwordUpdated}`);
+
     res.status(200).json({
       success: true,
-      message: 'User updated successfully',
+      message: message,
       data: {
         id: user._id,
         full_name: user.full_name,
@@ -1687,7 +1760,8 @@ const updateTenantUser = async (req, res) => {
         roles: user.role_ids || [],
         created_at: user.created_at,
         updated_at: user.updated_at
-      }
+      },
+      password_updated: passwordUpdated
     });
   } catch (error) {
     console.error('Error updating tenant user:', error);

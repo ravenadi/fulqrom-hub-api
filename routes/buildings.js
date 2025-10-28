@@ -5,6 +5,7 @@ const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
 const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -412,6 +413,9 @@ router.post('/', checkModulePermission('buildings', 'create'), async (req, res) 
     await building.populate('site_id', 'site_name address');
     await building.populate('customer_id', 'organisation.organisation_name');
 
+    // Log audit for building creation
+    await logCreate({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
+
     res.status(201).json({
       success: true,
       message: 'Building created successfully',
@@ -493,6 +497,9 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       });
     }
 
+    // Log audit for building update
+    await logUpdate({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
+
     // Add raw IDs to the response for convenience
     const responseData = building.toObject();
     responseData.site_id_raw = building.site_id;
@@ -536,6 +543,9 @@ router.delete('/:id', checkResourcePermission('building', 'delete', (req) => req
         message: 'Building not found or you do not have permission to delete it'
       });
     }
+
+    // Log audit for building deletion (before deletion)
+    await logDelete({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
 
     res.status(200).json({
       success: true,

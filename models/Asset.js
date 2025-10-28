@@ -280,4 +280,11 @@ AssetSchema.set('toObject', { virtuals: true });
 // Apply tenant plugin for multi-tenancy support
 AssetSchema.plugin(tenantPlugin);
 
-module.exports = mongoose.model('Asset', AssetSchema);
+const Asset = mongoose.model('Asset', AssetSchema);
+
+// Setup audit hooks
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
+addAuditContextHelper(Asset);
+setupAuditHooks(Asset, { module: 'asset' });
+
+module.exports = Asset;

@@ -14,6 +14,9 @@ class ReminderService {
   async sendExpiryReminders(daysBefore = [30, 7, 1]) {
     try {
       const today = new Date();
+      // Set to start of today (midnight)
+      today.setHours(0, 0, 0, 0);
+      
       const reminders = {
         sent: 0,
         failed: 0,
@@ -21,26 +24,66 @@ class ReminderService {
       };
 
       for (const days of daysBefore) {
+        // Calculate target date (X days from today)
         const targetDate = new Date(today);
         targetDate.setDate(today.getDate() + days);
+        
+        // Format target date as YYYY-MM-DD for comparison
+        const targetDateStr = targetDate.toISOString().split('T')[0];
+        
+        // Escape special regex characters in the date string
+        const escapedDate = targetDateStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-        // Find documents expiring on target date
+        // Find documents with expiry_date matching the target date
+        // Handle both YYYY-MM-DD format and ISO date strings (YYYY-MM-DDTHH:mm:ss.sssZ)
+        // Check both root level expiry_date and metadata.expiry_date for backward compatibility
+        // Use regex to match dates that start with the target date string
         const expiringDocs = await Document.find({
-          'metadata.expiry_date': {
-            $gte: targetDate.toISOString().split('T')[0], // Start of target date
-            $lt: new Date(targetDate.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // End of target date
-          }
+          $or: [
+            // Exact match for YYYY-MM-DD format
+            { expiry_date: targetDateStr },
+            // Regex match for dates starting with YYYY-MM-DD (handles ISO strings)
+            { expiry_date: { $regex: `^${escapedDate}` } },
+            // Same for metadata.expiry_date
+            { 'metadata.expiry_date': targetDateStr },
+            { 'metadata.expiry_date': { $regex: `^${escapedDate}` } }
+          ]
         }).lean();
 
-        console.log(`Found ${expiringDocs.length} documents expiring in ${days} days`);
+        console.log(`Checking for documents expiring in ${days} days (target date: ${targetDateStr})`);
+        console.log(`Found ${expiringDocs.length} documents expiring on ${targetDateStr}`);
 
         for (const doc of expiringDocs) {
           try {
+            // Get expiry date from root level or metadata (backward compatibility)
+            let expiryDate = doc.expiry_date || doc.metadata?.expiry_date;
+            
+            if (!expiryDate) {
+              console.log(`Document ${doc._id} has no expiry date, skipping`);
+              continue;
+            }
+
+            // Normalize expiry date to YYYY-MM-DD format for comparison
+            let normalizedExpiryDate = expiryDate;
+            if (expiryDate.includes('T')) {
+              // It's an ISO string, extract just the date part
+              normalizedExpiryDate = expiryDate.split('T')[0];
+            } else if (expiryDate.includes(' ')) {
+              // It might be a date with time separated by space
+              normalizedExpiryDate = expiryDate.split(' ')[0];
+            }
+
+            // Verify the normalized expiry date matches our target
+            if (normalizedExpiryDate !== targetDateStr) {
+              console.log(`Document ${doc._id} expiry date ${expiryDate} (normalized: ${normalizedExpiryDate}) doesn't match target ${targetDateStr}, skipping`);
+              continue;
+            }
+
             // Determine who to notify
             const recipients = this.getDocumentRecipients(doc);
 
             if (recipients.length === 0) {
-              console.log(`No recipients found for document ${doc._id}`);
+              console.log(`No recipients found for document ${doc._id} (${doc.name})`);
               continue;
             }
 
@@ -49,18 +92,22 @@ class ReminderService {
             if (days <= 1) priority = 'urgent';
             else if (days <= 7) priority = 'high';
 
+            // Use normalized date for display
+            const displayExpiryDate = normalizedExpiryDate;
+
             // Send notifications to all recipients
             await notificationService.sendBulkNotifications(
               recipients,
               {
                 title: `Document Expiring in ${days} Day${days !== 1 ? 's' : ''}`,
-                message: `Document "${doc.name}" will expire on ${doc.metadata.expiry_date}. Please review and renew if necessary.`,
+                message: `Document "${doc.name}" will expire on ${displayExpiryDate}. Please review and renew if necessary.`,
                 type: 'document_expiry_reminder',
                 priority,
                 documentId: doc._id,
                 documentName: doc.name,
+                tenantId: doc.tenant_id, // Required for multi-tenancy
                 metadata: {
-                  expiry_date: doc.metadata.expiry_date,
+                  expiry_date: displayExpiryDate,
                   days_until_expiry: days
                 },
                 building: doc.location?.building?.building_name || '',
@@ -78,7 +125,7 @@ class ReminderService {
                   status_class: priority === 'urgent' ? 'rejected' : priority === 'high' ? 'pending' : 'approved',
                   reviewer_name: 'System Reminder',
                   review_date_formatted: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-                  comment: `This document will expire in ${days} day${days !== 1 ? 's' : ''} on ${doc.metadata.expiry_date}. Please review and renew if necessary.`,
+                  comment: `This document will expire in ${days} day${days !== 1 ? 's' : ''} on ${displayExpiryDate}. Please review and renew if necessary.`,
                   document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/hub/documents/${doc._id}`
                 }
               }
@@ -88,10 +135,12 @@ class ReminderService {
             reminders.documents.push({
               id: doc._id,
               name: doc.name,
-              expiry_date: doc.metadata.expiry_date,
+              expiry_date: displayExpiryDate,
               days_until_expiry: days,
               recipients_count: recipients.length
             });
+            
+            console.log(`✓ Sent expiry reminder for document "${doc.name}" to ${recipients.length} recipient(s)`);
           } catch (error) {
             console.error(`Failed to send expiry reminder for document ${doc._id}:`, error);
             reminders.failed++;
@@ -280,12 +329,23 @@ class ReminderService {
     const recipients = [];
     const seenEmails = new Set();
 
-    // Add document creator
+    // Add document creator (created_by is an object with user_id, user_name, email)
     if (document.created_by) {
-      const email = document.created_by;
-      if (!seenEmails.has(email)) {
+      let email, userId;
+      
+      // Handle both object format {user_id, user_name, email} and string format (backward compatibility)
+      if (typeof document.created_by === 'object') {
+        email = document.created_by.email || document.created_by.user_email;
+        userId = document.created_by.user_id || email;
+      } else {
+        // Legacy: created_by was a simple email string
+        email = document.created_by;
+        userId = email;
+      }
+      
+      if (email && !seenEmails.has(email)) {
         recipients.push({
-          user_id: document.created_by,
+          user_id: userId,
           user_email: email
         });
         seenEmails.add(email);

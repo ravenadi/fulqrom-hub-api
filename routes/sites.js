@@ -6,6 +6,7 @@ const Asset = require('../models/Asset');
 const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { tenantContext } = require('../middleware/tenantContext');
+const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -511,6 +512,9 @@ router.post('/', checkModulePermission('sites', 'create'), tenantContext, async 
     const createdSite = await Site.findById(site._id)
       .populate('customer_id', 'organisation.organisation_name');
 
+    // Log audit for site creation
+    await logCreate({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
+
     res.status(201).json({
       success: true,
       message: 'Site created successfully',
@@ -567,6 +571,9 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
       });
     }
 
+    // Log audit for site update
+    await logUpdate({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
+
     res.status(200).json({
       success: true,
       message: 'Site updated successfully',
@@ -594,15 +601,11 @@ router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.par
       });
     }
 
-    // Soft delete ONLY if belongs to user's tenant
-    const site = await Site.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        tenant_id: tenantId  // Ensure user owns this resource
-      },
-      { is_active: false },
-      { new: true }
-    );
+    // Get site before deletion for audit log
+    const site = await Site.findOne({
+      _id: req.params.id,
+      tenant_id: tenantId
+    });
 
     if (!site) {
       return res.status(404).json({
@@ -610,6 +613,15 @@ router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.par
         message: 'Site not found or you do not have permission to delete it'
       });
     }
+
+    // Log audit for site deletion (before deletion)
+    await logDelete({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
+
+    // Soft delete
+    await Site.findOneAndUpdate(
+      { _id: req.params.id, tenant_id: tenantId },
+      { is_active: false }
+    );
 
     res.status(200).json({
       success: true,

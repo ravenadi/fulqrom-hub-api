@@ -28,7 +28,9 @@ const authorize = (req, res, next) => {
 
   // Skip authorization for dropdowns (read-only data, no module-specific permissions needed)
   if (req.path.startsWith('/dropdowns')) {
-    console.log(`⚠️  Skipping permission check for dropdowns endpoint: ${req.method} ${req.path}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`⚠️  Skipping permission check for dropdowns endpoint: ${req.method} ${req.path}`);
+    }
     return next();
   }
 
@@ -41,14 +43,18 @@ const authorize = (req, res, next) => {
   const targetModule = getModuleFromPath(req.path);
 
   if (!targetModule) {
-    console.log(`⚠️  No module mapping for path: ${req.path}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`⚠️  No module mapping for path: ${req.path}`);
+    }
     return next(); // Allow if no mapping found
   }
 
   // Get required permission based on HTTP method
   const requiredPermission = getPermissionFromMethod(req.method);
 
-  console.log(`🔐 Checking ${requiredPermission} permission for module: ${targetModule}`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`🔐 Checking ${requiredPermission} permission for module: ${targetModule}`);
+  }
 
   // Apply module permission check - checkModulePermission handles all logic including Admin bypass
   checkModulePermission(targetModule, requiredPermission)(req, res, next);

@@ -7,7 +7,8 @@ const {
   deleteAuth0User,
   getAuth0UserByEmail,
   ensureAuth0User,
-  syncUserRoles
+  syncUserRoles,
+  setAuth0Password
 } = require('../services/auth0Service');
 const { validateUserCreation, validateUserElevation, getAccessibleResources } = require('../middleware/authorizationRules');
 const { checkModulePermission } = require('../middleware/checkPermission');
@@ -177,6 +178,7 @@ router.post('/', validateUserCreation, async (req, res) => {
       last_name,
       lastName,
       phone,
+      password,
       role_ids,
       roleIds,
       is_active,
@@ -377,6 +379,7 @@ router.post('/', validateUserCreation, async (req, res) => {
         email: user.email,
         full_name: user.full_name,
         phone: user.phone,
+        password: password, // Pass password if provided
         is_active: user.is_active,
         role_ids: user.role_ids
       });
@@ -385,7 +388,7 @@ router.post('/', validateUserCreation, async (req, res) => {
       if (auth0User) {
         user.auth0_id = auth0User.user_id;
         await user.save();
-        console.log(`✅ Auth0 user ensured: ${auth0User.user_id}`);
+        console.log(`✅ Auth0 user ensured: ${auth0User.user_id}${password ? ' with password' : ''}`);
       }
     } catch (auth0Error) {
       console.error('Auth0 user creation/linking failed:', auth0Error.message);
@@ -446,6 +449,7 @@ router.put('/:id', validateUserElevation, async (req, res) => {
       last_name,
       lastName,
       phone,
+      password,
       role_ids,
       roleIds,
       is_active,
@@ -659,6 +663,41 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     // Verify the save was successful
     console.log(`✅ User ${user.email} saved successfully with ${user.role_ids.length} roles`);
 
+    // Update password in Auth0 if provided
+    let passwordUpdated = false;
+    if (password) {
+      if (!user.auth0_id) {
+        // Create Auth0 user first if it doesn't exist
+        try {
+          const auth0User = await ensureAuth0User({
+            _id: user._id,
+            email: user.email,
+            full_name: user.full_name,
+            phone: user.phone,
+            password: password,
+            is_active: user.is_active,
+            role_ids: user.role_ids || []
+          });
+          
+          if (auth0User) {
+            user.auth0_id = auth0User.user_id;
+            await user.save();
+            passwordUpdated = true;
+          }
+        } catch (auth0CreateError) {
+          console.error('Failed to create Auth0 user with password:', auth0CreateError.message);
+        }
+      } else {
+        try {
+          await setAuth0Password(user.auth0_id, password);
+          passwordUpdated = true;
+        } catch (passwordError) {
+          console.error('Failed to update password in Auth0:', passwordError.message);
+          // Continue - password update failed but user data is updated
+        }
+      }
+    }
+
     // Update user in Auth0 (if auth0_id exists)
     let auth0Updated = false;
     let rolesSynced = false;
@@ -700,12 +739,21 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     // Populate roles before returning
     await user.populate('role_ids', 'name description permissions');
 
+    // Build response message
+    let message = 'User updated successfully';
+    if (password && !passwordUpdated) {
+      message = 'User updated successfully, but password update failed';
+    } else if (password && passwordUpdated) {
+      message = 'User updated successfully, password updated in Auth0';
+    }
+
     res.status(200).json({
       success: true,
-      message: 'User updated successfully',
+      message: message,
       data: user,
       auth0_synced: auth0Updated,
-      roles_synced: rolesSynced
+      roles_synced: rolesSynced,
+      password_updated: passwordUpdated
     });
 
   } catch (error) {

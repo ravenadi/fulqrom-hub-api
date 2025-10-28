@@ -62,7 +62,9 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
 
       // CHECK 0: Check for super admin first (before database query)
       if (req.user.is_super_admin) {
-        console.log(`✅ Super admin bypass: ${req.user.email || req.user.full_name} has super admin privileges - granting access to ${resourceType}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✅ Super admin bypass: ${req.user.email || req.user.full_name} has super admin privileges - granting access to ${resourceType}`);
+        }
         req.permissionSource = 'super_admin';
         return next();
       }
@@ -93,7 +95,9 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         );
 
         if (hasAdminRole) {
-          console.log(`✅ Admin bypass: ${user.email} has Admin role - granting access`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`✅ Admin bypass: ${user.email} has Admin role - granting access`);
+          }
           req.permissionSource = 'admin_role';
           return next();
         }
@@ -224,7 +228,9 @@ const checkModulePermission = (moduleName, action) => {
 
       // CHECK 0: Check for super admin first (before database query)
       if (req.user.is_super_admin) {
-        console.log(`✅ Super admin bypass: ${req.user.email || req.user.full_name} has super admin privileges - granting access to ${moduleName}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✅ Super admin bypass: ${req.user.email || req.user.full_name} has super admin privileges - granting access to ${moduleName}`);
+        }
         req.permissionSource = 'super_admin';
         return next();
       }
@@ -255,7 +261,9 @@ const checkModulePermission = (moduleName, action) => {
         );
 
         if (hasAdminRole) {
-          console.log(`✅ Admin bypass: ${user.email} has Admin role - granting access to ${moduleName}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`✅ Admin bypass: ${user.email} has Admin role - granting access to ${moduleName}`);
+          }
           req.permissionSource = 'admin_role';
           return next();
         }

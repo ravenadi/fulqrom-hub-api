@@ -24,14 +24,18 @@ const checkJwt = auth({
  */
 const attachUser = async (req, res, next) => {
   try {
-    // Debug: Log what we received from JWT validation
-    console.log('📋 attachUser: req.auth =', JSON.stringify(req.auth, null, 2));
+    // Debug: Log what we received from JWT validation (only in development)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📋 attachUser: req.auth =', JSON.stringify(req.auth, null, 2));
+    }
 
     // The JWT payload is available in req.auth.payload (express-oauth2-jwt-bearer wraps it)
     const payload = req.auth?.payload || req.auth;
 
     if (!payload || !payload.sub) {
-      console.log('❌ attachUser: Missing payload or sub claim');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('❌ attachUser: Missing payload or sub claim');
+      }
       return res.status(401).json({
         success: false,
         message: 'Authentication required. No user information in token.'
@@ -40,12 +44,16 @@ const attachUser = async (req, res, next) => {
 
     // Auth0 user ID is in the 'sub' claim (e.g., "auth0|abc123")
     const auth0UserId = payload.sub;
-    console.log('✅ Found auth0UserId:', auth0UserId);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Found auth0UserId:', auth0UserId);
+    }
 
     // Check if user is super_admin via Auth0 claims
     const auth0Roles = payload['https://fulqrom.com.au/roles'] || [];
     if (auth0Roles.includes('super_admin')) {
-      console.log('✅ Super admin detected via Auth0 JWT claims - checking database for user record');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Super admin detected via Auth0 JWT claims - checking database for user record');
+      }
       
       // Even super_admin users should have a database record for consistency
       // Try to find the user in MongoDB first
@@ -54,7 +62,9 @@ const attachUser = async (req, res, next) => {
 
       if (user) {
         // Super admin user found in database - use database record
-        console.log('✅ Super admin user found in database - using database record');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Super admin user found in database - using database record');
+        }
         req.user = {
           id: user._id.toString(),
           userId: user._id.toString(),
@@ -71,7 +81,9 @@ const attachUser = async (req, res, next) => {
         return next();
       } else {
         // Super admin user not in database - this shouldn't happen in production
-        console.log('⚠️ Super admin user not found in database - creating fallback user object');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('⚠️ Super admin user not found in database - creating fallback user object');
+        }
         // Create a fallback user object with a special ID that won't cause ObjectId issues
         req.user = {
           id: 'super_admin_fallback',
@@ -125,9 +137,35 @@ const attachUser = async (req, res, next) => {
       tenant_id: user.tenant_id // Add tenant_id for tenantContext middleware
     };
 
+    // Log login only for fresh tokens AND only for GET requests (not CRUD operations)
+    // Check if token was issued recently (within last 60 seconds) = new login
+    // Skip login logging for POST/PUT/PATCH/DELETE to avoid logging on create/update/delete operations
+    try {
+      const method = req.method;
+      const isReadOperation = method === 'GET' || method === 'OPTIONS';
+      
+      // Only log login for read operations (GET requests), not for CRUD operations
+      if (isReadOperation) {
+        const payload = req.auth?.payload || req.auth;
+        if (payload && payload.iat) {
+          const tokenIssuedAt = payload.iat * 1000; // Convert to milliseconds
+          const now = Date.now();
+          const tokenAge = now - tokenIssuedAt;
+          
+          // If token was issued within last 60 seconds, it's a new login
+          if (tokenAge < 60000) {
+            const { logLogin } = require('../utils/auditLogger');
+            logLogin(req, payload.iat); // Pass token IAT for better duplicate detection
+          }
+        }
+      }
+    } catch (err) {
+      // Silently fail - don't break auth flow
+    }
+
     next();
   } catch (error) {
-    console.error('Error attaching user:', error);
+    console.error('Error attaching user:', error.message);
     return res.status(500).json({
       success: false,
       message: 'Error authenticating user',

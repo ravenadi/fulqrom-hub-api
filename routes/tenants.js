@@ -289,6 +289,7 @@ router.post('/', checkModulePermission('tenants', 'create'), validateTenantData,
     };
 
     const tenant = new BuildingTenant(tenantData);
+    tenant.$setAuditContext(req, 'create');
     await tenant.save();
 
     // Populate the created tenant before returning
@@ -324,14 +325,11 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
     }
 
     // Update ONLY if belongs to user's tenant
-    const tenant = await BuildingTenant.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        tenant_id: tenantId  // Ensure user owns this resource
-      },
-      req.body,
-      { new: true, runValidators: true }
-    );
+    // Use findOneAndUpdate with audit context to trigger hooks
+    const tenant = await BuildingTenant.findOne({
+      _id: req.params.id,
+      tenant_id: tenantId
+    });
 
     if (!tenant) {
       return res.status(404).json({
@@ -339,6 +337,17 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
         message: 'Building tenant not found or you do not have permission to update it'
       });
     }
+
+    // Set audit context and update
+    tenant.$setAuditContext(req, 'update');
+    Object.assign(tenant, req.body);
+    await tenant.save();
+
+    // Populate tenant before returning
+    await tenant.populate('customer_id', 'organisation.organisation_name');
+    await tenant.populate('site_id', 'site_name address');
+    await tenant.populate('building_id', 'building_name building_code');
+    await tenant.populate('floor_id', 'floor_name floor_number');
 
     res.status(200).json({
       success: true,
@@ -463,8 +472,8 @@ router.delete('/:id', checkResourcePermission('tenant', 'delete', (req) => req.p
       });
     }
 
-    // Delete ONLY if belongs to user's tenant
-    const tenant = await BuildingTenant.findOneAndDelete({
+    // Find tenant first to set audit context before delete
+    const tenant = await BuildingTenant.findOne({
       _id: req.params.id,
       tenant_id: tenantId  // Ensure user owns this resource
     });
@@ -475,6 +484,10 @@ router.delete('/:id', checkResourcePermission('tenant', 'delete', (req) => req.p
         message: 'Building tenant not found or you do not have permission to delete it'
       });
     }
+
+    // Set audit context before deletion
+    tenant.$setAuditContext(req, 'delete');
+    await tenant.remove(); // Use remove() to trigger post-remove hook
 
     res.status(200).json({
       success: true,

@@ -129,6 +129,10 @@ const initializeDatabase = require('./utils/initializeDatabase');
 mongoose.connect(MONGODB_URI)
   .then(async () => {
     console.log('✓ Database connected successfully');
+    
+    // Load all action hooks (must be after DB connection, before routes)
+    require('./hooks');
+    
     // Initialize database with default data
     await initializeDatabase();
   })
@@ -145,9 +149,11 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`✓ Server is running on port ${PORT}`);
-});
+// Start server (skip in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`✓ Server is running on port ${PORT}`);
+  });
+}
 
 module.exports = app;

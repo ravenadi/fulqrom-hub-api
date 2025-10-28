@@ -1,5 +1,6 @@
 const express = require('express');
 const Customer = require('../models/Customer');
+const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 
 const router = express.Router({ mergeParams: true });
 
@@ -230,6 +231,19 @@ router.post('/', async (req, res) => {
     // Get the newly added contact
     const newContact = customer.contact_methods[customer.contact_methods.length - 1];
 
+    // Log audit for contact creation
+    const contactName = newContact.full_name || newContact.method_value || 'New Contact';
+    const customerName = customer.organisation?.organisation_name || 
+                        customer.company_profile?.trading_name || 
+                        'Unknown Customer';
+    await logCreate({ 
+      module: 'contact', 
+      resourceName: `${contactName} (${customerName})`, 
+      req, 
+      moduleId: newContact._id,
+      resource: newContact.toObject ? newContact.toObject() : newContact
+    });
+
     res.status(201).json({
       success: true,
       message: 'Contact created successfully',
@@ -278,9 +292,29 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    // Store old contact data for audit
+    const oldContact = JSON.parse(JSON.stringify(customer.contact_methods[contactIndex]));
+
     // Update the contact
     Object.assign(customer.contact_methods[contactIndex], req.body);
     await customer.save();
+
+    // Log audit for contact update
+    const contactName = customer.contact_methods[contactIndex].full_name || 
+                       customer.contact_methods[contactIndex].method_value || 
+                       'Contact';
+    const customerName = customer.organisation?.organisation_name || 
+                        customer.company_profile?.trading_name || 
+                        'Unknown Customer';
+    await logUpdate({ 
+      module: 'contact', 
+      resourceName: `${contactName} (${customerName})`, 
+      req, 
+      moduleId: customer.contact_methods[contactIndex]._id,
+      resource: customer.contact_methods[contactIndex].toObject ? 
+                customer.contact_methods[contactIndex].toObject() : 
+                customer.contact_methods[contactIndex]
+    });
 
     res.status(200).json({
       success: true,
@@ -369,9 +403,25 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
+    // Store contact data for audit before deletion
     const deletedContact = customer.contact_methods[contactIndex];
+
+    // Remove the contact
     customer.contact_methods.splice(contactIndex, 1);
     await customer.save();
+
+    // Log audit for contact deletion
+    const contactName = deletedContact.full_name || deletedContact.method_value || 'Contact';
+    const customerName = customer.organisation?.organisation_name || 
+                        customer.company_profile?.trading_name || 
+                        'Unknown Customer';
+    await logDelete({ 
+      module: 'contact', 
+      resourceName: `${contactName} (${customerName})`, 
+      req, 
+      moduleId: deletedContact._id,
+      resource: deletedContact.toObject ? deletedContact.toObject() : deletedContact
+    });
 
     res.status(200).json({
       success: true,

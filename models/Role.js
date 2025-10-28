@@ -152,18 +152,18 @@ RoleSchema.statics.getPredefinedRoles = function() {
     },
     {
       name: 'Tenants',
-      description: 'Building tenants with minimal access - can only view floors',
+      description: 'Building tenants with view-only access to their resources',
       permissions: [
-        { entity: 'sites', view: false, create: false, edit: false, delete: false },
-        { entity: 'buildings', view: false, create: false, edit: false, delete: false },
+        { entity: 'sites', view: true, create: false, edit: false, delete: false },
+        { entity: 'buildings', view: true, create: false, edit: false, delete: false },
         { entity: 'floors', view: true, create: false, edit: false, delete: false },
         { entity: 'tenants', view: false, create: false, edit: false, delete: false },
-        { entity: 'documents', view: false, create: false, edit: false, delete: false },
-        { entity: 'assets', view: false, create: false, edit: false, delete: false },
+        { entity: 'documents', view: true, create: false, edit: false, delete: false },
+        { entity: 'assets', view: true, create: false, edit: false, delete: false },
         { entity: 'vendors', view: false, create: false, edit: false, delete: false },
         { entity: 'customers', view: false, create: false, edit: false, delete: false },
         { entity: 'users', view: false, create: false, edit: false, delete: false },
-        { entity: 'analytics', view: false, create: false, edit: false, delete: false }
+        { entity: 'analytics', view: true, create: false, edit: false, delete: false }
       ]
     }
   ];

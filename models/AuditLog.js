@@ -1,68 +1,64 @@
 const mongoose = require('mongoose');
 const tenantPlugin = require('../plugins/tenantPlugin');
 
-// Audit Log schema for tracking user actions
+// Audit Log schema - Simplified to track: action, description, module, module_id, user, ip, agent
 const AuditLogSchema = new mongoose.Schema({
-  user_id: {
-    type: String,
-    trim: true
-  },
-  user_email: {
-    type: String,
-    trim: true
-  },
-  user_name: {
-    type: String,
-    trim: true
-  },
   action: {
     type: String,
     required: true,
     enum: [
-      'create', 'read', 'update', 'delete',
-      'login', 'logout', 'deactivate', 'activate',
-      'assign_role', 'remove_role',
-      'grant_access', 'revoke_access'
+      'create', 'read', 'update', 'delete', 'auth'
     ],
+    trim: true,
+    index: true
+  },
+  description: {
+    type: String,
+    required: true,
     trim: true
   },
-  resource_type: {
+  module: {
     type: String,
     required: true,
     enum: [
-      'user', 'role', 'customer', 'site', 'building',
-      'floor', 'asset', 'tenant', 'document', 'vendor'
+      'auth', 'customer', 'site', 'building', 'floor', 
+      'asset', 'tenant', 'building_tenant', 'document', 'user', 'vendor'
     ],
-    trim: true
+    trim: true,
+    index: true
   },
-  resource_id: {
+  module_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    index: true
+  },
+  user: {
+    id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    }
+  },
+  ip: {
     type: String,
     trim: true
   },
-  resource_name: {
+  agent: {
     type: String,
     trim: true
   },
-  details: {
+  detail: {
     type: mongoose.Schema.Types.Mixed
   },
-  ip_address: {
-    type: String,
-    trim: true
-  },
-  user_agent: {
-    type: String,
-    trim: true
-  },
-  status: {
-    type: String,
-    enum: ['success', 'failure', 'error'],
-    default: 'success',
-    trim: true
-  },
-  error_message: {
-    type: String,
-    trim: true
+  tenant_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    index: true
   },
   created_at: {
     type: Date,
@@ -74,14 +70,13 @@ const AuditLogSchema = new mongoose.Schema({
 });
 
 // Indexes for efficient querying
-AuditLogSchema.index({ user_id: 1, created_at: -1 });
-AuditLogSchema.index({ resource_type: 1, resource_id: 1 });
-AuditLogSchema.index({ action: 1 });
+AuditLogSchema.index({ 'user.id': 1, created_at: -1 });
+AuditLogSchema.index({ module: 1, action: 1 });
+AuditLogSchema.index({ 'module_id': 1 });
+AuditLogSchema.index({ tenant_id: 1, created_at: -1 });
 AuditLogSchema.index({ created_at: -1 });
-AuditLogSchema.index({ status: 1 });
 
-// Apply tenant plugin for multi-tenancy support but make tenant_id optional
-// since audit logs can track global operations (e.g., admin role management)
-AuditLogSchema.plugin(tenantPlugin, { required: false });
+// Note: tenant_id is now explicitly defined in schema instead of using plugin
 
 module.exports = mongoose.model('AuditLog', AuditLogSchema);
+

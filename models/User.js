@@ -150,4 +150,11 @@ UserSchema.set('toObject', { virtuals: true });
 // Apply tenant plugin for multi-tenancy support
 UserSchema.plugin(tenantPlugin);
 
-module.exports = mongoose.model('User', UserSchema);
+const User = mongoose.model('User', UserSchema);
+
+// Setup audit hooks
+const { setupAuditHooks, addAuditContextHelper } = require('../utils/auditHook');
+addAuditContextHelper(User);
+setupAuditHooks(User, { module: 'user' });
+
+module.exports = User;

@@ -44,7 +44,6 @@ const getAllRoles = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Roles fetched successfully',
       count: rolesWithCounts.length,
       total: totalRoles,
       page: pageNum,
@@ -93,7 +92,6 @@ const getRoleById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Role fetched successfully',
       data: {
         ...role.toObject(),
         user_count: userCount
@@ -104,7 +102,6 @@ const getRoleById = async (req, res) => {
     console.error('Error fetching role:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching role',
       error: error.message
     });
   }
@@ -133,7 +130,6 @@ const getRoleByName = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Role fetched successfully',
       data: {
         ...role.toObject(),
         user_count: userCount
@@ -163,8 +159,7 @@ const initializePredefinedRoles = async (req, res) => {
     await Role.initializePredefinedRoles();
 
     res.status(200).json({
-      success: true,
-      message: 'Predefined roles initialized successfully'
+      success: true
     });
 
   } catch (error) {
@@ -219,7 +214,6 @@ const getPermissionsMatrix = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Permissions matrix fetched successfully',
       data: {
         entities,
         permissions,

@@ -34,6 +34,7 @@ const {
 } = require('../middleware/searchHelpers');
 const emailService = require('../utils/emailService');
 const notificationService = require('../utils/notificationService');
+const { sendNotificationAsync, sendEmailAsync } = require('../utils/asyncHelpers');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 
 // Configure multer for memory storage
@@ -1045,8 +1046,9 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
       };
     }
 
-    // Create document
+    // Create document and set audit context
     const document = new Document(documentPayload);
+    document.$setAuditContext(req, 'create');
     await document.save();
 
     // Set document_group_id to the document's own ID after creation
@@ -1107,22 +1109,19 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
         description: document.description
       };
 
-      // Send emails to all approvers asynchronously (fire and forget)
-      setImmediate(() => {
-        documentData.approval_config.approvers.forEach(async (approver) => {
-          if (approver.user_email) {
-            try {
-              await emailService.sendDocumentAssignment({
-                to: approver.user_email,
-                documentId: document._id.toString(),
-                approverName: approver.user_name || approver.user_email,
-                documentDetails
-              });
-            } catch (emailError) {
-              console.error(`Failed to send approval email to ${approver.user_email}:`, emailError);
-            }
-          }
-        });
+      // Non-blocking: Send emails to all approvers after response
+      documentData.approval_config.approvers.forEach((approver) => {
+        if (approver.user_email) {
+          sendEmailAsync(
+            () => emailService.sendDocumentAssignment({
+              to: approver.user_email,
+              documentId: document._id.toString(),
+              approverName: approver.user_name || approver.user_email,
+              documentDetails
+            }),
+            `document_assignment_email_${approver.user_email}`
+          );
+        }
       });
     }
 
@@ -1443,14 +1442,11 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
     }
 
     // Update ONLY if belongs to user's tenant
-    const document = await Document.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        tenant_id: tenantId  // Ensure user owns this resource
-      },
-      updateData,
-      { new: true, runValidators: true }
-    ).lean();
+    // Use findOne, set audit context, and save to trigger hooks properly
+    const document = await Document.findOne({
+      _id: req.params.id,
+      tenant_id: tenantId
+    });
 
     if (!document) {
       return res.status(404).json({
@@ -1459,43 +1455,51 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
       });
     }
 
+    // Set audit context and update
+    document.$setAuditContext(req, 'update');
+    Object.assign(document, updateData);
+    await document.save();
+
+    // Convert to lean object for response
+    const documentLean = document.toObject();
+
     // Populate entity names dynamically
-    const names = await fetchEntityNames(document);
+    const names = await fetchEntityNames(documentLean);
     const documentWithNames = {
-      ...document,
+      ...documentLean,
       customer: {
-        customer_id: document.customer?.customer_id,
+        customer_id: documentLean.customer?.customer_id,
         customer_name: names.customer_name
       },
       location: {
-        site: document.location?.site?.site_id ? {
-          site_id: document.location.site.site_id,
+        site: documentLean.location?.site?.site_id ? {
+          site_id: documentLean.location.site.site_id,
           site_name: names.site_name
         } : undefined,
-        building: document.location?.building?.building_id ? {
-          building_id: document.location.building.building_id,
+        building: documentLean.location?.building?.building_id ? {
+          building_id: documentLean.location.building.building_id,
           building_name: names.building_name
         } : undefined,
-        floor: document.location?.floor?.floor_id ? {
-          floor_id: document.location.floor.floor_id,
+        floor: documentLean.location?.floor?.floor_id ? {
+          floor_id: documentLean.location.floor.floor_id,
           floor_name: names.floor_name
         } : undefined,
         // Multiple assets support
         assets: names.assets && names.assets.length > 0 ? names.assets : 
-                (document.location?.assets && document.location.assets.length > 0 ? document.location.assets : undefined),
+                (documentLean.location?.assets && documentLean.location.assets.length > 0 ? documentLean.location.assets : undefined),
         // Legacy single asset (for backward compatibility)
-        asset: document.location?.asset?.asset_id ? {
-          asset_id: document.location.asset.asset_id,
+        asset: documentLean.location?.asset?.asset_id ? {
+          asset_id: documentLean.location.asset.asset_id,
           asset_name: names.asset_name,
           asset_type: names.asset_type
         } : undefined,
          // building tenant id
-        tenant: document.location?.tenant?.tenant_id ? {
-          tenant_id: document.location.tenant.tenant_id,
+        tenant: documentLean.location?.tenant?.tenant_id ? {
+          tenant_id: documentLean.location.tenant.tenant_id,
           tenant_name: names.tenant_name
         } : undefined,
-        vendor: document.location?.vendor?.vendor_id ? {
-          vendor_id: document.location.vendor.vendor_id,
+        vendor: documentLean.location?.vendor?.vendor_id ? {
+          vendor_id: documentLean.location.vendor.vendor_id,
           vendor_name: names.vendor_name
         } : undefined
       }
@@ -1537,16 +1541,20 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
           );
 
           if (uniqueRecipients.length > 0) {
-            await notificationService.notifyDocumentStatusChanged(
-              document,
-              oldDocument.status,
-              document.status,
-              uniqueRecipients,
-              {
-                user_id: userId,
-                user_name: userName,
-                user_email: req.user?.email || userId
-              }
+            // Non-blocking: Send notifications after response
+            sendNotificationAsync(
+              () => notificationService.notifyDocumentStatusChanged(
+                document,
+                oldDocument.status,
+                document.status,
+                uniqueRecipients,
+                {
+                  user_id: userId,
+                  user_name: userName,
+                  user_email: req.user?.email || userId
+                }
+              ),
+              'document_status_changed'
             );
           }
         }
@@ -1561,17 +1569,21 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
         );
 
         if (addedApprovers.length > 0) {
-          await notificationService.notifyDocumentApproversAssigned(
-            document,
-            addedApprovers.map(approver => ({
-              user_id: approver.user_id,
-              user_email: approver.user_email
-            })),
-            {
-              user_id: userId,
-              user_name: userName,
-              user_email: req.user?.email || userId
-            }
+          // Non-blocking: Send notifications after response
+          sendNotificationAsync(
+            () => notificationService.notifyDocumentApproversAssigned(
+              document,
+              addedApprovers.map(approver => ({
+                user_id: approver.user_id,
+                user_email: approver.user_email
+              })),
+              {
+                user_id: userId,
+                user_name: userName,
+                user_email: req.user?.email || userId
+              }
+            ),
+            'document_approvers_assigned'
           );
         }
       } catch (notifError) {
@@ -2297,15 +2309,19 @@ router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) =
         );
 
         if (uniqueRecipients.length > 0) {
-          await notificationService.notifyDocumentApprovalStatusChanged(
-            document,
-            'Approved',
-            uniqueRecipients,
-            {
-              user_id: approved_by,
-              user_name: approved_by_name || approved_by,
-              user_email: approved_by_name || approved_by
-            }
+          // Non-blocking: Send notifications after response
+          sendNotificationAsync(
+            () => notificationService.notifyDocumentApprovalStatusChanged(
+              document,
+              'Approved',
+              uniqueRecipients,
+              {
+                user_id: approved_by,
+                user_name: approved_by_name || approved_by,
+                user_email: approved_by_name || approved_by
+              }
+            ),
+            'document_approved'
           );
         }
       } catch (notifError) {
@@ -2432,15 +2448,19 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
         );
 
         if (uniqueRecipients.length > 0) {
-          await notificationService.notifyDocumentApprovalStatusChanged(
-            document,
-            'Rejected',
-            uniqueRecipients,
-            {
-              user_id: rejected_by,
-              user_name: rejected_by_name || rejected_by,
-              user_email: rejected_by_name || rejected_by
-            }
+          // Non-blocking: Send notifications after response
+          sendNotificationAsync(
+            () => notificationService.notifyDocumentApprovalStatusChanged(
+              document,
+              'Rejected',
+              uniqueRecipients,
+              {
+                user_id: rejected_by,
+                user_name: rejected_by_name || rejected_by,
+                user_email: rejected_by_name || rejected_by
+              }
+            ),
+            'document_rejected'
           );
         }
       } catch (notifError) {
@@ -2896,65 +2916,59 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       }
     );
 
-    // Send notification emails and in-app notifications to all approvers (async, don't block response)
+    // Non-blocking: Send notification emails and in-app notifications to all approvers after response
     if (currentDocument.approval_config?.enabled && currentDocument.approval_config.approvers?.length > 0) {
-      setImmediate(async () => {
-        const documentDetails = {
-          name: newVersionDocument.name || newVersionDocument.file?.file_meta?.file_name || 'Unnamed Document',
-          category: newVersionDocument.category,
-          type: newVersionDocument.type
-        };
+      const documentDetails = {
+        name: newVersionDocument.name || newVersionDocument.file?.file_meta?.file_name || 'Unnamed Document',
+        category: newVersionDocument.category,
+        type: newVersionDocument.type
+      };
 
-        const statusUpdate = {
-          newStatus: currentDocument.approval_config.status,
-          oldStatus: currentVersionNumber,
-          reviewerName: uploadedBy.user_name || uploadedBy.email || 'Unknown',
-          reviewDate: new Date(),
-          comment: `New version ${newVersionNumber} uploaded. ${req.body.change_notes || ''}`
-        };
+      const statusUpdate = {
+        newStatus: currentDocument.approval_config.status,
+        oldStatus: currentVersionNumber,
+        reviewerName: uploadedBy.user_name || uploadedBy.email || 'Unknown',
+        reviewDate: new Date(),
+        comment: `New version ${newVersionNumber} uploaded. ${req.body.change_notes || ''}`
+      };
 
-        // Send email to all approvers
-        for (const approver of currentDocument.approval_config.approvers) {
-          if (approver.user_email) {
-            try {
-              await emailService.sendDocumentUpdate({
-                to: approver.user_email,
-                documentId: newVersionDocument._id.toString(),
-                creatorName: approver.user_name || approver.user_email,
-                documentDetails,
-                statusUpdate
-              });
-            } catch (emailError) {
-              // Email notification failed - continue
+      // Non-blocking: Send emails to all approvers after response
+      const approversToNotify = currentDocument.approval_config.approvers.filter(a => a.user_email);
+      
+      for (const approver of approversToNotify) {
+        sendEmailAsync(
+          () => emailService.sendDocumentUpdate({
+            to: approver.user_email,
+            documentId: newVersionDocument._id.toString(),
+            creatorName: approver.user_name || approver.user_email,
+            documentDetails,
+            statusUpdate
+          }),
+          `document_version_email_${approver.user_email}`
+        );
+      }
+
+      // Non-blocking: Send in-app notifications to all approvers
+      const recipients = approversToNotify.map(approver => ({
+        user_id: approver.user_id,
+        user_email: approver.user_email
+      }));
+
+      if (recipients.length > 0) {
+        sendNotificationAsync(
+          () => notificationService.notifyDocumentVersionUploaded(
+            currentDocument,
+            newVersionNumber,
+            recipients,
+            {
+              user_id: uploadedBy.user_id,
+              user_name: uploadedBy.user_name || uploadedBy.email || 'Unknown',
+              user_email: uploadedBy.email
             }
-          }
-        }
-
-        // Send in-app notifications to all approvers
-        try {
-          const recipients = currentDocument.approval_config.approvers
-            .filter(approver => approver.user_email)
-            .map(approver => ({
-              user_id: approver.user_id,
-              user_email: approver.user_email
-            }));
-
-          if (recipients.length > 0) {
-            await notificationService.notifyDocumentVersionUploaded(
-              currentDocument,
-              newVersionNumber,
-              recipients,
-              {
-                user_id: uploadedBy.user_id,
-                user_name: uploadedBy.user_name || uploadedBy.email || 'Unknown',
-                user_email: uploadedBy.email
-              }
-            );
-          }
-        } catch (notifError) {
-          console.error('Failed to send version upload notifications:', notifError);
-        }
-      });
+          ),
+          'document_version_uploaded'
+        );
+      }
     }
 
     res.status(200).json({
@@ -3398,13 +3412,17 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
               recipientName = document.created_by.user_name;
             }
 
-            await emailService.sendDocumentUpdate({
-              to: recipientEmail,
-              documentId: id,
-              creatorName: recipientName,
-              documentDetails,
-              statusUpdate
-            });
+            // Non-blocking: Send email after response
+            sendEmailAsync(
+              () => emailService.sendDocumentUpdate({
+                to: recipientEmail,
+                documentId: id,
+                creatorName: recipientName,
+                documentDetails,
+                statusUpdate
+              }),
+              `document_update_email_${recipientEmail}`
+            );
           } catch (emailError) {
             console.error('Failed to send email notification:', emailError);
             // Email notification failed - continue
@@ -3422,12 +3440,12 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
         }
       }
 
-      // Send in-app notifications (always, even if email is disabled)
+      // Non-blocking: Send in-app notifications after response
       if (inAppRecipients.length > 0) {
-        try {
-          // If status was changed, notify about status change. Otherwise, notify about comment
-          if (statusChanged) {
-            await notificationService.notifyDocumentStatusChanged(
+        // If status was changed, notify about status change. Otherwise, notify about comment
+        if (statusChanged) {
+          sendNotificationAsync(
+            () => notificationService.notifyDocumentStatusChanged(
               document,
               previousStatus,
               status,
@@ -3437,9 +3455,12 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
                 user_name: user_name || user_email,
                 user_email: user_email
               }
-            );
-          } else {
-            await notificationService.notifyDocumentCommentAdded(
+            ),
+            'document_status_changed_comment'
+          );
+        } else {
+          sendNotificationAsync(
+            () => notificationService.notifyDocumentCommentAdded(
               document,
               {
                 _id: documentComment._id,
@@ -3449,10 +3470,9 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
                 comment: comment
               },
               inAppRecipients
-            );
-          }
-        } catch (notifError) {
-          console.error('Failed to send in-app notifications:', notifError);
+            ),
+            'document_comment_added'
+          );
         }
       }
     });

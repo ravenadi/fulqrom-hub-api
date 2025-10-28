@@ -7,11 +7,17 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "scheduler": "node scripts/notificationScheduler.js --daemon",
-    "check-reminders": "node scripts/notificationScheduler.js",
+    "send-reminders": "node scripts/notificationScheduler.js",
+    "test-expiry": "node scripts/test-expiry-notifications.js",
+    "reset-expiry-notifications": "node scripts/reset-expiry-notifications.js",
     "migrate:tenant-structure": "node migrations/run_migration.js",
     "rollback:tenant-structure": "node migrations/rollback_tenant_structure.js",
     "verify:migration": "node migrations/verify_migration.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch --runInBand",
+    "test:coverage": "jest --coverage --runInBand",
+    "test:unit": "jest tests/unit --runInBand",
+    "test:integration": "jest tests/integration --runInBand",
     "lint": "echo \"No linter configured\" && exit 0"
   },
   "keywords": [
@@ -43,7 +49,11 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "@types/jest": "^29.5.0",
+    "@types/supertest": "^6.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

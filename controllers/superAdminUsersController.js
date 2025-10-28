@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Role = require('../models/v2/Role');
 const Customer = require('../models/Customer');
 const AuditLog = require('../models/AuditLog');
+const { ensureAuth0User, setAuth0Password } = require('../services/auth0Service');
 
 /**
  * Create new user
@@ -82,6 +83,52 @@ const createUser = async (req, res) => {
 
     await user.save();
 
+    // Create user in Auth0 with password if provided
+    let auth0User = null;
+    let passwordSet = false;
+    if (password) {
+      try {
+        // Create or ensure Auth0 user with password
+        auth0User = await ensureAuth0User({
+          _id: user._id,
+          email: user.email,
+          full_name: user.full_name,
+          phone: user.phone,
+          password: password,
+          is_active: user.is_active,
+          role_ids: user.role_ids.length > 0 ? user.role_ids.map(r => r.toString()) : []
+        });
+
+        if (auth0User) {
+          user.auth0_id = auth0User.user_id;
+          await user.save();
+          passwordSet = true;
+        }
+      } catch (auth0Error) {
+        console.error('Auth0 user creation failed:', auth0Error.message);
+        // Continue even if Auth0 creation fails - user exists in MongoDB
+      }
+    } else {
+      // Create Auth0 user without password (will send invite)
+      try {
+        auth0User = await ensureAuth0User({
+          _id: user._id,
+          email: user.email,
+          full_name: user.full_name,
+          phone: user.phone,
+          is_active: user.is_active,
+          role_ids: user.role_ids.length > 0 ? user.role_ids.map(r => r.toString()) : []
+        });
+
+        if (auth0User) {
+          user.auth0_id = auth0User.user_id;
+          await user.save();
+        }
+      } catch (auth0Error) {
+        console.error('Auth0 user creation failed:', auth0Error.message);
+      }
+    }
+
     // Populate the created user
     const populatedUser = await User.findById(user._id)
       .populate('role_ids', 'name description')
@@ -97,7 +144,9 @@ const createUser = async (req, res) => {
       user_email: req.superAdmin?.email,
       details: {
         user_name: name,
-        tenant_id: tenant_id
+        tenant_id: tenant_id,
+        password_set: passwordSet,
+        auth0_synced: !!auth0User
       }
     });
 
@@ -256,6 +305,18 @@ const updateUser = async (req, res) => {
     ).populate('role_ids', 'name description')
      .populate('customer_id', 'organisation.organisation_name');
 
+    // Update password in Auth0 if provided
+    let passwordUpdated = false;
+    if (password && updatedUser.auth0_id) {
+      try {
+        await setAuth0Password(updatedUser.auth0_id, password);
+        passwordUpdated = true;
+      } catch (passwordError) {
+        console.error('Failed to update password in Auth0:', passwordError.message);
+        // Continue - password update failed but user data is updated
+      }
+    }
+
     // Log audit
     await AuditLog.create({
       action: 'update',
@@ -263,7 +324,10 @@ const updateUser = async (req, res) => {
       resource_id: user,
       user_id: req.superAdmin?.id,
       user_email: req.superAdmin?.email,
-      details: updateData
+      details: {
+        ...updateData,
+        password_updated: passwordUpdated
+      }
     });
 
     // Transform user data to match Laravel DR format

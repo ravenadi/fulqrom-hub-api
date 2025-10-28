@@ -32,17 +32,35 @@ const logAuthEvent = async (event, details) => {
   try {
     console.log(`🔐 [AUTH] ${event}:`, JSON.stringify(details, null, 2));
 
-    // Create audit log
+    const mongoose = require('mongoose');
+    
+    // Convert IDs to ObjectId if needed
+    const userId = details.user_id ? 
+      (typeof details.user_id === 'string' ? new mongoose.Types.ObjectId(details.user_id) : details.user_id) : 
+      null;
+    const tenantId = details.tenant_id ?
+      (typeof details.tenant_id === 'string' ? new mongoose.Types.ObjectId(details.tenant_id) : details.tenant_id) :
+      null;
+
+    // Create audit log with new simplified schema
     await AuditLog.create({
-      action: 'authentication',
-      resource_type: 'user',
-      resource_id: details.user_id || details.email,
-      tenant_id: details.tenant_id,
-      details: {
+      action: 'auth',
+      description: `User authentication: ${event}`,
+      module: 'auth',
+      module_id: userId,
+      user: {
+        id: userId || new mongoose.Types.ObjectId(),
+        name: details.user_name || details.email || 'Unknown User'
+      },
+      ip: details.ip || 'unknown',
+      agent: details.agent || 'unknown',
+      detail: {
         event,
         ...details,
         timestamp: new Date()
-      }
+      },
+      tenant_id: tenantId,
+      created_at: new Date()
     });
   } catch (error) {
     console.error('Failed to log auth event:', error.message);
@@ -355,8 +373,9 @@ const postLoginSync = async (auth0User) => {
       auth0_id: auth0User.user_id
     });
 
-    // Find MongoDB user
-    const mongoUser = await User.findOne({ email: email.toLowerCase() }).populate('role_ids');
+    // Find MongoDB user with roles fully populated including permissions
+    const mongoUser = await User.findOne({ email: email.toLowerCase() })
+      .populate('role_ids', 'name description permissions is_active');
 
     if (!mongoUser) {
       await logAuthEvent('POST_LOGIN_USER_NOT_FOUND', { email, auth0_id: auth0User.user_id });

@@ -34,9 +34,17 @@ async function runReminderChecks() {
       console.log('✓ Database connected');
     }
 
-    // Run expiry reminders (30 days, 7 days, 1 day before)
+    // Run expiry reminders (30 days, 7 days, 1 day before, and also check for documents expiring today/tomorrow)
+    // Since reminder service checks "X days from today", we check specific days
     console.log('\n--- Checking Document Expiry Reminders ---');
     const expiryResults = await reminderService.sendExpiryReminders([30, 7, 1]);
+    
+    // Also check for documents expiring today (0 days) and in the next few days (2, 3, 4, 5, 6 days)
+    // This ensures we catch documents that expire soon even if not on the standard intervals
+    const additionalResults = await reminderService.sendExpiryReminders([0, 2, 3, 4, 5, 6]);
+    expiryResults.sent += additionalResults.sent;
+    expiryResults.failed += additionalResults.failed;
+    expiryResults.documents.push(...additionalResults.documents);
     console.log(`✓ Expiry reminders: ${expiryResults.sent} sent, ${expiryResults.failed} failed`);
     if (expiryResults.documents.length > 0) {
       console.log('Documents with expiry reminders:');
