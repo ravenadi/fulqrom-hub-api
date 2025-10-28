@@ -223,9 +223,9 @@ class NotificationService {
           uploaded_by_name: document.created_by?.user_name || actor.userName || actor.user_name || 'Unknown',
           uploaded_date_formatted: formatDate(document.created_at || document.createdAt),
           document_description: document.description || '',
-          document_review_url: `${process.env.CLIENT_URL || 'http://localhost:8080'}${actionUrl}`,
+          document_review_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}`,
           assigned_by: actor.userName || actor.user_name,
-          action_url: `${process.env.CLIENT_URL || 'http://localhost:8080'}${actionUrl}`
+          action_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}`
         },
         userId: approverId,
         userEmail: approverEmail
