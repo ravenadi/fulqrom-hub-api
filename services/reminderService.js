@@ -36,7 +36,6 @@ class ReminderService {
 
         // Find documents with expiry_date matching the target date
         // Handle both YYYY-MM-DD format and ISO date strings (YYYY-MM-DDTHH:mm:ss.sssZ)
-        // Check both root level expiry_date and metadata.expiry_date for backward compatibility
         // Use regex to match dates that start with the target date string
         const expiringDocs = await Document.find({
           $or: [
@@ -44,9 +43,6 @@ class ReminderService {
             { expiry_date: targetDateStr },
             // Regex match for dates starting with YYYY-MM-DD (handles ISO strings)
             { expiry_date: { $regex: `^${escapedDate}` } },
-            // Same for metadata.expiry_date
-            { 'metadata.expiry_date': targetDateStr },
-            { 'metadata.expiry_date': { $regex: `^${escapedDate}` } }
           ]
         }).lean();
 
@@ -55,8 +51,8 @@ class ReminderService {
 
         for (const doc of expiringDocs) {
           try {
-            // Get expiry date from root level or metadata (backward compatibility)
-            let expiryDate = doc.expiry_date || doc.metadata?.expiry_date;
+            // Get expiry date from root level
+            let expiryDate = doc.expiry_date;
             
             if (!expiryDate) {
               console.log(`Document ${doc._id} has no expiry date, skipping`);
@@ -94,6 +90,9 @@ class ReminderService {
 
             // Use normalized date for display
             const displayExpiryDate = normalizedExpiryDate;
+            
+            // Get creator name for email template
+            const creatorName = this.getDocumentCreatorName(doc);
 
             // Send notifications to all recipients
             await notificationService.sendBulkNotifications(
@@ -106,17 +105,13 @@ class ReminderService {
                 documentId: doc._id,
                 documentName: doc.name,
                 tenantId: doc.tenant_id, // Required for multi-tenancy
-                metadata: {
-                  expiry_date: displayExpiryDate,
-                  days_until_expiry: days
-                },
                 building: doc.location?.building?.building_name || '',
                 customer: doc.customer?.customer_name || '',
                 actionUrl: `/hub/document/${doc._id}/review`,
                 sendEmail: true,
                 emailTemplate: 'document_update',
                 emailVariables: {
-                  creator_name: 'User',
+                  creator_name: creatorName,
                   document_name: doc.name,
                   document_category: doc.category || 'N/A',
                   document_type: doc.type || 'N/A',
@@ -172,17 +167,25 @@ class ReminderService {
       // Find documents where category contains "report" and have a frequency set
       const serviceReports = await Document.find({
         category: { $regex: /report/i },
-        'metadata.frequency': { $exists: true, $ne: null }
+        'frequency': { $exists: true, $ne: null }
       }).lean();
 
       console.log(`Found ${serviceReports.length} service reports to check`);
 
       for (const doc of serviceReports) {
         try {
-          // Calculate next service date based on frequency and review_date
+          // Get issue_date from root level or metadata (backward compatibility)
+          const issueDate = doc.issue_date || doc.metadata?.issue_date;
+          
+          if (!issueDate || !doc.frequency) {
+            console.log(`Document ${doc._id} missing issue_date or frequency, skipping`);
+            continue;
+          }
+
+          // Calculate next service date based on frequency and issue_date
           const nextServiceDate = this.calculateNextServiceDate(
-            doc.metadata.review_date,
-            doc.metadata.frequency
+            issueDate,
+            doc.frequency
           );
 
           if (!nextServiceDate) {
@@ -221,6 +224,9 @@ class ReminderService {
               message = `Service report "${doc.name}" is due on ${nextServiceDate.toISOString().split('T')[0]}. Please prepare and submit on time.`;
             }
 
+            // Get creator name for email template
+            const creatorName = this.getDocumentCreatorName(doc);
+
             // Send notifications to all recipients
             await notificationService.sendBulkNotifications(
               recipients,
@@ -231,9 +237,11 @@ class ReminderService {
                 priority,
                 documentId: doc._id,
                 documentName: doc.name,
+                tenantId: doc.tenant_id, // Required for multi-tenancy
                 metadata: {
                   next_service_date: nextServiceDate.toISOString().split('T')[0],
-                  frequency: doc.metadata.frequency,
+                  frequency: doc.frequency,
+                  issue_date: issueDate,
                   days_until_due: daysUntilDue,
                   is_overdue: daysUntilDue < 0
                 },
@@ -243,7 +251,7 @@ class ReminderService {
                 sendEmail: true,
                 emailTemplate: 'document_update',
                 emailVariables: {
-                  creator_name: 'User',
+                  creator_name: creatorName,
                   document_name: doc.name,
                   document_category: doc.category || 'Service Report',
                   document_type: doc.type || 'N/A',
@@ -263,7 +271,7 @@ class ReminderService {
               id: doc._id,
               name: doc.name,
               next_service_date: nextServiceDate.toISOString().split('T')[0],
-              frequency: doc.metadata.frequency,
+              frequency: doc.frequency,
               days_until_due: daysUntilDue,
               recipients_count: recipients.length
             });
@@ -283,22 +291,22 @@ class ReminderService {
   }
 
   /**
-   * Calculate next service date based on review date and frequency
-   * @param {string} reviewDate - Last review date
+   * Calculate next service date based on issue date and frequency
+   * @param {string} issueDate - Issue date from document
    * @param {string} frequency - Frequency: weekly, monthly, quarterly, annual
    * @returns {Date|null} Next service date
    */
-  calculateNextServiceDate(reviewDate, frequency) {
-    if (!reviewDate || !frequency) {
+  calculateNextServiceDate(issueDate, frequency) {
+    if (!issueDate || !frequency) {
       return null;
     }
 
-    const lastReview = new Date(reviewDate);
-    if (isNaN(lastReview.getTime())) {
+    const issue = new Date(issueDate);
+    if (isNaN(issue.getTime())) {
       return null;
     }
 
-    const nextDate = new Date(lastReview);
+    const nextDate = new Date(issue);
 
     switch (frequency.toLowerCase()) {
       case 'weekly':
@@ -318,6 +326,25 @@ class ReminderService {
     }
 
     return nextDate;
+  }
+
+  /**
+   * Get creator name from document
+   * @param {Object} document - Document object
+   * @returns {string} Creator name or 'User' as fallback
+   */
+  getDocumentCreatorName(document) {
+    if (!document.created_by) {
+      return 'User';
+    }
+
+    // Handle both object format {user_id, user_name, email} and string format (backward compatibility)
+    if (typeof document.created_by === 'object') {
+      return document.created_by.user_name || document.created_by.userName || document.created_by.email?.split('@')[0] || 'User';
+    } else {
+      // Legacy: created_by was a simple email string
+      return document.created_by.split('@')[0] || 'User';
+    }
   }
 
   /**
