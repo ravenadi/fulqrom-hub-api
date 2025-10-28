@@ -852,6 +852,10 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
     // Use validated data from middleware
     const documentData = req.validatedData;
 
+    // Get logged-in user data using helper function
+    const { getCurrentUser } = require('../utils/authHelper');
+    const currentUser = getCurrentUser(req);
+
     // Get tenant information for S3 bucket
     const customer = await Customer.findById(documentData.customer_id);
     if (!customer) {
@@ -982,8 +986,12 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
       // Tenant ID for multi-tenancy
       tenant_id: req.tenant.tenantId,
 
-      // Audit fields
-      created_by: documentData.created_by,
+      // Audit fields - use provided created_by or set from authenticated user
+      created_by: documentData.created_by || (currentUser && currentUser.userEmail ? {
+        user_id: currentUser.userId,
+        ...(currentUser.userName && { user_name: currentUser.userName }),
+        email: currentUser.userEmail
+      } : undefined),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };

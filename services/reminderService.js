@@ -331,20 +331,24 @@ class ReminderService {
   /**
    * Get creator name from document
    * @param {Object} document - Document object
-   * @returns {string} Creator name or 'User' as fallback
+   * @returns {string} Creator name
    */
   getDocumentCreatorName(document) {
     if (!document.created_by) {
       return 'User';
     }
 
-    // Handle both object format {user_id, user_name, email} and string format (backward compatibility)
-    if (typeof document.created_by === 'object') {
-      return document.created_by.user_name || document.created_by.userName || document.created_by.email?.split('@')[0] || 'User';
-    } else {
-      // Legacy: created_by was a simple email string
-      return document.created_by.split('@')[0] || 'User';
+    // Handle object format {user_id, user_name, email}
+    if (typeof document.created_by === 'object' && document.created_by.user_name) {
+      return document.created_by.user_name;
     }
+
+    // Legacy: created_by was a simple email string
+    if (typeof document.created_by === 'string') {
+      return document.created_by.split('@')[0];
+    }
+
+    return 'User';
   }
 
   /**
