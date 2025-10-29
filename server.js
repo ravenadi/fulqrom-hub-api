@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 const errorHandler = require('./middleware/errorHandler');
@@ -10,53 +11,103 @@ const authenticate = require('./middleware/authMiddleware');
 const authorize = require('./middleware/authorizationMiddleware');
 const { tenantContext } = require('./middleware/tenantContext');
 const { registerRoutes, getEndpointDocs } = require('./config/routes.config');
+const { runWithContext } = require('./utils/requestContext');
+const { attachETag, parseIfMatch } = require('./middleware/etagVersion');
+const { optionalCSRF } = require('./middleware/csrf');
 
 const app = express();
 const PORT = process.env.PORT || 30001;
 const MONGODB_URI = process.env.MONGODB_CONNECTION;
 
-// Security middleware
-app.use(helmet());
-app.use(compression());
-
-// CORS configuration for development and production
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      process.env.CLIENT_URL || 'http://localhost:8080',
-      'http://localhost:8080',
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://hub.ravenlabs.biz'
-    ];
-    
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
+// Security middleware - Hardened Helmet configuration
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for admin UI
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", process.env.CLIENT_URL || 'http://localhost:8080'],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"]
     }
   },
-  credentials: true,
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  },
+  frameguard: {
+    action: 'deny'
+  },
+  referrerPolicy: {
+    policy: 'strict-origin-when-cross-origin'
+  }
+}));
+app.use(compression());
+
+// Cookie parser (required for session cookies)
+app.use(cookieParser(process.env.COOKIE_SECRET || 'fallback-secret-change-in-production'));
+
+// CORS configuration - Hardened for production with credentials support
+app.use(cors({
+  origin: function (origin, callback) {
+    // In production, strictly validate origins
+    if (process.env.NODE_ENV === 'production') {
+      const allowedOrigins = [
+        process.env.CLIENT_URL,
+        'https://hub.ravenlabs.biz'
+      ].filter(Boolean); // Remove undefined
+      
+      if (!origin) {
+        // Allow server-to-server calls (no Origin header)
+        return callback(null, true);
+      }
+      
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.error('⛔ CORS blocked origin:', origin);
+        callback(new Error('Not allowed by CORS'));
+      }
+    } else {
+      // Development: more permissive
+      const allowedOrigins = [
+        process.env.CLIENT_URL || 'http://localhost:8080',
+        'http://localhost:8080',
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'https://hub.ravenlabs.biz'
+      ];
+      
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log('⚠️  CORS blocked origin:', origin);
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true, // Required for cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
     'Content-Type', 
-    'Authorization', 
-    'Accept', 
+    'Authorization', // Keep for legacy Bearer during migration
+    'Accept',
+    'x-csrf-token', // Required for CSRF protection
     'x-user-id',
     'x-tenant-id',
     'x-requested-with',
-    'Access-Control-Allow-Origin',
-    'Access-Control-Allow-Headers',
-    'Access-Control-Allow-Methods'
+    'If-Match', // Required for optimistic concurrency
+    'If-None-Match'
   ],
-  exposedHeaders: ['x-user-id', 'x-tenant-id'],
-  optionsSuccessStatus: 200, // Some legacy browsers (IE11, various SmartTVs) choke on 204
-  preflightContinue: false
+  exposedHeaders: ['x-user-id', 'x-tenant-id', 'ETag'], // Expose ETag for OCC
+  optionsSuccessStatus: 200,
+  preflightContinue: false,
+  maxAge: 86400 // Cache preflight for 24 hours
 }));
 
 // Handle preflight requests explicitly
@@ -68,6 +119,13 @@ app.options('*', (req, res) => {
   res.sendStatus(200);
 });
 
+// Wrap all requests in AsyncLocalStorage context for tenant isolation
+app.use((req, res, next) => {
+  runWithContext({}, () => {
+    next();
+  });
+});
+
 // Body parsing middleware
 // Important: Do NOT parse multipart/form-data here - let multer handle it in routes
 // Skip JSON parsing for multipart requests to avoid parsing errors
@@ -77,9 +135,9 @@ app.use((req, res, next) => {
   if (contentType.includes('multipart/form-data') || req.headers['content-type']?.includes('boundary')) {
     return next();
   }
-  express.json({ limit: '10mb' })(req, res, next);
+  express.json({ limit: '1mb' })(req, res, next); // Reduced from 10mb for security
 });
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Health check endpoint (no authentication required)
 app.get('/health', (req, res) => {
@@ -91,11 +149,24 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Apply authentication, authorization, and tenant context middleware to all API routes
-// These middlewares validate JWT tokens, check permissions, and set up tenant isolation
+// Apply middleware chain to all API routes (order matters!)
+// 1. ETag parsing (for If-Match header on writes)
+app.use('/api', parseIfMatch);
+
+// 2. Authentication (session or Bearer)
 app.use('/api', authenticate);
-app.use('/api', authorize);
+
+// 3. Tenant context (sets ALS tenant context)
 app.use('/api', tenantContext);
+
+// 4. CSRF protection (optional during migration)
+app.use('/api', optionalCSRF);
+
+// 5. Authorization (permission checks)
+app.use('/api', authorize);
+
+// 6. ETag attachment (on responses)
+app.use('/api', attachETag);
 
 // Register all API routes
 registerRoutes(app);
@@ -125,10 +196,15 @@ app.use(errorHandler);
 // Database initialization
 const initializeDatabase = require('./utils/initializeDatabase');
 
+// Apply global plugins to all schemas
+const optimisticConcurrencyPlugin = require('./plugins/optimisticConcurrencyPlugin');
+mongoose.plugin(optimisticConcurrencyPlugin); // Enable OCC globally for all schemas
+
 // Database connection
 mongoose.connect(MONGODB_URI)
   .then(async () => {
     console.log('✓ Database connected successfully');
+    console.log('✓ Optimistic Concurrency Control enabled globally');
     
     // Load all action hooks (must be after DB connection, before routes)
     require('./hooks');

@@ -19,6 +19,7 @@ const User = require('../models/User');
 const Organization = require('../models/Organization');
 const Tenant = require('../models/Tenant');
 const mongoose = require('mongoose');
+const { setTenant, setBypassTenantFilter } = require('../utils/requestContext');
 
 /**
  * Helper function to fetch user with proper ID handling
@@ -67,6 +68,9 @@ async function tenantContext(req, res, next) {
 
     // Super admins bypass tenant context
     if (isSuperAdmin) {
+      // Set bypass flag in ALS
+      setBypassTenantFilter(true);
+      
       req.tenant = {
         tenantId: null,
         organizationId: null,
@@ -141,6 +145,9 @@ async function tenantContext(req, res, next) {
       .populate('plan_id', 'name description features')
       .lean()
       .catch(() => null); // Don't fail if organization doesn't exist
+
+    // Set tenant in ALS context for strict tenant isolation
+    setTenant(tenant._id);
 
     // Attach tenant context to request
     req.tenant = {

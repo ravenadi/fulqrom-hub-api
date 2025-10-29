@@ -1,238 +1,313 @@
+/**
+ * Authentication Routes
+ * 
+ * BFF (Backend-for-Frontend) authentication endpoints.
+ * Handles session creation, refresh, and logout with cookie management.
+ * 
+ * Routes:
+ * - POST /auth/login - Create session from Auth0 token
+ * - POST /auth/refresh - Refresh session and extend TTL
+ * - POST /auth/logout - Invalidate session
+ * - GET /auth/me - Get current user info
+ */
+
 const express = require('express');
+const crypto = require('crypto');
 const User = require('../models/User');
-const Role = require('../models/Role');
-const Tenant = require('../models/Tenant');
-const resilientAuthService = require('../services/resilientAuthService');
+const UserSession = require('../models/UserSession');
+const { generateCSRFToken } = require('../middleware/csrf');
+const { authenticateSession, optionalSession } = require('../middleware/sessionAuth');
+const { requireAuth } = require('../middleware/auth0');
 
 const router = express.Router();
 
-// Auth0 Management API token cache
-let auth0ManagementToken = null;
-let tokenExpiresAt = 0;
+// Session configuration
+const SESSION_TTL = parseInt(process.env.SESSION_TTL_SECONDS) || 86400; // 24 hours default
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined; // undefined = same domain
+const COOKIE_SECURE = process.env.NODE_ENV === 'production'; // HTTPS only in production
+const SINGLE_SESSION = process.env.ALLOW_MULTI_SESSION !== 'true'; // Default: single session
 
 /**
- * Helper function to get Auth0 Management API access token
+ * POST /auth/login
+ * 
+ * Server-side session creation after Auth0 authentication.
+ * Client sends Auth0 token, server validates and creates session.
+ * 
+ * Request:
+ * - Headers: Authorization: Bearer <auth0_token>
+ * - Body: (optional) { remember_me: boolean }
+ * 
+ * Response:
+ * - Sets sid (HttpOnly) and csrf cookies
+ * - Returns user info
+ * 
+ * NOTE: This endpoint ALWAYS accepts Bearer tokens for Auth0 validation,
+ * regardless of ALLOW_BEARER setting (which only affects other endpoints)
  */
-async function getAuth0ManagementToken() {
-  // Return cached token if still valid
-  if (auth0ManagementToken && Date.now() < tokenExpiresAt) {
-    return auth0ManagementToken;
-  }
-
+router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
   try {
-    const response = await fetch(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        grant_type: 'client_credentials',
-        client_id: process.env.AUTH0_CLIENT_ID,
-        client_secret: process.env.AUTH0_CLIENT_SECRET,
-        audience: process.env.AUTH0_MANAGEMENT_API_AUDIENCE || `https://${process.env.AUTH0_DOMAIN}/api/v2/`
-      })
+    // User already validated by requireAuth middleware
+    const { userId, email, auth0_id, tenant_id } = req.user;
+
+    // Get user from database to ensure latest data
+    const user = await User.findById(userId)
+      .populate('role_ids', 'name description permissions');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    if (!user.is_active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is deactivated',
+        code: 'ACCOUNT_DEACTIVATED'
+      });
+    }
+
+    // Generate session ID and CSRF token
+    const sessionId = crypto.randomBytes(32).toString('hex');
+    const csrfToken = generateCSRFToken();
+
+    // Get request metadata
+    const userAgent = req.get('user-agent');
+    const ipAddress = req.ip || req.connection.remoteAddress;
+
+    // Session TTL (longer if remember_me)
+    const ttl = req.body.remember_me ? SESSION_TTL * 7 : SESSION_TTL;
+
+    // Create session (invalidates old sessions if single-session mode)
+    const session = await UserSession.createSession({
+      user_id: user._id,
+      auth0_id: auth0_id || user.auth0_id,
+      email: user.email,
+      tenant_id: tenant_id || user.tenant_id
+    }, {
+      sessionId,
+      csrfToken,
+      userAgent,
+      ipAddress,
+      ttlSeconds: ttl,
+      singleSession: SINGLE_SESSION
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error_description || errorData.message || 'Failed to get token');
-    }
+    // Set cookies
+    const cookieOptions = {
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: 'lax',
+      maxAge: ttl * 1000,
+      domain: COOKIE_DOMAIN,
+      path: '/'
+    };
 
-    const data = await response.json();
-    auth0ManagementToken = data.access_token;
-    // Set expiry to 1 hour from now (tokens typically last 24 hours, but we refresh earlier)
-    tokenExpiresAt = Date.now() + (60 * 60 * 1000);
+    res.cookie('sid', sessionId, cookieOptions);
+    res.cookie('csrf', csrfToken, {
+      ...cookieOptions,
+      httpOnly: false // CSRF token needs to be readable by JS
+    });
 
-    return auth0ManagementToken;
-  } catch (error) {
-    console.error('Failed to get Auth0 Management API token:', error.message);
-    throw new Error('Failed to authenticate with Auth0 Management API');
-  }
-}
+    // Log successful login
+    console.log(`🔐 User logged in: ${user.email} (session: ${sessionId.substring(0, 8)}...)`);
 
-/**
- * Helper function to set or update user password in Auth0
- * Uses Management API to set password (works with M2M applications)
- */
-async function setAuth0Password(auth0_id, password) {
-  try {
-    // Validate password length
-    if (!password || password.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
-    }
-
-    // Get Management API token
-    const managementToken = await getAuth0ManagementToken();
-
-    // Update password using Auth0 Management API
-    const updateResponse = await fetch(
-      `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${auth0_id}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${managementToken}`,
-          'Content-Type': 'application/json'
+    // Return user info
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          full_name: user.full_name,
+          tenant_id: user.tenant_id,
+          roles: user.role_ids,
+          is_active: user.is_active
         },
-        body: JSON.stringify({
-          password: password,
-          connection: process.env.AUTH0_CONNECTION || 'Username-Password-Authentication'
-        })
+        session: {
+          created_at: session.created_at,
+          expires_at: session.expires_at
+        }
       }
-    );
-
-    if (!updateResponse.ok) {
-      const errorData = await updateResponse.json().catch(() => ({}));
-      const errorMessage = errorData.message || errorData.description || 'Failed to update password';
-      
-      // Handle specific Auth0 errors
-      if (errorMessage.includes('PasswordStrengthError') || 
-          errorMessage.includes('Password is too weak')) {
-        throw new Error('Password does not meet Auth0 password strength requirements');
-      }
-      
-      throw new Error(errorMessage);
-    }
-
-    return { success: true, message: 'Password set successfully' };
-  } catch (error) {
-    console.error('Auth0 password update error:', error.message);
-    throw error;
-  }
-}
-
-/**
- * Helper function to get tenant/organization information for a user
- */
-async function getUserTenantInfo(user) {
-  try {
-    // If user has tenant_id, fetch the tenant info
-    if (user.tenant_id) {
-      const tenant = await Tenant.findById(user.tenant_id).lean();
-
-      if (tenant) {
-        return {
-          tenant_id: user.tenant_id.toString(),
-          tenant_name: tenant.tenant_name || tenant.display_name || 'Unknown Tenant',
-          organisation: {
-            organisation_id: tenant._id.toString(),
-            name: tenant.tenant_name || tenant.display_name || 'Unknown Tenant',
-            is_primary: true
-          }
-        };
-      }
-    }
-
-    // No tenant information available
-    return {
-      tenant_id: null,
-      tenant_name: null,
-      organisation: null
-    };
-  } catch (error) {
-    console.error('Error fetching tenant info:', error);
-    return {
-      tenant_id: null,
-      tenant_name: null,
-      organisation: null
-    };
-  }
-}
-
-/**
- * POST /api/auth/prepare-login
- * RESILIENT: Prepare user for login by ensuring MongoDB/Auth0 sync
- * Call this BEFORE Auth0 login to ensure user can authenticate
- */
-router.post('/prepare-login', async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is required'
-      });
-    }
-
-    // Use resilient service to prepare login
-    const result = await resilientAuthService.prepareLogin(email);
-
-    if (!result.success) {
-      return res.status(404).json({
-        success: false,
-        message: result.message,
-        warnings: result.warnings
-      });
-    }
-
-    // Return success with sync actions performed
-    return res.status(200).json({
-      success: true,
-      message: 'User prepared for login',
-      actions: result.actions,
-      warnings: result.warnings,
-      status: result.status
     });
 
   } catch (error) {
-    console.error('Login preparation error:', error);
-    return res.status(500).json({
+    console.error('Login error:', error);
+    res.status(500).json({
       success: false,
-      message: 'Error preparing login',
+      message: 'Login failed',
       error: error.message
     });
   }
 });
 
 /**
- * POST /api/auth/password-reset
- * RESILIENT: Request password reset with auto-sync
- * Ensures user is synced before sending reset email
+ * POST /auth/refresh
+ * 
+ * Refresh session and extend TTL.
+ * Validates existing session and issues new cookies.
  */
-router.post('/password-reset', async (req, res) => {
+router.post('/refresh', authenticateSession, async (req, res) => {
   try {
-    const { email } = req.body;
+    const currentSession = req.session;
 
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is required'
-      });
-    }
+    // Extend session expiry
+    const ttl = SESSION_TTL;
+    currentSession.expires_at = new Date(Date.now() + ttl * 1000);
+    currentSession.last_activity = new Date();
+    await currentSession.save();
 
-    // Use resilient service to handle password reset
-    const result = await resilientAuthService.handlePasswordReset(email);
+    // Refresh cookies (same session ID, same CSRF for simplicity)
+    const cookieOptions = {
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: 'lax',
+      maxAge: ttl * 1000,
+      domain: COOKIE_DOMAIN,
+      path: '/'
+    };
 
-    if (!result.success) {
-      return res.status(404).json({
-        success: false,
-        message: result.message,
-        error: result.error
-      });
-    }
+    res.cookie('sid', currentSession.session_id, cookieOptions);
+    res.cookie('csrf', currentSession.csrf_token, {
+      ...cookieOptions,
+      httpOnly: false
+    });
 
-    return res.status(200).json({
+    console.log(`🔄 Session refreshed: ${req.user.email}`);
+
+    res.status(200).json({
       success: true,
-      message: result.message,
-      actions: result.actions,
-      warnings: result.warnings
+      message: 'Session refreshed',
+      data: {
+        expires_at: currentSession.expires_at
+      }
     });
 
   } catch (error) {
-    console.error('Password reset error:', error);
-    return res.status(500).json({
+    console.error('Refresh error:', error);
+    res.status(500).json({
       success: false,
-      message: 'Error processing password reset',
+      message: 'Session refresh failed',
       error: error.message
     });
   }
 });
 
 /**
- * POST /api/auth/sync-user
- * RESILIENT: Sync or create user from Auth0 authentication
- * This endpoint is called by the frontend after Auth0 login
- * Now uses resilient post-login sync
+ * POST /auth/logout
+ * 
+ * Invalidate session and clear cookies.
+ * NOTE: This endpoint doesn't require authentication - allows logout even with expired session
+ */
+router.post('/logout', async (req, res) => {
+  try {
+    const sessionId = req.cookies['sid'];
+
+    // Try to invalidate session if it exists
+    if (sessionId) {
+      try {
+        const session = await UserSession.findOne({ session_id: sessionId });
+        if (session) {
+          await session.invalidate('logout');
+          console.log(`🚪 User logged out: ${session.user_id}`);
+        }
+      } catch (sessionError) {
+        console.warn('Could not invalidate session:', sessionError.message);
+        // Continue anyway to clear cookies
+      }
+    }
+
+    // Clear cookies (must match the options used when setting them)
+    const cookieOptions = {
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: 'lax',
+      domain: COOKIE_DOMAIN,
+      path: '/'
+    };
+
+    res.clearCookie('sid', cookieOptions);
+    res.clearCookie('csrf', {
+      ...cookieOptions,
+      httpOnly: false // csrf cookie is not httpOnly
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Logout successful'
+    });
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Even on error, try to clear cookies
+    res.clearCookie('sid', { domain: COOKIE_DOMAIN, path: '/' });
+    res.clearCookie('csrf', { domain: COOKIE_DOMAIN, path: '/' });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Logout completed (with errors)'
+    });
+  }
+});
+
+/**
+ * GET /auth/me
+ * 
+ * Get current authenticated user information.
+ * Useful for session validation and user info refresh.
+ */
+router.get('/me', authenticateSession, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate('role_ids', 'name description permissions')
+      .populate('tenant_id', 'tenant_name status');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: user._id,
+        email: user.email,
+        full_name: user.full_name,
+        tenant_id: user.tenant_id,
+        roles: user.role_ids,
+        resource_access: user.resource_access,
+        is_active: user.is_active,
+        session: {
+          session_id: req.user.session_id,
+          created_at: req.user.session_created
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get user info',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /auth/sync-user
+ * 
+ * Legacy endpoint for Auth0 user synchronization.
+ * Creates or updates user in database from Auth0 data.
+ * This is called by the frontend after Auth0 authentication.
+ * 
+ * NOTE: This is public (no auth required) as it's called before session creation
  */
 router.post('/sync-user', async (req, res) => {
   try {
@@ -245,110 +320,73 @@ router.post('/sync-user', async (req, res) => {
       });
     }
 
-    // Check if user is a super_admin (only exists in Auth0, not in database)
-    if (roles && Array.isArray(roles) && roles.includes('super_admin')) {
-      return res.status(200).json({
-        success: true,
-        message: 'Super admin authenticated via Auth0 only',
-        data: {
-          id: auth0_id,
-          _id: auth0_id,
-          email: email,
-          full_name: full_name || email.split('@')[0],
-          phone: phone,
-          auth0_id: auth0_id,
-          is_active: true,
-          role_ids: [{ name: 'super_admin', _id: 'super_admin' }],
-          role_name: 'super_admin',
-          resource_access: [],
-          tenant_id: null,
-          tenant_name: null,
-          organisations: [],
-          is_super_admin: true
-        }
+    // Find or create user
+    let user = await User.findOne({ auth0_id }).populate('role_ids tenant_id');
+
+    if (!user) {
+      // Create new user
+      user = new User({
+        auth0_id,
+        email: email.toLowerCase(),
+        full_name: full_name || email.split('@')[0],
+        phone,
+        is_active: true
       });
-    }
 
-    // Use resilient post-login sync
-    const syncResult = await resilientAuthService.postLoginSync({
-      user_id: auth0_id,
-      email: email,
-      name: full_name,
-      phone: phone
-    });
-
-    if (!syncResult.success) {
-      // User not found in MongoDB - this shouldn't happen if prepare-login was called
-      return res.status(404).json({
-        success: false,
-        message: syncResult.message
-      });
-    }
-
-    let user = syncResult.user;
-
-    // Ensure roles are populated with permissions
-    // Check if roles need to be populated or if permissions are missing
-    const hasRoles = user.role_ids && user.role_ids.length > 0;
-    const rolesNeedPopulation = !hasRoles || 
-                                (hasRoles && user.role_ids[0] && 
-                                 typeof user.role_ids[0] === 'object' && 
-                                 user.role_ids[0].permissions === undefined);
-    
-    if (rolesNeedPopulation) {
-      // Re-fetch user with populated roles
-      const populatedUser = await User.findById(user._id || user.id)
-        .populate('role_ids', 'name description permissions is_active');
-      if (populatedUser) {
-        user = populatedUser.toObject ? populatedUser.toObject() : populatedUser;
+      // Assign roles if provided
+      if (roles && roles.length > 0) {
+        const Role = require('../models/Role');
+        const roleObjects = await Role.find({ name: { $in: roles } });
+        user.role_ids = roleObjects.map(r => r._id);
       }
+
+      await user.save();
+      user = await User.findById(user._id).populate('role_ids tenant_id');
+    } else {
+      // Update existing user
+      user.full_name = full_name || user.full_name;
+      user.phone = phone || user.phone;
+      await user.save();
+      user = await User.findById(user._id).populate('role_ids tenant_id');
     }
 
-    // Get tenant information
-    const tenantInfo = await getUserTenantInfo(user);
-
-    // NOTE: Login logging is now handled in auth0.js middleware by checking token age
-    // This endpoint is called on every page refresh, so we don't log here
-
-    return res.status(200).json({
+    // Return user data
+    res.status(200).json({
       success: true,
-      message: 'User synced successfully',
       data: {
-        _id: user._id.toString(),
-        id: user._id.toString(),
+        id: user._id,
+        auth0_id: user.auth0_id,
         email: user.email,
         full_name: user.full_name,
         phone: user.phone,
-        auth0_id: user.auth0_id,
         is_active: user.is_active,
+        tenant_id: user.tenant_id?._id,
+        tenant_name: user.tenant_id?.tenant_name,
         role_ids: user.role_ids,
-        role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
         resource_access: user.resource_access || [],
-        tenant_id: tenantInfo.tenant_id,
-        tenant_name: tenantInfo.tenant_name,
-        organisations: tenantInfo.organisation ? [tenantInfo.organisation] : []
+        document_categories: user.document_categories || [],
+        engineering_disciplines: user.engineering_disciplines || []
       }
     });
-
   } catch (error) {
-    console.error('User sync error:', error);
-    return res.status(500).json({
+    console.error('Sync user error:', error);
+    res.status(500).json({
       success: false,
-      message: 'Error syncing user',
+      message: 'Failed to sync user',
       error: error.message
     });
   }
 });
 
 /**
- * GET /api/auth/user/:auth0_id
- * Get user by Auth0 ID
+ * GET /auth/user/:auth0Id
+ * 
+ * Get user by Auth0 ID (for fallback when sync fails)
  */
-router.get('/user/:auth0_id', async (req, res) => {
+router.get('/user/:auth0Id', async (req, res) => {
   try {
-    const { auth0_id } = req.params;
-
-    const user = await User.findOne({ auth0_id }).populate('role_ids');
+    const { auth0Id } = req.params;
+    const user = await User.findOne({ auth0_id: auth0Id }).populate('role_ids tenant_id');
 
     if (!user) {
       return res.status(404).json({
@@ -356,188 +394,70 @@ router.get('/user/:auth0_id', async (req, res) => {
         message: 'User not found'
       });
     }
-
-    // Get tenant information
-    const tenantInfo = await getUserTenantInfo(user);
 
     res.status(200).json({
       success: true,
       data: {
-        _id: user._id.toString(),
-        id: user._id.toString(),
+        id: user._id,
+        auth0_id: user.auth0_id,
         email: user.email,
         full_name: user.full_name,
         phone: user.phone,
-        auth0_id: user.auth0_id,
         is_active: user.is_active,
+        tenant_id: user.tenant_id?._id,
+        tenant_name: user.tenant_id?.tenant_name,
         role_ids: user.role_ids,
-        role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
-        resource_access: user.resource_access,
-        tenant_id: tenantInfo.tenant_id,
-        tenant_name: tenantInfo.tenant_name,
-        organisations: tenantInfo.organisation ? [tenantInfo.organisation] : []
+        resource_access: user.resource_access || [],
+        document_categories: user.document_categories || [],
+        engineering_disciplines: user.engineering_disciplines || []
       }
     });
-
   } catch (error) {
     console.error('Get user error:', error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: 'Error fetching user',
+      message: 'Failed to get user',
       error: error.message
     });
   }
 });
 
 /**
- * POST /api/auth/change-password
- * Change user password in Auth0 using Management API
- * Note: Password verification is optional and may not work with M2M applications.
- * If password grant is not enabled, verification is skipped but password is still changed.
- * The user must be authenticated via bearer token (already provided in request).
+ * POST /auth/logout-all
  * 
- * Requires: auth0_id, new_password
- * Optional: current_password (for verification if password grant is enabled)
+ * Invalidate all sessions for the current user.
+ * Useful for security events or "logout from all devices".
  */
-router.post('/change-password', async (req, res) => {
+router.post('/logout-all', authenticateSession, async (req, res) => {
   try {
-    const { auth0_id, current_password, new_password } = req.body;
+    const userId = req.user._id;
 
-    // Validate required fields
-    if (!auth0_id || !new_password) {
-      return res.status(400).json({
-        success: false,
-        message: 'auth0_id and new_password are required'
-      });
-    }
+    // Invalidate all sessions for this user
+    await UserSession.invalidateAllForUser(userId, 'logout_all');
 
-    // Ensure new password is different from current password (if provided)
-    if (current_password && current_password === new_password) {
-      return res.status(400).json({
-        success: false,
-        message: 'New password must be different from current password'
-      });
-    }
+    // Clear cookies for current session
+    res.clearCookie('sid', {
+      domain: COOKIE_DOMAIN,
+      path: '/'
+    });
+    res.clearCookie('csrf', {
+      domain: COOKIE_DOMAIN,
+      path: '/'
+    });
 
-    // Validate new password meets requirements
-    if (new_password.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: 'New password must be at least 8 characters long'
-      });
-    }
+    console.log(`🚪🔒 All sessions invalidated for user: ${req.user.email}`);
 
-    // Get Auth0 user to verify email and get connection info
-    const user = await User.findOne({ auth0_id });
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    // Optional: Verify current password if provided
-    // Note: Password grant verification may not work with M2M applications
-    // Only reject if we get a clear "wrong password" error
-    if (current_password) {
-      try {
-        const verifyResponse = await fetch(`https://${process.env.AUTH0_DOMAIN}/oauth/token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            grant_type: 'password',
-            username: user.email,
-            password: current_password,
-            client_id: process.env.AUTH0_CLIENT_ID,
-            client_secret: process.env.AUTH0_CLIENT_SECRET,
-            audience: process.env.AUTH0_AUDIENCE || process.env.AUTH0_CLIENT_ID,
-            scope: 'openid profile email'
-          })
-        });
-
-        if (!verifyResponse.ok) {
-          const errorData = await verifyResponse.json().catch(() => ({}));
-          const errorCode = String(errorData.error || errorData.error_description || '').toLowerCase();
-          
-          // Only reject on clearly wrong password errors
-          // Skip verification for grant type issues or configuration problems
-          if (errorCode.includes('invalid_user_password') || 
-              errorCode.includes('wrong email or password') ||
-              (errorCode.includes('access_denied') && errorCode.includes('password'))) {
-            return res.status(401).json({
-              success: false,
-              message: 'Current password is incorrect'
-            });
-          }
-          
-          // For any other error (grant type not enabled, wrong audience, etc.), skip verification
-          console.warn('Password verification skipped:', errorCode || 'unknown error');
-        }
-      } catch (verifyError) {
-        // Network errors or other issues - skip verification
-        console.warn('Password verification unavailable, proceeding without verification');
-      }
-    }
-
-    // Get Management API token to change password
-    const managementToken = await getAuth0ManagementToken();
-
-    // Update password using Auth0 Management API
-    const updateResponse = await fetch(
-      `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${auth0_id}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${managementToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          password: new_password,
-          connection: process.env.AUTH0_CONNECTION || 'Username-Password-Authentication'
-        })
-      }
-    );
-
-    if (!updateResponse.ok) {
-      const errorData = await updateResponse.json().catch(() => ({}));
-      const errorMessage = errorData.message || errorData.description || 'Failed to update password';
-      
-      // Handle specific Auth0 errors
-      if (errorMessage.includes('PasswordStrengthError') || 
-          errorMessage.includes('Password is too weak')) {
-        return res.status(400).json({
-          success: false,
-          message: 'New password does not meet Auth0 password strength requirements'
-        });
-      }
-      
-      if (errorMessage.includes('same as the previous password')) {
-        return res.status(400).json({
-          success: false,
-          message: 'New password must be different from your current password'
-        });
-      }
-      
-      console.error('Password update error:', errorData);
-      return res.status(400).json({
-        success: false,
-        message: errorMessage
-      });
-    }
-
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: 'Password changed successfully'
+      message: 'All sessions have been logged out'
     });
 
   } catch (error) {
-    console.error('Password change error:', error.message);
-
-    return res.status(500).json({
+    console.error('Logout all error:', error);
+    res.status(500).json({
       success: false,
-      message: error.message || 'Failed to change password'
+      message: 'Failed to logout all sessions',
+      error: error.message
     });
   }
 });
