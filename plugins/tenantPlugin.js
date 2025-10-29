@@ -1,18 +1,19 @@
 /**
- * Mongoose Tenant Plugin
+ * Mongoose Tenant Plugin (ALS-Powered)
  *
- * This plugin adds automatic tenant isolation to Mongoose models.
- * It ensures that all queries are automatically scoped to the current tenant,
- * preventing data leakage between organizations.
+ * This plugin adds automatic tenant isolation to Mongoose models using
+ * AsyncLocalStorage for context propagation.
  *
  * Features:
- * - Auto-adds tenant_id to all find/update/delete queries
- * - Provides tenant-scoped query methods
- * - Supports bypassing tenant filter for super admin operations
+ * - Auto-adds tenant_id to ALL queries using ALS context
+ * - No need to pass _tenantId options manually
+ * - Strict enforcement: fails in production if tenantId missing
+ * - Supports bypassing for super admin (with strict guards)
  * - Prevents cross-tenant data access
  */
 
 const mongoose = require('mongoose');
+const { getTenant, shouldBypassTenantFilter } = require('../utils/requestContext');
 
 /**
  * Tenant isolation plugin for Mongoose schemas
@@ -62,30 +63,55 @@ function tenantPlugin(schema, options = {}) {
   // ==========================================
 
   /**
-   * Pre-find middleware to automatically add tenant_id filter
+   * Pre-find middleware to automatically add tenant_id filter using ALS
    * Applies to: find, findOne, findOneAndUpdate, findOneAndDelete, etc.
    */
   const preFindMiddleware = function(next) {
     const query = this.getQuery();
 
-    // Skip if explicitly told to bypass tenant filter
-    if (this.getOptions()._bypassTenantFilter) {
+    // Check if bypass is requested and allowed
+    const bypassRequested = this.getOptions()._bypassTenantFilter || shouldBypassTenantFilter();
+    
+    if (bypassRequested) {
+      // In production, only allow bypass for super admins
+      if (process.env.NODE_ENV === 'production' && !shouldBypassTenantFilter()) {
+        const error = new Error('Tenant filter bypass not allowed in production without super admin context');
+        error.code = 'TENANT_BYPASS_FORBIDDEN';
+        return next(error);
+      }
       return next();
     }
 
-    // Skip if tenant_id is already in the query (allows explicit tenant queries)
+    // Skip if tenant_id is already explicitly in the query
     if (query.tenant_id) {
       return next();
     }
 
-    // Get tenant context from query options
-    const tenantId = this.getOptions()._tenantId;
+    // Get tenant from ALS context (or fallback to options for backward compatibility)
+    const tenantId = getTenant() || this.getOptions()._tenantId;
 
-    if (tenantId) {
-      // Add tenant_id to the query
-      this.where({ tenant_id: tenantId });
+    if (!tenantId) {
+      // In production, fail hard if no tenant context
+      if (process.env.NODE_ENV === 'production') {
+        const error = new Error('Tenant context missing for query. This is a security violation.');
+        error.code = 'TENANT_CONTEXT_MISSING';
+        console.error('❌ SECURITY: Query without tenant context blocked', {
+          operation: 'find',
+          model: this.model?.modelName,
+          query: query
+        });
+        return next(error);
+      }
+      
+      // In development, warn but allow
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`⚠️  Query without tenant context: ${this.model?.modelName}`, query);
+      }
+      return next();
     }
 
+    // Add tenant_id to the query
+    this.where({ tenant_id: tenantId });
     next();
   };
 
@@ -98,29 +124,50 @@ function tenantPlugin(schema, options = {}) {
   schema.pre('findOneAndReplace', preFindMiddleware);
 
   /**
-   * Pre-update middleware to prevent cross-tenant updates
+   * Pre-update middleware to prevent cross-tenant updates using ALS
    */
   const preUpdateMiddleware = function(next) {
     const query = this.getQuery();
 
-    // Skip if explicitly told to bypass tenant filter
-    if (this.getOptions()._bypassTenantFilter) {
+    // Check bypass
+    const bypassRequested = this.getOptions()._bypassTenantFilter || shouldBypassTenantFilter();
+    
+    if (bypassRequested) {
+      if (process.env.NODE_ENV === 'production' && !shouldBypassTenantFilter()) {
+        const error = new Error('Tenant filter bypass not allowed in production');
+        error.code = 'TENANT_BYPASS_FORBIDDEN';
+        return next(error);
+      }
       return next();
     }
 
-    // Skip if tenant_id is already in the query
+    // Skip if tenant_id already in query
     if (query.tenant_id) {
       return next();
     }
 
-    // Get tenant context from query options
-    const tenantId = this.getOptions()._tenantId;
+    // Get tenant from ALS
+    const tenantId = getTenant() || this.getOptions()._tenantId;
 
-    if (tenantId) {
-      // Add tenant_id to the update filter
-      this.where({ tenant_id: tenantId });
+    if (!tenantId) {
+      if (process.env.NODE_ENV === 'production') {
+        const error = new Error('Tenant context missing for update. This is a security violation.');
+        error.code = 'TENANT_CONTEXT_MISSING';
+        console.error('❌ SECURITY: Update without tenant context blocked', {
+          operation: 'update',
+          model: this.model?.modelName
+        });
+        return next(error);
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`⚠️  Update without tenant context: ${this.model?.modelName}`);
+      }
+      return next();
     }
 
+    // Add tenant_id to the update filter
+    this.where({ tenant_id: tenantId });
     next();
   };
 
@@ -130,29 +177,50 @@ function tenantPlugin(schema, options = {}) {
   schema.pre('update', preUpdateMiddleware);
 
   /**
-   * Pre-delete middleware to prevent cross-tenant deletes
+   * Pre-delete middleware to prevent cross-tenant deletes using ALS
    */
   const preDeleteMiddleware = function(next) {
     const query = this.getQuery();
 
-    // Skip if explicitly told to bypass tenant filter
-    if (this.getOptions()._bypassTenantFilter) {
+    // Check bypass
+    const bypassRequested = this.getOptions()._bypassTenantFilter || shouldBypassTenantFilter();
+    
+    if (bypassRequested) {
+      if (process.env.NODE_ENV === 'production' && !shouldBypassTenantFilter()) {
+        const error = new Error('Tenant filter bypass not allowed in production');
+        error.code = 'TENANT_BYPASS_FORBIDDEN';
+        return next(error);
+      }
       return next();
     }
 
-    // Skip if tenant_id is already in the query
+    // Skip if tenant_id already in query
     if (query.tenant_id) {
       return next();
     }
 
-    // Get tenant context from query options
-    const tenantId = this.getOptions()._tenantId;
+    // Get tenant from ALS
+    const tenantId = getTenant() || this.getOptions()._tenantId;
 
-    if (tenantId) {
-      // Add tenant_id to the delete filter
-      this.where({ tenant_id: tenantId });
+    if (!tenantId) {
+      if (process.env.NODE_ENV === 'production') {
+        const error = new Error('Tenant context missing for delete. This is a security violation.');
+        error.code = 'TENANT_CONTEXT_MISSING';
+        console.error('❌ SECURITY: Delete without tenant context blocked', {
+          operation: 'delete',
+          model: this.model?.modelName
+        });
+        return next(error);
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`⚠️  Delete without tenant context: ${this.model?.modelName}`);
+      }
+      return next();
     }
 
+    // Add tenant_id to the delete filter
+    this.where({ tenant_id: tenantId });
     next();
   };
 
@@ -166,6 +234,36 @@ function tenantPlugin(schema, options = {}) {
    */
   schema.pre('countDocuments', preFindMiddleware);
   schema.pre('count', preFindMiddleware);
+
+  /**
+   * Pre-save middleware to auto-set tenant_id on new documents
+   */
+  schema.pre('save', function(next) {
+    // Only set tenant_id if document is new and doesn't have one
+    if (this.isNew && !this.tenant_id) {
+      const tenantId = getTenant();
+      
+      if (!tenantId) {
+        if (process.env.NODE_ENV === 'production' && required) {
+          const error = new Error('Tenant context missing for save. Cannot create document without tenant.');
+          error.code = 'TENANT_CONTEXT_MISSING';
+          console.error('❌ SECURITY: Save without tenant context blocked', {
+            operation: 'save',
+            model: this.constructor.modelName
+          });
+          return next(error);
+        }
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`⚠️  Saving new document without tenant_id: ${this.constructor.modelName}`);
+        }
+      } else {
+        this.tenant_id = tenantId;
+      }
+    }
+    
+    next();
+  });
 
   // ==========================================
   // INSTANCE METHODS
