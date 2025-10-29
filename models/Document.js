@@ -385,25 +385,31 @@ const DocumentSchema = new mongoose.Schema({
   },
 
   // Version Management Fields
+  // DEPRECATED: document_group_id - legacy multi-record versioning (creating separate records)
+  // New versioning approach: update same document, archive to DocumentVersion collection
   document_group_id: {
     type: String,
     trim: true,
     index: true
   },
+  // version_number: tracks current file version (e.g., "1.0", "2.0")
   version_number: {
     type: String,
     trim: true,
     default: '1.0'
   },
+  // DEPRECATED: is_current_version - not used in new single-record approach
   is_current_version: {
     type: Boolean,
     default: true,
     index: true
   },
+  // DEPRECATED: version_sequence - only used in DocumentVersion collection now
   version_sequence: {
     type: Number,
     default: 1
   },
+  // version_metadata: metadata for current file (who uploaded, when, change notes)
   version_metadata: VersionMetadataSchema,
 
   // Audit Fields

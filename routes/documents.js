@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const Document = require('../models/Document');
+const DocumentVersion = require('../models/DocumentVersion');
 const DocumentComment = require('../models/DocumentComment');
 const Customer = require('../models/Customer');
 const Site = require('../models/Site');
@@ -2683,6 +2684,7 @@ function calculateNextVersion(currentVersion) {
 }
 
 // POST /api/documents/:id/versions - Upload new version of document
+// NEW APPROACH: Archive old file to DocumentVersion, update same Document record with new file
 router.post('/:id/versions', upload.single('file'), validateObjectId, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2703,6 +2705,16 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
         success: false,
         message: 'Document not found',
         code: 'DOCUMENT_NOT_FOUND'
+      });
+    }
+
+    // Get tenant ID
+    const tenantId = req.tenant?.tenantId || currentDocument.tenant_id;
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required',
+        code: 'TENANT_ID_REQUIRED'
       });
     }
 
@@ -2729,20 +2741,11 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       });
     }
 
-    // Get document_group_id (initialize if this is first version)
-    const documentGroupId = currentDocument.document_group_id || currentDocument._id.toString();
-
-    // Get current document version (for superseded_version field)
+    // Get current version number
     const currentVersionNumber = currentDocument.version_number || currentDocument.version || '1.0';
-
-    // Find HIGHEST version in the document group by version_sequence (reliable number sorting)
-    const highestVersionDoc = await Document.findOne({ document_group_id: documentGroupId })
-      .sort({ version_sequence: -1 })
-      .limit(1);
-
-    // Calculate new version number based on HIGHEST existing version (not current)
-    const highestVersionNumber = highestVersionDoc?.version_number || currentVersionNumber;
-    const newVersionNumber = req.body.version_number || calculateNextVersion(highestVersionNumber);
+    
+    // Calculate new version number
+    const newVersionNumber = req.body.version_number || calculateNextVersion(currentVersionNumber);
 
     // Validate version number format
     if (!/^\d+\.\d+$/.test(newVersionNumber)) {
@@ -2753,183 +2756,120 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       });
     }
 
-    // Check for version conflict
-    const existingVersion = await Document.findOne({
-      document_group_id: documentGroupId,
-      version_number: newVersionNumber
-    });
-
-    if (existingVersion) {
-      return res.status(400).json({
-        success: false,
-        message: `Version ${newVersionNumber} already exists`,
-        code: 'VERSION_CONFLICT'
-      });
-    }
-
-    // Get max version_sequence
-    const maxSequenceDoc = await Document.findOne({ document_group_id: documentGroupId })
+    // Get max version_sequence from DocumentVersion collection (for this document)
+    const maxVersionSequence = await DocumentVersion.findOne({ document_id: id })
       .sort({ version_sequence: -1 })
       .limit(1);
 
-    const newVersionSequence = (maxSequenceDoc?.version_sequence || 0) + 1;
+    const newVersionSequence = (maxVersionSequence?.version_sequence || 0) + 1;
 
-    // Upload new file to S3 with date-based versioned key
+    // ========================================================================
+    // STEP 1: Archive current file to DocumentVersion collection
+    // ========================================================================
+    if (currentDocument.file && currentDocument.file.file_meta) {
+      const archivedVersion = new DocumentVersion({
+        document_id: id,
+        version_number: currentVersionNumber,
+        version_sequence: newVersionSequence - 1,
+        file: {
+          file_meta: currentDocument.file.file_meta
+        },
+        version_metadata: currentDocument.version_metadata || {
+          uploaded_by: currentDocument.created_by || {},
+          upload_timestamp: currentDocument.created_at ? new Date(currentDocument.created_at) : new Date()
+        },
+        tenant_id: tenantId
+      });
+
+      await archivedVersion.save();
+    }
+
+    // ========================================================================
+    // STEP 2: Upload new file to S3
+    // ========================================================================
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
 
     const versionedFileName = `v${newVersionNumber}_${req.file.originalname}`;
-
-    // Extract customer_id from different possible locations
-    const customerId = currentDocument.customer?.customer_id || currentDocument.customer_id || 'unknown';
-
-    // Get tenant ID from request (set by auth middleware)
-    const tenantId = req.user?.tenant_id || req.tenantId || currentDocument.tenant_id;
-
-    // Generate S3 key and file metadata immediately (without uploading)
-    const s3Key = `documents/${documentGroupId}/${year}/${month}/${day}/${Date.now()}-${versionedFileName}`;
+    const s3Key = `documents/${id}/${year}/${month}/${day}/${Date.now()}-${versionedFileName}`;
     const fileUrl = `${process.env.AWS_URL}/${s3Key}`;
     const fileExtension = require('path').extname(req.file.originalname).toLowerCase().replace('.', '');
 
-    const uploadResult = {
-      success: true,
-      data: {
-        file_meta: {
-          file_name: req.file.originalname,
-          file_size: req.file.size,
-          file_type: req.file.mimetype,
-          file_extension: fileExtension,
-          file_url: fileUrl,
-          file_path: s3Key,
-          file_key: s3Key,
-          version: newVersionNumber,
-          file_mime_type: req.file.mimetype,
-          upload_status: 'pending' // Mark as pending upload
-        }
-      }
-    };
-
-    // Upload to S3 asynchronously in background (non-blocking)
-    // Clone file buffer to prevent garbage collection before async upload completes
-    const fileBufferCopy = Buffer.from(req.file.buffer);
+    // Upload to S3
+    const customerId = currentDocument.customer?.customer_id || currentDocument.customer_id || 'unknown';
     const fileForUpload = {
       ...req.file,
-      buffer: fileBufferCopy,
       originalname: versionedFileName
     };
 
-    setImmediate(async () => {
-      try {
-        const asyncUploadResult = await uploadFileToS3(
-          fileForUpload,
-          customerId,
-          `documents/${documentGroupId}/${year}/${month}/${day}`,
-          tenantId
-        );
-
-        if (!asyncUploadResult.success) {
-          console.error(`Failed to upload file to S3 for version ${newVersionNumber}:`, asyncUploadResult.error);
-        }
-      } catch (error) {
-        console.error(`Error uploading file to S3 for version ${newVersionNumber}:`, error.message);
-      }
-    });
-
-    // Mark current version as not current
-    await Document.updateOne(
-      { _id: currentDocument._id },
-      {
-        $set: {
-          is_current_version: false,
-          document_group_id: documentGroupId,
-          updated_at: new Date().toISOString()
-        }
-      }
+    const uploadResult = await uploadFileToS3(
+      fileForUpload,
+      customerId,
+      `documents/${id}/${year}/${month}/${day}`,
+      tenantId
     );
 
-    // Update all other versions in the group to ensure document_group_id is set
-    await Document.updateMany(
-      {
-        document_group_id: { $exists: false },
-        _id: { $in: [currentDocument._id] }
-      },
-      { $set: { document_group_id: documentGroupId } }
-    );
+    if (!uploadResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to upload file to S3',
+        error: uploadResult.error
+      });
+    }
 
-    // Create minimal version document - ONLY file data and version metadata
-    const newVersionData = {
-      // Minimal required fields (schema requires these)
-      name: `${currentDocument.name} - v${newVersionNumber}`,
-      category: 'Version',
-      type: 'Version',
-
-      // File data
-      file: uploadResult.data,
-
-      // Version tracking
+    const newFileMetadata = uploadResult.data.file_meta || {
+      file_name: req.file.originalname,
+      file_size: req.file.size,
+      file_type: req.file.mimetype,
+      file_extension: fileExtension,
+      file_url: s3Key,
+      file_path: s3Key,
+      file_key: s3Key,
       version: newVersionNumber,
-      document_group_id: documentGroupId,
-      version_number: newVersionNumber,
-      is_current_version: true,
-      version_sequence: newVersionSequence,
-
-      // Version metadata - WHO, WHEN, WHERE uploaded
-      version_metadata: {
-        uploaded_by: {
-          user_id: uploadedBy.user_id,
-          user_name: uploadedBy.user_name || '',
-          email: uploadedBy.email || ''
-        },
-        upload_timestamp: new Date(),
-        change_notes: req.body.change_notes || '',
-        superseded_version: currentVersionNumber,
-        file_changes: {
-          original_filename: req.file.originalname,
-          file_size_bytes: req.file.size,
-          file_hash: req.body.file_hash || ''
-        }
-      },
-
-      // Timestamps
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      file_mime_type: req.file.mimetype
     };
 
-    const newVersionDocument = new Document(newVersionData);
-    await newVersionDocument.save();
-
-    // Update the original/current document with new version info
-    await Document.findByIdAndUpdate(
-      id,
-      {
-        $set: {
-          version_number: newVersionNumber,
-          version: newVersionNumber,
-          is_current_version: true,
-          updated_at: new Date().toISOString()
-        }
-      }
-    );
-
-    // Mark all other versions as not current
-    await Document.updateMany(
-      {
-        document_group_id: documentGroupId,
-        _id: { $nin: [id, newVersionDocument._id] }
+    // ========================================================================
+    // STEP 3: Update the same Document record with new file data
+    // All header data (location, customer, approvals, etc.) is preserved
+    // ========================================================================
+    const newVersionMetadata = {
+      uploaded_by: {
+        user_id: uploadedBy.user_id,
+        user_name: uploadedBy.user_name || '',
+        email: uploadedBy.email || ''
       },
-      {
-        $set: { is_current_version: false }
+      upload_timestamp: new Date(),
+      change_notes: req.body.change_notes || '',
+      superseded_version: currentVersionNumber,
+      file_changes: {
+        original_filename: req.file.originalname,
+        file_size_bytes: req.file.size,
+        file_hash: req.body.file_hash || ''
       }
-    );
+    };
 
-    // Non-blocking: Send notification emails and in-app notifications to all approvers after response
+    // Update the document with new file and version info
+    currentDocument.file = {
+      file_meta: newFileMetadata
+    };
+    currentDocument.version_number = newVersionNumber;
+    currentDocument.version = newVersionNumber;
+    currentDocument.version_metadata = newVersionMetadata;
+    currentDocument.updated_at = new Date().toISOString();
+
+    await currentDocument.save();
+
+    // ========================================================================
+    // STEP 4: Send notifications (non-blocking)
+    // ========================================================================
     if (currentDocument.approval_config?.enabled && currentDocument.approval_config.approvers?.length > 0) {
       const documentDetails = {
-        name: newVersionDocument.name || newVersionDocument.file?.file_meta?.file_name || 'Unnamed Document',
-        category: newVersionDocument.category,
-        type: newVersionDocument.type
+        name: currentDocument.name || currentDocument.file?.file_meta?.file_name || 'Unnamed Document',
+        category: currentDocument.category,
+        type: currentDocument.type
       };
 
       const statusUpdate = {
@@ -2940,14 +2880,14 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
         comment: `New version ${newVersionNumber} uploaded. ${req.body.change_notes || ''}`
       };
 
-      // Non-blocking: Send emails to all approvers after response
+      // Non-blocking: Send emails to all approvers
       const approversToNotify = currentDocument.approval_config.approvers.filter(a => a.user_email);
       
       for (const approver of approversToNotify) {
         sendEmailAsync(
           () => emailService.sendDocumentUpdate({
             to: approver.user_email,
-            documentId: newVersionDocument._id.toString(),
+            documentId: currentDocument._id.toString(),
             creatorName: approver.user_name || approver.user_email,
             documentDetails,
             statusUpdate
@@ -2956,7 +2896,7 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
         );
       }
 
-      // Non-blocking: Send in-app notifications to all approvers
+      // Non-blocking: Send in-app notifications
       const recipients = approversToNotify.map(approver => ({
         user_id: approver.user_id,
         user_email: approver.user_email
@@ -2982,7 +2922,12 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     res.status(200).json({
       success: true,
       message: 'New version uploaded successfully',
-      data: newVersionDocument
+      data: {
+        document: currentDocument,
+        version_number: newVersionNumber,
+        uploaded_by: uploadedBy.user_name || uploadedBy.email || 'Unknown',
+        uploaded_at: new Date()
+      }
     });
 
   } catch (error) {
@@ -2994,45 +2939,76 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
   }
 });
 
-// GET /api/documents/versions/:documentGroupId - Get all versions of a document
-router.get('/versions/:documentGroupId', async (req, res) => {
+// GET /api/documents/:id/versions - Get all versions of a document
+// NEW APPROACH: Fetch from DocumentVersion collection + current document
+router.get('/:id/versions', validateObjectId, async (req, res) => {
   try {
-    const { documentGroupId } = req.params;
+    const { id } = req.params;
 
-    // Find all versions with this document_group_id
-    const versions = await Document.find({ document_group_id: documentGroupId })
-      .sort({ version_sequence: -1 })
-      .lean();
-
-    if (!versions || versions.length === 0) {
+    // Get the current document
+    const currentDocument = await Document.findById(id).lean();
+    
+    if (!currentDocument) {
       return res.status(404).json({
         success: false,
-        message: 'No versions found for this document group',
-        code: 'NO_VERSIONS_FOUND'
+        message: 'Document not found',
+        code: 'DOCUMENT_NOT_FOUND'
       });
     }
 
-    // Format version data for response
-    const formattedVersions = versions.map(doc => ({
-      _id: doc._id,
-      version_number: doc.version_number,
-      version_sequence: doc.version_sequence,
-      is_current_version: doc.is_current_version,
-      created_at: doc.version_metadata?.upload_timestamp || doc.created_at,
-      created_by: doc.version_metadata?.uploaded_by?.user_name || doc.created_by || 'Unknown',
-      file_name: doc.file?.file_meta?.file_name || doc.name,
-      file_size: doc.file?.file_meta?.file_size || 0,
-      file_url: doc.file?.file_meta?.file_url || '',
-      change_notes: doc.version_metadata?.change_notes || null
+    // Get tenant ID for filtering
+    const tenantId = req.tenant?.tenantId || currentDocument.tenant_id;
+    
+    // Fetch all historical versions from DocumentVersion collection
+    const historicalVersions = await DocumentVersion.find({ document_id: id })
+      .sort({ version_sequence: -1 })
+      .lean();
+
+    // Format historical versions
+    const formattedVersions = historicalVersions.map(version => ({
+      _id: version._id,
+      document_id: version.document_id,
+      version_number: version.version_number,
+      version_sequence: version.version_sequence,
+      is_current_version: false,
+      is_historical: true,
+      created_at: version.version_metadata?.upload_timestamp || version.created_at,
+      created_by: version.version_metadata?.uploaded_by?.user_name || 'Unknown',
+      file_name: version.file?.file_meta?.file_name || '',
+      file_size: version.file?.file_meta?.file_size || 0,
+      file_url: version.file?.file_meta?.file_url || '',
+      file_key: version.file?.file_meta?.file_key || '',
+      change_notes: version.version_metadata?.change_notes || null
     }));
+
+    // Add current version at the beginning
+    const currentVersion = {
+      _id: currentDocument._id,
+      document_id: currentDocument._id,
+      version_number: currentDocument.version_number || currentDocument.version || '1.0',
+      version_sequence: (historicalVersions.length || 0) + 1,
+      is_current_version: true,
+      is_historical: false,
+      created_at: currentDocument.version_metadata?.upload_timestamp || currentDocument.created_at || currentDocument.updated_at,
+      created_by: currentDocument.version_metadata?.uploaded_by?.user_name || currentDocument.created_by?.user_name || 'Unknown',
+      file_name: currentDocument.file?.file_meta?.file_name || currentDocument.name || '',
+      file_size: currentDocument.file?.file_meta?.file_size || 0,
+      file_url: currentDocument.file?.file_meta?.file_url || '',
+      file_key: currentDocument.file?.file_meta?.file_key || '',
+      change_notes: currentDocument.version_metadata?.change_notes || null
+    };
+
+    // Combine current + historical versions (newest first)
+    const allVersions = [currentVersion, ...formattedVersions];
 
     res.status(200).json({
       success: true,
-      data: formattedVersions
+      data: allVersions,
+      total: allVersions.length,
+      current_version: currentDocument.version_number || '1.0'
     });
 
   } catch (error) {
-
     res.status(500).json({
       success: false,
       message: 'Error fetching document versions',
@@ -3041,14 +3017,25 @@ router.get('/versions/:documentGroupId', async (req, res) => {
   }
 });
 
-// GET /api/documents/versions/:versionId/download - Download specific version
-router.get('/versions/:versionId/download', validateObjectId, async (req, res) => {
+// GET /api/documents/:id/versions/:versionId/download - Download specific version
+// Supports both current document (Document collection) and historical versions (DocumentVersion collection)
+router.get('/:id/versions/:versionId/download', validateObjectId, async (req, res) => {
   try {
-    const { versionId } = req.params;
+    const { id, versionId } = req.params;
 
-    const document = await Document.findById(versionId);
+    // Try to find in DocumentVersion first (historical versions)
+    let versionRecord = await DocumentVersion.findById(versionId);
+    
+    // If not found in DocumentVersion, check if it's the current document
+    if (!versionRecord) {
+      const document = await Document.findById(id);
+      if (document && document._id.toString() === versionId) {
+        // Use current document for download
+        versionRecord = document;
+      }
+    }
 
-    if (!document) {
+    if (!versionRecord) {
       return res.status(404).json({
         success: false,
         message: 'Version not found',
@@ -3056,7 +3043,10 @@ router.get('/versions/:versionId/download', validateObjectId, async (req, res) =
       });
     }
 
-    if (!document.file || !document.file.file_meta || !document.file.file_meta.file_key) {
+    // Handle both DocumentVersion and Document structures
+    const fileMeta = versionRecord.file?.file_meta;
+    
+    if (!fileMeta || !fileMeta.file_key) {
       return res.status(404).json({
         success: false,
         message: 'Version file not found',
@@ -3064,7 +3054,7 @@ router.get('/versions/:versionId/download', validateObjectId, async (req, res) =
       });
     }
 
-    const fileMeta = document.file.file_meta;
+    const versionNumber = versionRecord.version_number || versionRecord.version || 'unknown';
     let urlResult;
 
     // Check if document version is in tenant-specific bucket
@@ -3096,8 +3086,8 @@ router.get('/versions/:versionId/download', validateObjectId, async (req, res) =
       success: true,
       download_url: urlResult.url,
       expires_in: 3600,
-      file_name: document.file.file_meta.file_name,
-      version_number: document.version_number
+      file_name: fileMeta.file_name,
+      version_number: versionNumber
     });
 
   } catch (error) {
