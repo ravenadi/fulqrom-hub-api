@@ -1202,6 +1202,139 @@ router.delete('/resource-access/:id', async (req, res) => {
   }
 });
 
+// GET /api/users/me/permissions - Get current user's complete permissions matrix
+router.get('/me/permissions', async (req, res) => {
+  try {
+    // Get user from req.user (set by auth middleware)
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    const userId = req.user._id || req.user.id;
+    
+    // Fetch full user with populated roles
+    const user = await User.findById(userId).populate('role_ids', 'name description permissions is_active');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Import helper function for document permissions
+    const { filterDocumentsByAccess } = require('../middleware/authorizationRules');
+    
+    // Get document permissions (category/discipline based)
+    const documentPermissions = await filterDocumentsByAccess(userId);
+
+    // Build role-based permissions matrix
+    const rolePermissions = {};
+    const allEntities = ['sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'analytics', 'organisations'];
+    
+    // Initialize all entities with false permissions
+    allEntities.forEach(entity => {
+      rolePermissions[entity] = {
+        view: false,
+        create: false,
+        edit: false,
+        delete: false
+      };
+    });
+
+    // Apply role permissions (highest privilege from all roles)
+    if (user.role_ids && user.role_ids.length > 0) {
+      user.role_ids.forEach(role => {
+        if (!role.is_active) return;
+        
+        role.permissions.forEach(perm => {
+          if (perm.entity && rolePermissions[perm.entity]) {
+            // Take the highest permission level
+            rolePermissions[perm.entity].view = rolePermissions[perm.entity].view || perm.view;
+            rolePermissions[perm.entity].create = rolePermissions[perm.entity].create || perm.create;
+            rolePermissions[perm.entity].edit = rolePermissions[perm.entity].edit || perm.edit;
+            rolePermissions[perm.entity].delete = rolePermissions[perm.entity].delete || perm.delete;
+          }
+        });
+      });
+    }
+
+    // Build resource-based permissions
+    const resourceAccess = user.resource_access || [];
+    const resourcePermissions = {};
+    
+    resourceAccess.forEach(access => {
+      const resourceKey = `${access.resource_type}_${access.resource_id}`;
+      resourcePermissions[resourceKey] = {
+        resource_type: access.resource_type,
+        resource_id: access.resource_id,
+        resource_name: access.resource_name,
+        permissions: {
+          view: access.permissions?.can_view || false,
+          create: access.permissions?.can_create || false,
+          edit: access.permissions?.can_edit || false,
+          delete: access.permissions?.can_delete || false
+        },
+        granted_at: access.granted_at,
+        granted_by: access.granted_by
+      };
+    });
+
+    // Build document category/discipline permissions
+    const documentAccess = {
+      hasFullAccess: documentPermissions.hasFullAccess || false,
+      allowedCategories: documentPermissions.allowedCategories || [],
+      allowedDisciplines: documentPermissions.allowedDisciplines || [],
+      categoryRestrictions: documentPermissions.categoryPermissions || [],
+      disciplineRestrictions: documentPermissions.disciplinePermissions || []
+    };
+
+    // Get user roles summary
+    const roles = user.role_ids.map(role => ({
+      id: role._id,
+      name: role.name,
+      description: role.description,
+      is_active: role.is_active
+    }));
+
+    // Return comprehensive permissions matrix
+    res.status(200).json({
+      success: true,
+      data: {
+        user: {
+          id: user._id.toString(),
+          email: user.email,
+          full_name: user.full_name,
+          is_active: user.is_active
+        },
+        roles: roles,
+        permissions: {
+          role_based: rolePermissions,
+          resource_specific: resourcePermissions,
+          document_access: documentAccess
+        },
+        summary: {
+          total_roles: roles.length,
+          total_resource_access: resourceAccess.length,
+          has_document_restrictions: !documentPermissions.hasFullAccess,
+          document_categories: documentPermissions.allowedCategories.length,
+          document_disciplines: documentPermissions.allowedDisciplines.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching user permissions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching user permissions',
+      error: error.message
+    });
+  }
+});
 
 
 module.exports = router;
