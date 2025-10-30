@@ -132,7 +132,7 @@ function requireIfMatch(req, res, next) {
 function sendVersionConflict(res, { clientVersion, currentVersion, resource, id }) {
   return res.status(409).json({
     success: false,
-    message: 'Version conflict. The resource was modified by another user. Please refresh and try again.',
+    message: 'The record was modified by another user. Please refresh and try again.',
     code: 'VERSION_CONFLICT',
     details: {
       resource,

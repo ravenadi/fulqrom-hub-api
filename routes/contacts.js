@@ -249,7 +249,7 @@ router.post('/', async (req, res) => {
     if (!result) {
       return res.status(409).json({
         success: false,
-        message: 'Customer was modified by another process. Please refresh and try again.',
+        message: 'The record was modified by another user. Please refresh and try again',
         code: 'VERSION_CONFLICT'
       });
     }
@@ -637,7 +637,7 @@ router.post('/:id/methods', async (req, res) => {
     if (!result) {
       return res.status(409).json({
         success: false,
-        message: 'Customer was modified by another process. Please refresh and try again.',
+        message: 'The record was modified by another user. Please refresh and try again.',
         code: 'VERSION_CONFLICT'
       });
     }

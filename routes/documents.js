@@ -3410,7 +3410,7 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
         session.endSession();
         return res.status(409).json({
           success: false,
-          message: 'Document version state changed. Please refresh and try again.',
+          message: 'The record was modified by another user. Please refresh and try again',
           code: 'VERSION_STATE_CONFLICT'
         });
       }
