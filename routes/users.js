@@ -391,7 +391,8 @@ router.post('/', validateUserCreation, async (req, res) => {
         phone: user.phone,
         password: password, // Pass password if provided
         is_active: user.is_active,
-        role_ids: user.role_ids
+        role_ids: user.role_ids,
+        mfa_required: user.mfa_required
       });
 
       // Store Auth0 user ID in MongoDB

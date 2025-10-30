@@ -18,6 +18,7 @@ const UserSession = require('../models/UserSession');
 const { generateCSRFToken } = require('../middleware/csrf');
 const { authenticateSession, optionalSession } = require('../middleware/sessionAuth');
 const { requireAuth } = require('../middleware/auth0');
+const { extractDeviceInfo } = require('../utils/deviceFingerprint');
 
 const router = express.Router();
 
@@ -73,9 +74,8 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
     const sessionId = crypto.randomBytes(32).toString('hex');
     const csrfToken = generateCSRFToken();
 
-    // Get request metadata
-    const userAgent = req.get('user-agent');
-    const ipAddress = req.ip || req.connection.remoteAddress;
+    // Extract comprehensive device information
+    const deviceData = extractDeviceInfo(req);
 
     // Session TTL (longer if remember_me)
     const ttl = req.body.remember_me ? SESSION_TTL * 7 : SESSION_TTL;
@@ -89,17 +89,20 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
     }, {
       sessionId,
       csrfToken,
-      userAgent,
-      ipAddress,
+      ...deviceData, // Spread enhanced device data
       ttlSeconds: ttl,
       singleSession: SINGLE_SESSION
     });
 
     // Set cookies
+    // IMPORTANT: For cross-origin requests (frontend on different port), we need:
+    // - Development: sameSite='none' to allow cookies across localhost:8080 -> localhost:30001
+    // - Production: sameSite='lax' for better security (same domain)
+    // - sameSite='none' requires secure=true, but we allow secure=false in development
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
       maxAge: ttl * 1000,
       domain: COOKIE_DOMAIN,
       path: '/'
@@ -146,7 +149,7 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
 
 /**
  * POST /auth/refresh
- * 
+ *
  * Refresh session and extend TTL.
  * Validates existing session and issues new cookies.
  */
@@ -164,7 +167,7 @@ router.post('/refresh', authenticateSession, async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
       maxAge: ttl * 1000,
       domain: COOKIE_DOMAIN,
       path: '/'
@@ -188,6 +191,74 @@ router.post('/refresh', authenticateSession, async (req, res) => {
 
   } catch (error) {
     console.error('Refresh error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Session refresh failed',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /auth/refresh-session
+ *
+ * Alternative endpoint for session refresh (used by frontend).
+ * Validates existing session, extends TTL, and returns user info.
+ */
+router.get('/refresh-session', authenticateSession, async (req, res) => {
+  try {
+    const currentSession = req.session;
+
+    // Extend session expiry
+    const ttl = SESSION_TTL;
+    currentSession.expires_at = new Date(Date.now() + ttl * 1000);
+    currentSession.last_activity = new Date();
+    await currentSession.save();
+
+    // Refresh cookies
+    const cookieOptions = {
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
+      maxAge: ttl * 1000,
+      domain: COOKIE_DOMAIN,
+      path: '/'
+    };
+
+    res.cookie('sid', currentSession.session_id, cookieOptions);
+    res.cookie('csrf', currentSession.csrf_token, {
+      ...cookieOptions,
+      httpOnly: false
+    });
+
+    console.log(`🔄 Session refreshed (GET): ${req.user.email}`);
+
+    // Return user info for frontend context
+    const user = await User.findById(req.user._id)
+      .populate('role_ids', 'name description permissions')
+      .populate('tenant_id', 'tenant_name status');
+
+    res.status(200).json({
+      success: true,
+      message: 'Session refreshed',
+      user: user ? {
+        id: user._id,
+        email: user.email,
+        full_name: user.full_name,
+        tenant_id: user.tenant_id?._id,
+        tenant_name: user.tenant_id?.tenant_name,
+        roles: user.role_ids,
+        resource_access: user.resource_access,
+        document_categories: user.document_categories,
+        engineering_disciplines: user.engineering_disciplines
+      } : null,
+      data: {
+        expires_at: currentSession.expires_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Refresh session error:', error);
     res.status(500).json({
       success: false,
       message: 'Session refresh failed',
@@ -224,7 +295,7 @@ router.post('/logout', async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
       domain: COOKIE_DOMAIN,
       path: '/'
     };
@@ -518,7 +589,7 @@ router.get('/user/:auth0Id', async (req, res) => {
 
 /**
  * POST /auth/logout-all
- * 
+ *
  * Invalidate all sessions for the current user.
  * Useful for security events or "logout from all devices".
  */
@@ -551,6 +622,105 @@ router.post('/logout-all', authenticateSession, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to logout all sessions',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /auth/sessions
+ *
+ * List all active sessions for the current user.
+ * Used for session management UI.
+ */
+router.get('/sessions', authenticateSession, async (req, res) => {
+  try {
+    const sessions = await UserSession.find({
+      user_id: req.user._id,
+      is_active: true,
+      expires_at: { $gt: new Date() }
+    }).sort({ last_activity: -1 });
+
+    const currentSessionId = req.cookies.sid;
+
+    const sessionsWithCurrent = sessions.map(session => ({
+      id: session._id.toString(),
+      session_name: session.session_name ||
+        `${session.device_info?.device_type || 'Unknown'} - ${session.device_info?.browser || 'Unknown'}`,
+      device_info: session.device_info || {},
+      ip_address: session.ip_address,
+      geolocation: session.geolocation,
+      created_at: session.created_at,
+      last_activity: session.last_activity,
+      expires_at: session.expires_at,
+      is_current: session.session_id === currentSessionId
+    }));
+
+    res.json({
+      success: true,
+      data: sessionsWithCurrent
+    });
+  } catch (error) {
+    console.error('Get sessions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get sessions',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /auth/sessions/:sessionId
+ *
+ * Revoke a specific session (not current session).
+ * Allows users to logout from other devices.
+ */
+router.delete('/sessions/:sessionId', authenticateSession, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const currentSessionId = req.cookies.sid;
+
+    // Find the session to revoke
+    const session = await UserSession.findById(sessionId);
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+    }
+
+    // Verify session belongs to current user
+    if (session.user_id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to revoke this session'
+      });
+    }
+
+    // Don't allow revoking current session (use /logout instead)
+    if (session.session_id === currentSessionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot revoke current session. Use /logout instead.'
+      });
+    }
+
+    // Invalidate the session
+    await session.invalidate('revoked_by_user');
+
+    console.log(`🔒 Session revoked by user: ${req.user.email} (session: ${sessionId})`);
+
+    res.json({
+      success: true,
+      message: 'Session revoked successfully'
+    });
+  } catch (error) {
+    console.error('Revoke session error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to revoke session',
       error: error.message
     });
   }

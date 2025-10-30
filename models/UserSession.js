@@ -66,6 +66,39 @@ const UserSessionSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Enhanced device tracking
+  device_fingerprint: {
+    type: String,
+    index: true
+  },
+
+  device_info: {
+    browser: String,
+    browser_version: String,
+    os: String,
+    os_version: String,
+    device_type: {
+      type: String,
+      enum: ['desktop', 'mobile', 'tablet', 'unknown'],
+      default: 'unknown'
+    }
+  },
+
+  // Geolocation (optional, from IP)
+  geolocation: {
+    country: String,
+    country_code: String,
+    city: String,
+    region: String,
+    timezone: String
+  },
+
+  // User-friendly session name
+  session_name: {
+    type: String,
+    default: 'Unknown Device'
+  },
+
   // Session timestamps
   created_at: {
     type: Date,
@@ -110,6 +143,7 @@ const UserSessionSchema = new mongoose.Schema({
 UserSessionSchema.index({ user_id: 1, is_active: 1 });
 UserSessionSchema.index({ session_id: 1, is_active: 1 });
 UserSessionSchema.index({ auth0_id: 1, is_active: 1 });
+UserSessionSchema.index({ user_id: 1, device_fingerprint: 1 });
 
 // TTL index - automatically delete expired sessions after 24 hours of expiry
 UserSessionSchema.index({ expires_at: 1 }, { expireAfterSeconds: 86400 });
@@ -174,10 +208,17 @@ UserSessionSchema.statics.createSession = async function(userData, options = {})
   const {
     sessionId,
     csrfToken,
-    userAgent,
-    ipAddress,
+    user_agent,
+    ip_address,
+    device_info,
+    device_fingerprint,
+    geolocation,
+    session_name,
     ttlSeconds = 86400, // 24 hours default
-    singleSession = true
+    singleSession = true,
+    // Legacy field names for backwards compatibility
+    userAgent,
+    ipAddress
   } = options;
 
   // Invalidate existing sessions if single-session mode
@@ -192,8 +233,13 @@ UserSessionSchema.statics.createSession = async function(userData, options = {})
     email: userData.email,
     tenant_id: userData.tenant_id,
     csrf_token: csrfToken,
-    user_agent: userAgent,
-    ip_address: ipAddress,
+    // Use new field names, fallback to legacy
+    user_agent: user_agent || userAgent,
+    ip_address: ip_address || ipAddress,
+    device_info: device_info || {},
+    device_fingerprint: device_fingerprint || null,
+    geolocation: geolocation || null,
+    session_name: session_name || 'Unknown Device',
     created_at: new Date(),
     last_activity: new Date(),
     expires_at: new Date(Date.now() + ttlSeconds * 1000),

@@ -43,7 +43,8 @@ const createAuth0User = async (userData) => {
       },
       app_metadata: {
         is_active: userData.is_active !== undefined ? userData.is_active : true,
-        role_ids: userData.role_ids || []
+        role_ids: userData.role_ids || [],
+        mfa_required: userData.mfa_required || false
       },
       email_verified: skipEmailVerification, // Skip verification if password provided
       verify_email: !skipEmailVerification, // Only send verification if no password
@@ -118,6 +119,13 @@ const updateAuth0User = async (auth0UserId, updateData) => {
       auth0UpdateData.app_metadata = {
         ...auth0UpdateData.app_metadata,
         role_ids: updateData.role_ids
+      };
+    }
+
+    if (updateData.mfa_required !== undefined) {
+      auth0UpdateData.app_metadata = {
+        ...auth0UpdateData.app_metadata,
+        mfa_required: updateData.mfa_required
       };
     }
 
