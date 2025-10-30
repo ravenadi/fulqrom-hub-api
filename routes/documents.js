@@ -3383,10 +3383,8 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       }
     });
 
-    // Use transaction for atomic multi-document update (prevents race conditions)
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    
+    // Use atomic operations without transactions (standalone MongoDB doesn't support transactions)
+    let newVersionDocument;
     try {
       // Atomically mark current version as not current (only if still current)
       const currentUpdateResult = await Document.updateOne(
@@ -3400,14 +3398,11 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
             document_group_id: documentGroupId,
             updated_at: new Date().toISOString()
           }
-        },
-        { session }
+        }
       );
       
       // If update didn't match, another process may have updated it
       if (currentUpdateResult.matchedCount === 0) {
-        await session.abortTransaction();
-        session.endSession();
         return res.status(409).json({
           success: false,
           message: 'The record was modified by another user. Please refresh and try again',
@@ -3421,8 +3416,7 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
           document_group_id: { $exists: false },
           _id: { $in: [currentDocument._id] }
         },
-        { $set: { document_group_id: documentGroupId } },
-        { session }
+        { $set: { document_group_id: documentGroupId } }
       );
 
       // Create minimal version document - ONLY file data and version metadata
@@ -3468,8 +3462,8 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
         customer: currentDocument.customer
       };
 
-      const newVersionDocument = new Document(newVersionData);
-      await newVersionDocument.save({ session });
+      newVersionDocument = new Document(newVersionData);
+      await newVersionDocument.save();
 
       // Update the original/current document with new version info
       await Document.findByIdAndUpdate(
@@ -3481,8 +3475,7 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
             is_current_version: true,
             updated_at: new Date().toISOString()
           }
-        },
-        { session }
+        }
       );
 
       // Atomically mark all other versions as not current
@@ -3493,15 +3486,9 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
         },
         {
           $set: { is_current_version: false }
-        },
-        { session }
+        }
       );
-      
-      await session.commitTransaction();
-      await session.endSession();
     } catch (error) {
-      await session.abortTransaction();
-      await session.endSession();
       console.error('Error creating document version:', error);
       return res.status(500).json({
         success: false,
