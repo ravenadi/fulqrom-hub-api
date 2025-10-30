@@ -596,6 +596,18 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
     // Log audit for customer update
     const customerName = customer.organisation?.organisation_name || customer.company_profile?.trading_name || 'Customer';
     await logUpdate({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
+    
+    // Emit socket notification for real-time updates
+    const socketManager = require('../utils/socketManager');
+    socketManager.emitCustomerUpdate(customer._id.toString(), {
+      tenant_id: customer.tenant_id?.toString(),
+      updatedBy: req.user?.name || req.user?.email || 'Unknown user',
+      customer_name: customerName,
+      organisation_name: customer.organisation?.organisation_name,
+      trading_name: customer.company_profile?.trading_name,
+      updatedAt: customer.updated_at || new Date().toISOString(),
+      version: customer.__v
+    });
 
     res.status(200).json({
       success: true,
