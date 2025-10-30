@@ -1,6 +1,7 @@
 const express = require('express');
 const Customer = require('../models/Customer');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 const router = express.Router({ mergeParams: true });
 
@@ -193,7 +194,7 @@ router.post('/', async (req, res) => {
   try {
     const { customerId } = req.params;
 
-    const customer = await Customer.findById(customerId);
+    let customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
@@ -201,10 +202,17 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // If this is set as primary, remove primary from existing contacts
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v ?? customer.__v;
+    
+    // If this is set as primary, remove primary from existing contacts atomically
+    const updateOperation = {};
     if (req.body.is_primary) {
-      customer.contact_methods.forEach(contact => {
-        contact.is_primary = false;
+      // Mark all existing contacts as non-primary using $set on array elements
+      customer.contact_methods.forEach((contact, index) => {
+        if (contact.is_primary) {
+          updateOperation[`contact_methods.${index}.is_primary`] = false;
+        }
       });
     }
 
@@ -224,9 +232,29 @@ router.post('/', async (req, res) => {
       }];
     }
 
-    // Add new contact to contact_methods array
-    customer.contact_methods.push(newContactData);
-    await customer.save();
+    // Use atomic update to add contact and update primary flags
+    const result = await Customer.findOneAndUpdate(
+      { 
+        _id: customerId,
+        __v: clientVersion  // Version check for optimistic locking
+      },
+      {
+        $push: { contact_methods: newContactData },
+        $set: updateOperation,
+        $inc: { __v: 1 }  // Atomic version increment
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!result) {
+      return res.status(409).json({
+        success: false,
+        message: 'Customer was modified by another process. Please refresh and try again.',
+        code: 'VERSION_CONFLICT'
+      });
+    }
+
+    customer = result;
 
     // Get the newly added contact
     const newContact = customer.contact_methods[customer.contact_methods.length - 1];
@@ -263,15 +291,26 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/customers/:customerId/contacts/:id - Update contact
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireIfMatch, async (req, res) => {
   try {
     const { customerId, id } = req.params;
 
-    const customer = await Customer.findById(customerId);
+    let customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
         message: 'Customer not found'
+      });
+    }
+
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined || customer.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
       });
     }
 
@@ -283,21 +322,51 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    // If this is set as primary, remove primary from other contacts
+    // Store old contact data for audit
+    const oldContact = JSON.parse(JSON.stringify(customer.contact_methods[contactIndex]));
+
+    // Build atomic update operation
+    const updateOperation = {};
+    
+    // Update contact fields atomically
+    Object.keys(req.body).forEach(key => {
+      if (req.body[key] !== undefined && key !== '_id') {
+        updateOperation[`contact_methods.${contactIndex}.${key}`] = req.body[key];
+      }
+    });
+
+    // If this is set as primary, remove primary from other contacts atomically
     if (req.body.is_primary) {
       customer.contact_methods.forEach((contact, index) => {
-        if (index !== contactIndex) {
-          contact.is_primary = false;
+        if (index !== contactIndex && contact.is_primary) {
+          updateOperation[`contact_methods.${index}.is_primary`] = false;
         }
       });
     }
 
-    // Store old contact data for audit
-    const oldContact = JSON.parse(JSON.stringify(customer.contact_methods[contactIndex]));
+    // Perform atomic update with version check
+    const result = await Customer.findOneAndUpdate(
+      { 
+        _id: customerId,
+        __v: clientVersion  // Version check prevents lost updates
+      },
+      {
+        $set: updateOperation,
+        $inc: { __v: 1 }  // Atomic version increment
+      },
+      { new: true, runValidators: true }
+    );
 
-    // Update the contact
-    Object.assign(customer.contact_methods[contactIndex], req.body);
-    await customer.save();
+    if (!result) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
+      });
+    }
+
+    customer = result;
 
     // Log audit for contact update
     const contactName = customer.contact_methods[contactIndex].full_name || 
@@ -335,15 +404,26 @@ router.put('/:id', async (req, res) => {
 });
 
 // PATCH /api/customers/:customerId/contacts/:id/primary - Set contact as primary
-router.patch('/:id/primary', async (req, res) => {
+router.patch('/:id/primary', requireIfMatch, async (req, res) => {
   try {
     const { customerId, id } = req.params;
 
-    const customer = await Customer.findById(customerId);
+    let customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
         message: 'Customer not found'
+      });
+    }
+
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined || customer.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
       });
     }
 
@@ -355,14 +435,39 @@ router.patch('/:id/primary', async (req, res) => {
       });
     }
 
-    // Remove primary from all contacts
-    customer.contact_methods.forEach(contact => {
-      contact.is_primary = false;
+    // Build atomic update: remove primary from all, set primary for target contact
+    const updateOperation = {};
+    customer.contact_methods.forEach((contact, index) => {
+      if (index === contactIndex) {
+        updateOperation[`contact_methods.${index}.is_primary`] = true;
+      } else if (contact.is_primary) {
+        updateOperation[`contact_methods.${index}.is_primary`] = false;
+      }
     });
 
-    // Set this contact as primary
-    customer.contact_methods[contactIndex].is_primary = true;
-    await customer.save();
+    // Perform atomic update with version check
+    const result = await Customer.findOneAndUpdate(
+      { 
+        _id: customerId,
+        __v: clientVersion
+      },
+      {
+        $set: updateOperation,
+        $inc: { __v: 1 }
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!result) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
+      });
+    }
+
+    customer = result;
 
     res.status(200).json({
       success: true,
@@ -383,15 +488,26 @@ router.patch('/:id/primary', async (req, res) => {
 });
 
 // DELETE /api/customers/:customerId/contacts/:id - Delete contact
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireIfMatch, async (req, res) => {
   try {
     const { customerId, id } = req.params;
 
-    const customer = await Customer.findById(customerId);
+    let customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
         message: 'Customer not found'
+      });
+    }
+
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined || customer.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
       });
     }
 
@@ -406,9 +522,29 @@ router.delete('/:id', async (req, res) => {
     // Store contact data for audit before deletion
     const deletedContact = customer.contact_methods[contactIndex];
 
-    // Remove the contact
-    customer.contact_methods.splice(contactIndex, 1);
-    await customer.save();
+    // Remove the contact atomically using $pull
+    const result = await Customer.findOneAndUpdate(
+      { 
+        _id: customerId,
+        __v: clientVersion
+      },
+      {
+        $pull: { contact_methods: { _id: id } },
+        $inc: { __v: 1 }
+      },
+      { new: true }
+    );
+
+    if (!result) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
+      });
+    }
+
+    customer = result;
 
     // Log audit for contact deletion
     const contactName = deletedContact.full_name || deletedContact.method_value || 'Contact';
@@ -446,7 +582,7 @@ router.post('/:id/methods', async (req, res) => {
   try {
     const { customerId, id } = req.params;
 
-    const customer = await Customer.findById(customerId);
+    let customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
@@ -467,16 +603,46 @@ router.post('/:id/methods', async (req, res) => {
       customer.contact_methods[contactIndex].contact_methods = [];
     }
 
-    // If this method is set as primary, remove primary from other methods in this contact
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v ?? customer.__v;
+
+    // Build update operation for atomic add
+    const updateOperation = {};
     if (req.body.is_primary) {
-      customer.contact_methods[contactIndex].contact_methods.forEach(method => {
-        method.is_primary = false;
+      // Remove primary from other methods in this contact
+      const contact = customer.contact_methods[contactIndex];
+      if (contact.contact_methods) {
+        contact.contact_methods.forEach((method, methodIndex) => {
+          if (method.is_primary) {
+            updateOperation[`contact_methods.${contactIndex}.contact_methods.${methodIndex}.is_primary`] = false;
+          }
+        });
+      }
+    }
+
+    // Add new method atomically
+    const result = await Customer.findOneAndUpdate(
+      { 
+        _id: customerId,
+        __v: clientVersion
+      },
+      {
+        $push: { [`contact_methods.${contactIndex}.contact_methods`]: req.body },
+        $set: updateOperation,
+        $inc: { __v: 1 }
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!result) {
+      return res.status(409).json({
+        success: false,
+        message: 'Customer was modified by another process. Please refresh and try again.',
+        code: 'VERSION_CONFLICT'
       });
     }
 
-    // Add new method to contact_methods array
-    customer.contact_methods[contactIndex].contact_methods.push(req.body);
-    await customer.save();
+    customer = result;
 
     // Get the newly added method
     const methodsArray = customer.contact_methods[contactIndex].contact_methods;
@@ -502,15 +668,26 @@ router.post('/:id/methods', async (req, res) => {
 });
 
 // PUT /api/customers/:customerId/contacts/:id/methods/:methodId - Update specific contact method
-router.put('/:id/methods/:methodId', async (req, res) => {
+router.put('/:id/methods/:methodId', requireIfMatch, async (req, res) => {
   try {
     const { customerId, id, methodId } = req.params;
 
-    const customer = await Customer.findById(customerId);
+    let customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
         message: 'Customer not found'
+      });
+    }
+
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined || customer.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
       });
     }
 
@@ -522,7 +699,7 @@ router.put('/:id/methods/:methodId', async (req, res) => {
       });
     }
 
-    const contact = customer.contact_methods[contactIndex];
+    let contact = customer.contact_methods[contactIndex];
     if (!contact.contact_methods) {
       return res.status(404).json({
         success: false,
@@ -538,18 +715,49 @@ router.put('/:id/methods/:methodId', async (req, res) => {
       });
     }
 
-    // If this method is set as primary, remove primary from other methods in this contact
+    // Build atomic update operation
+    const updateOperation = {};
+    
+    // Update method fields atomically
+    Object.keys(req.body).forEach(key => {
+      if (req.body[key] !== undefined && key !== '_id') {
+        updateOperation[`contact_methods.${contactIndex}.contact_methods.${methodIndex}.${key}`] = req.body[key];
+      }
+    });
+
+    // If this method is set as primary, remove primary from other methods atomically
     if (req.body.is_primary) {
       contact.contact_methods.forEach((method, index) => {
-        if (index !== methodIndex) {
-          method.is_primary = false;
+        if (index !== methodIndex && method.is_primary) {
+          updateOperation[`contact_methods.${contactIndex}.contact_methods.${index}.is_primary`] = false;
         }
       });
     }
 
-    // Update the method
-    Object.assign(contact.contact_methods[methodIndex], req.body);
-    await customer.save();
+    // Perform atomic update with version check
+    const result = await Customer.findOneAndUpdate(
+      { 
+        _id: customerId,
+        __v: clientVersion
+      },
+      {
+        $set: updateOperation,
+        $inc: { __v: 1 }
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!result) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
+      });
+    }
+
+    customer = result;
+    contact = customer.contact_methods[contactIndex];
 
     res.status(200).json({
       success: true,
@@ -571,11 +779,11 @@ router.put('/:id/methods/:methodId', async (req, res) => {
 });
 
 // DELETE /api/customers/:customerId/contacts/:id/methods/:methodId - Delete specific contact method
-router.delete('/:id/methods/:methodId', async (req, res) => {
+router.delete('/:id/methods/:methodId', requireIfMatch, async (req, res) => {
   try {
     const { customerId, id, methodId } = req.params;
 
-    const customer = await Customer.findById(customerId);
+    let customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
@@ -591,7 +799,7 @@ router.delete('/:id/methods/:methodId', async (req, res) => {
       });
     }
 
-    const contact = customer.contact_methods[contactIndex];
+    let contact = customer.contact_methods[contactIndex];
     if (!contact.contact_methods) {
       return res.status(404).json({
         success: false,
@@ -607,9 +815,43 @@ router.delete('/:id/methods/:methodId', async (req, res) => {
       });
     }
 
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined || customer.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
+      });
+    }
+
     const deletedMethod = contact.contact_methods[methodIndex];
-    contact.contact_methods.splice(methodIndex, 1);
-    await customer.save();
+    
+    // Remove method atomically using $pull
+    const result = await Customer.findOneAndUpdate(
+      { 
+        _id: customerId,
+        __v: clientVersion
+      },
+      {
+        $pull: { [`contact_methods.${contactIndex}.contact_methods`]: { _id: methodId } },
+        $inc: { __v: 1 }
+      },
+      { new: true }
+    );
+
+    if (!result) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: customerId
+      });
+    }
+
+    customer = result;
+    contact = customer.contact_methods[contactIndex];
 
     res.status(200).json({
       success: true,

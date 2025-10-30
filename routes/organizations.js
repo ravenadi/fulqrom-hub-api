@@ -5,6 +5,7 @@ const Tenant = require('../models/Tenant');
 const Plan = require('../models/Plan');
 const User = require('../models/User');
 const { tenantContext, optionalTenantContext } = require('../middleware/tenantContext');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 const router = express.Router();
 
@@ -523,7 +524,7 @@ router.get('/current', tenantContext, async (req, res) => {
  *
  * Requires authentication and membership in the organization
  */
-router.put('/:id', tenantContext, async (req, res) => {
+router.put('/:id', requireIfMatch, tenantContext, async (req, res) => {
   try {
     const organizationId = req.params.id;
 
@@ -537,7 +538,17 @@ router.put('/:id', tenantContext, async (req, res) => {
       });
     }
 
-    // Find organization and verify it belongs to user's tenant
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
+
+    // Load organization document
     const organization = await Organization.findById(organizationId);
     if (!organization) {
       return res.status(404).json({
@@ -547,11 +558,22 @@ router.put('/:id', tenantContext, async (req, res) => {
       });
     }
 
+    // Verify tenant ownership
     if (organization.tenant_id.toString() !== user.tenant_id.toString()) {
       return res.status(403).json({
         success: false,
         error: 'ACCESS_DENIED',
         message: 'You do not have permission to update this organization'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (organization.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: organization.__v,
+        resource: 'Organization',
+        id: organizationId
       });
     }
 
@@ -606,12 +628,13 @@ router.put('/:id', tenantContext, async (req, res) => {
     if (branding) updateData.branding = branding;
     if (settings) updateData.settings = settings;
 
-    // Update organization
-    const updatedOrganization = await Organization.findByIdAndUpdate(
-      organizationId,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
+    // Apply updates via Object.assign (Load-Modify-Save pattern)
+    Object.assign(organization, updateData);
+
+    // Save (Mongoose auto-increments __v on save)
+    await organization.save();
+
+    const updatedOrganization = organization;
 
     res.status(200).json({
       success: true,
@@ -629,6 +652,16 @@ router.put('/:id', tenantContext, async (req, res) => {
     });
 
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'Organization',
+        id: req.params.id
+      });
+    }
+
     console.error('Update organization error:', error);
 
     res.status(500).json({
