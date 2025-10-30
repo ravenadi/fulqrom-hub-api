@@ -1,5 +1,6 @@
 const Notification = require('../models/Notification');
 const emailService = require('./emailService');
+const { emitNotification, emitUnreadCount, emitNotificationUpdate } = require('./socketManager');
 
 /**
  * Notification Service
@@ -79,6 +80,24 @@ class NotificationService {
       }
 
       const notification = await Notification.create(notificationData);
+
+      // Emit Socket.IO notification to user in real-time
+      try {
+        emitNotification(userId, {
+          id: notification._id.toString(),
+          title,
+          message,
+          type,
+          priority,
+          document_id: documentId,
+          document_name: documentName,
+          action_url: actionUrl,
+          is_read: false
+        });
+      } catch (socketError) {
+        console.warn('⚠️  Failed to emit Socket.IO notification:', socketError.message);
+        // Don't fail notification creation if Socket.IO fails
+      }
 
       // Send email notification if requested AND global email is not disabled
       if (sendEmail && emailTemplate && userEmail && !this.disableEmail) {
@@ -494,7 +513,23 @@ class NotificationService {
       throw new Error('Notification not found');
     }
 
-    return notification.markAsRead();
+    const result = await notification.markAsRead();
+
+    // Emit Socket.IO update event
+    try {
+      emitNotificationUpdate(userId, {
+        notificationId: notificationId,
+        action: 'marked_read'
+      });
+
+      // Also emit updated unread count
+      const unreadCount = await this.getUnreadCount(userId);
+      emitUnreadCount(userId, unreadCount);
+    } catch (socketError) {
+      console.warn('⚠️  Failed to emit Socket.IO update:', socketError.message);
+    }
+
+    return result;
   }
 
   /**
@@ -504,7 +539,23 @@ class NotificationService {
    * @returns {Promise<Object>} Update result
    */
   async markMultipleAsRead(notificationIds, userId) {
-    return Notification.markMultipleAsRead(notificationIds, userId);
+    const result = await Notification.markMultipleAsRead(notificationIds, userId);
+
+    // Emit Socket.IO update event
+    try {
+      emitNotificationUpdate(userId, {
+        notificationIds: notificationIds,
+        action: 'marked_read_multiple'
+      });
+
+      // Also emit updated unread count
+      const unreadCount = await this.getUnreadCount(userId);
+      emitUnreadCount(userId, unreadCount);
+    } catch (socketError) {
+      console.warn('⚠️  Failed to emit Socket.IO update:', socketError.message);
+    }
+
+    return result;
   }
 }
 

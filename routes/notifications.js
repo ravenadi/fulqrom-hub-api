@@ -265,6 +265,17 @@ router.put('/mark-all-read', async (req, res) => {
       }
     );
 
+    // Emit Socket.IO events for mark all as read
+    try {
+      const { emitNotificationUpdate, emitUnreadCount } = require('../utils/socketManager');
+      emitNotificationUpdate(userId, {
+        action: 'marked_all_read'
+      });
+      emitUnreadCount(userId, 0);
+    } catch (socketError) {
+      console.warn('⚠️  Failed to emit Socket.IO update:', socketError.message);
+    }
+
     res.json({
       success: true,
       data: result,

@@ -1,8 +1,10 @@
 /**
  * Socket.IO Manager
  * 
- * Handles WebSocket connections for real-time session invalidation.
- * Emits events when sessions are invalidated due to single-session enforcement.
+ * Handles WebSocket connections for real-time events:
+ * - Session invalidation (single-session enforcement)
+ * - Notifications (document activities, alerts, reminders)
+ * - System alerts
  */
 
 const { Server: SocketIOServer } = require('socket.io');
@@ -52,7 +54,7 @@ function initializeSocketIO(httpServer) {
       credentials: true,
       methods: ['GET', 'POST']
     },
-    transports: ['websocket', 'polling'],
+    transports: ['websocket'],
     allowEIO3: true // Allow Engine.IO v3 clients
   });
 
@@ -127,9 +129,76 @@ function emitSessionInvalidation(userId, sessionId, reason = 'new_session') {
   console.log(`📡 Emitted session invalidation to user ${userId} in room ${roomName}`);
 }
 
+/**
+ * Emit notification to user via Socket.IO
+ * @param {String} userId - User ID (MongoDB ObjectId as string)
+ * @param {Object} notification - Notification data
+ */
+function emitNotification(userId, notification) {
+  if (!io) {
+    console.warn('⚠️  Socket.IO not initialized, skipping real-time notification');
+    return;
+  }
+
+  const roomName = `user:${userId}`;
+  
+  // Emit notification event to user
+  io.to(roomName).emit('notification:new', {
+    ...notification,
+    timestamp: new Date()
+  });
+
+  console.log(`📨 Emitted notification to user ${userId}: ${notification.title}`);
+}
+
+/**
+ * Emit notification update event (e.g., when marked as read)
+ * @param {String} userId - User ID
+ * @param {Object} data - Update data
+ */
+function emitNotificationUpdate(userId, data) {
+  if (!io) {
+    console.warn('⚠️  Socket.IO not initialized, skipping notification update');
+    return;
+  }
+
+  const roomName = `user:${userId}`;
+  
+  io.to(roomName).emit('notification:update', {
+    ...data,
+    timestamp: new Date()
+  });
+
+  console.log(`🔄 Emitted notification update to user ${userId}`);
+}
+
+/**
+ * Emit unread count update to user
+ * @param {String} userId - User ID
+ * @param {Number} count - Unread count
+ */
+function emitUnreadCount(userId, count) {
+  if (!io) {
+    console.warn('⚠️  Socket.IO not initialized, skipping unread count update');
+    return;
+  }
+
+  const roomName = `user:${userId}`;
+  
+  io.to(roomName).emit('notification:unread_count', {
+    count,
+    timestamp: new Date()
+  });
+
+  console.log(`🔔 Emitted unread count update to user ${userId}: ${count}`);
+}
+
 module.exports = {
   initializeSocketIO,
   getIO,
-  emitSessionInvalidation
+  emitSessionInvalidation,
+  emitNotification,
+  emitNotificationUpdate,
+  emitUnreadCount
 };
 
