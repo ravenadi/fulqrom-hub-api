@@ -238,16 +238,22 @@ UserSessionSchema.statics.createSession = async function(userData, options = {})
 
   // STRICT SINGLE SESSION: Invalidate all previous active sessions for this user
   if (singleSession) {
-    const result = await this.updateMany(
-      { user_id: userData.user_id, is_active: true },
-      {
-        $set: {
-          is_active: false,
-          invalidated_at: new Date(),
-          invalidation_reason: 'new_session'
-        }
+
+    const filter = {
+      user_id: userData.user_id,
+      is_active: true,
+      ...(device_fingerprint ? { device_fingerprint: { $ne: device_fingerprint } } : {})
+    };
+
+
+       const result = await this.updateMany(filter, {
+      $set: {
+        is_active: false,
+        invalidated_at: new Date(),
+        invalidation_reason: 'new_session_different_device'
       }
-    );
+    });
+
 
     // Log invalidations for monitoring/debugging
     if (result.modifiedCount > 0) {

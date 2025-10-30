@@ -65,12 +65,12 @@ function initializeSocketIO(httpServer) {
     // Handle session authentication
     socket.on('authenticate', (data) => {
       const { sessionId, userId } = data;
-      
+
       if (sessionId && userId) {
         // Join room for this user
         socket.join(`user:${userId}`);
-        console.log(`✅ Socket authenticated: ${socket.id} for user ${userId}`);
-        
+        console.log(`✅ Socket authenticated: ${socket.id} for user ${userId} (session: ${sessionId})`);
+
         // Store session info on socket
         socket.sessionId = sessionId;
         socket.userId = userId;
@@ -107,26 +107,50 @@ function getIO() {
 /**
  * Emit session invalidation event to user
  * @param {String} userId - MongoDB ObjectId as string
- * @param {String} sessionId - Current valid session ID
+ * @param {String} currentSessionId - Current valid session ID (to preserve)
  * @param {String} reason - Invalidation reason
  */
-function emitSessionInvalidation(userId, sessionId, reason = 'new_session') {
+function emitSessionInvalidation(userId, currentSessionId, reason = 'new_session') {
   if (!io) {
     console.warn('⚠️  Socket.IO not initialized, skipping real-time notification');
     return;
   }
 
   const roomName = `user:${userId}`;
-  
-  // Emit to all sockets for this user
-  io.to(roomName).emit('session:invalidated', {
-    reason,
-    message: reason === 'new_session' 
-      ? 'You have been logged out because a new login was detected from another device.'
-      : 'Your session has been invalidated.'
+
+  // Get all sockets for this user
+  const socketsInRoom = io.sockets.adapter.rooms.get(roomName);
+
+  if (!socketsInRoom) {
+    console.log(`📡 No active sockets in room ${roomName}`);
+    return;
+  }
+
+  let invalidatedCount = 0;
+
+  // Emit to sockets with DIFFERENT session IDs
+  socketsInRoom.forEach((socketId) => {
+    const socket = io.sockets.sockets.get(socketId);
+
+    if (socket) {
+      // Only invalidate sockets with different session IDs
+      // This preserves all tabs/windows with the same session cookie
+      if (!currentSessionId || socket.sessionId !== currentSessionId) {
+        socket.emit('session:invalidated', {
+          reason,
+          message: reason === 'new_session'
+            ? 'You have been logged out because a new login was detected from another device.'
+            : 'Your session has been invalidated.'
+        });
+        invalidatedCount++;
+        console.log(`📡 Invalidated socket ${socketId} (session: ${socket.sessionId})`);
+      } else {
+        console.log(`✅ Preserved socket ${socketId} (same session: ${socket.sessionId})`);
+      }
+    }
   });
 
-  console.log(`📡 Emitted session invalidation to user ${userId} in room ${roomName}`);
+  console.log(`📡 Emitted session invalidation to ${invalidatedCount} socket(s) in room ${roomName} (preserved session: ${currentSessionId})`);
 }
 
 /**
@@ -193,12 +217,64 @@ function emitUnreadCount(userId, count) {
   console.log(`🔔 Emitted unread count update to user ${userId}: ${count}`);
 }
 
+/**
+ * Emit asset update notification to all connected users
+ * @param {String} assetId - Asset ID
+ * @param {Object} data - Update data including updatedBy and tenant_id
+ */
+function emitAssetUpdate(assetId, data) {
+  if (!io) {
+    console.warn('⚠️  Socket.IO not initialized, skipping asset update notification');
+    return;
+  }
+
+  // Use tenant-specific room for the broadcast
+  const tenantRoom = `tenant:${data.tenant_id}`;
+  
+  // Emit to all users in the tenant except the originator
+  io.to(tenantRoom).emit('asset:updated', {
+    assetId,
+    updatedBy: data.updatedBy,
+    timestamp: new Date(),
+    ...data
+  });
+
+  console.log(`🔧 Emitted asset update notification for asset ${assetId} to tenant ${data.tenant_id}`);
+}
+
+/**
+ * Emit customer update notification to all connected users
+ * @param {String} customerId - Customer ID
+ * @param {Object} data - Update data including updatedBy and tenant_id
+ */
+function emitCustomerUpdate(customerId, data) {
+  if (!io) {
+    console.warn('⚠️  Socket.IO not initialized, skipping customer update notification');
+    return;
+  }
+
+  // Use tenant-specific room for the broadcast
+  const tenantRoom = `tenant:${data.tenant_id}`;
+  
+  // Emit to all users in the tenant except the originator
+  io.to(tenantRoom).emit('customer:updated', {
+    customerId,
+    updatedBy: data.updatedBy,
+    timestamp: new Date(),
+    ...data
+  });
+
+  console.log(`👥 Emitted customer update notification for customer ${customerId} to tenant ${data.tenant_id}`);
+}
+
 module.exports = {
   initializeSocketIO,
   getIO,
   emitSessionInvalidation,
   emitNotification,
   emitNotificationUpdate,
-  emitUnreadCount
+  emitUnreadCount,
+  emitAssetUpdate,
+  emitCustomerUpdate
 };
 
