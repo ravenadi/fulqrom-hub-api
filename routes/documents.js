@@ -794,13 +794,39 @@ router.get('/:id/preview', validateObjectId, async (req, res) => {
 
     let urlResult;
 
+    // Determine bucket name - use from file_meta if available, otherwise determine from tenant
+    let bucketName = fileMeta.bucket_name;
+
+    if (!bucketName) {
+      // Bucket name missing - determine from tenant
+      const tenantId = document.tenant_id;
+      if (tenantId) {
+        try {
+          const tenant = await Tenant.findById(tenantId);
+          if (tenant && tenant.s3_bucket_name && tenant.s3_bucket_status === 'created') {
+            bucketName = tenant.s3_bucket_name;
+            console.log(`📦 Determined bucket from tenant: ${bucketName}`);
+          } else {
+            bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+            console.log(`📦 Using default bucket (tenant has no bucket): ${bucketName}`);
+          }
+        } catch (error) {
+          console.error('⚠️  Error fetching tenant, using default bucket:', error.message);
+          bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+        }
+      } else {
+        bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+        console.log(`📦 Using default bucket (no tenant): ${bucketName}`);
+      }
+    }
+
     // Check if document is in tenant-specific bucket
-    if (fileMeta.bucket_name && fileMeta.bucket_name !== process.env.AWS_BUCKET) {
+    if (bucketName && bucketName !== process.env.AWS_BUCKET) {
       // Use tenant-specific S3 service
-      console.log(`🔍 Generating preview URL for tenant bucket: ${fileMeta.bucket_name}`);
+      console.log(`🔍 Generating preview URL for tenant bucket: ${bucketName}`);
       const tenantS3Service = new TenantS3Service();
       urlResult = await tenantS3Service.generatePreviewUrlForTenantBucket(
-        fileMeta.bucket_name,
+        bucketName,
         fileMeta.file_key,
         fileMeta.file_name,
         fileMeta.file_type,
@@ -3360,54 +3386,89 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     // Get tenant ID from request (set by auth middleware)
     const tenantId = req.user?.tenant_id || req.tenantId || currentDocument.tenant_id;
 
-    // Generate S3 key and file metadata immediately (without uploading)
-    const s3Key = `documents/${documentGroupId}/${year}/${month}/${day}/${Date.now()}-${versionedFileName}`;
-    const fileUrl = `${process.env.AWS_URL}/${s3Key}`;
-    const fileExtension = require('path').extname(req.file.originalname).toLowerCase().replace('.', '');
-
-    const uploadResult = {
-      success: true,
-      data: {
-        file_meta: {
-          file_name: req.file.originalname,
-          file_size: req.file.size,
-          file_type: req.file.mimetype,
-          file_extension: fileExtension,
-          file_url: fileUrl,
-          file_path: s3Key,
-          file_key: s3Key,
-          version: newVersionNumber,
-          file_mime_type: req.file.mimetype,
-          upload_status: 'pending' // Mark as pending upload
+    // Determine bucket name based on tenant
+    let bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+    if (tenantId) {
+      try {
+        const tenant = await Tenant.findById(tenantId);
+        if (tenant && tenant.s3_bucket_name && tenant.s3_bucket_status === 'created') {
+          bucketName = tenant.s3_bucket_name;
+          console.log(`📦 Using tenant bucket for new version: ${bucketName}`);
         }
+      } catch (error) {
+        console.error('⚠️  Error fetching tenant bucket, using default:', error.message);
       }
-    };
+    }
 
-    // Upload to S3 asynchronously in background (non-blocking)
-    // Clone file buffer to prevent garbage collection before async upload completes
-    const fileBufferCopy = Buffer.from(req.file.buffer);
+    // Prepare file for upload with versioned filename
     const fileForUpload = {
       ...req.file,
-      buffer: fileBufferCopy,
       originalname: versionedFileName
     };
 
-    setImmediate(async () => {
-      try {
-        const asyncUploadResult = await uploadFileToS3(
+    // Upload to S3 SYNCHRONOUSLY (blocking) to ensure file exists before saving to DB
+    console.log(`📤 Uploading new version ${newVersionNumber} to S3...`);
+    let uploadResult;
+
+    try {
+      // Try tenant-specific bucket first if available
+      if (tenantId) {
+        try {
+          const tenant = await Tenant.findById(tenantId);
+          if (tenant && tenant.s3_bucket_name && tenant.s3_bucket_status === 'created') {
+            console.log(`📦 Uploading to tenant bucket: ${tenant.s3_bucket_name}`);
+            const tenantS3Service = new TenantS3Service(tenantId);
+            uploadResult = await tenantS3Service.uploadFileToTenantBucket(
+              fileForUpload,
+              tenantId,
+              tenant.tenant_name
+            );
+          } else {
+            // Fall back to shared bucket
+            uploadResult = await uploadFileToS3(
+              fileForUpload,
+              customerId,
+              `documents/${documentGroupId}/${year}/${month}/${day}`,
+              tenantId
+            );
+          }
+        } catch (tenantError) {
+          console.error('⚠️  Tenant bucket upload failed, using shared bucket:', tenantError.message);
+          uploadResult = await uploadFileToS3(
+            fileForUpload,
+            customerId,
+            `documents/${documentGroupId}/${year}/${month}/${day}`,
+            tenantId
+          );
+        }
+      } else {
+        // No tenant - use shared bucket
+        uploadResult = await uploadFileToS3(
           fileForUpload,
           customerId,
           `documents/${documentGroupId}/${year}/${month}/${day}`,
           tenantId
         );
-
-        if (!asyncUploadResult.success) {
-          console.error(`Failed to upload file to S3 for version ${newVersionNumber}:`, asyncUploadResult.error);
-        }
-      } catch (error) {
-        console.error(`Error uploading file to S3 for version ${newVersionNumber}:`, error.message);
       }
-    });
+
+      if (!uploadResult.success) {
+        console.error(`❌ S3 upload failed for version ${newVersionNumber}:`, uploadResult.error);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload file to S3',
+          error: uploadResult.error
+        });
+      }
+
+      console.log(`✅ Version ${newVersionNumber} uploaded successfully to S3`);
+    } catch (error) {
+      console.error(`❌ Error uploading version ${newVersionNumber} to S3:`, error.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Error uploading file to S3',
+        error: error.message
+      });
+    }
 
     // Update existing document instead of creating new one
     let updatedDocument;
@@ -3782,13 +3843,39 @@ router.get('/:id/download-version/:versionSequence', validateObjectId, async (re
     const fileMeta = fileToDownload.file_meta;
     let urlResult;
 
+    // Determine bucket name - use from file_meta if available, otherwise determine from tenant
+    let bucketName = fileMeta.bucket_name;
+
+    if (!bucketName) {
+      // Bucket name missing - determine from tenant
+      const tenantId = document.tenant_id;
+      if (tenantId) {
+        try {
+          const tenant = await Tenant.findById(tenantId);
+          if (tenant && tenant.s3_bucket_name && tenant.s3_bucket_status === 'created') {
+            bucketName = tenant.s3_bucket_name;
+            console.log(`📦 Determined bucket from tenant for version: ${bucketName}`);
+          } else {
+            bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+            console.log(`📦 Using default bucket for version (tenant has no bucket): ${bucketName}`);
+          }
+        } catch (error) {
+          console.error('⚠️  Error fetching tenant for version, using default bucket:', error.message);
+          bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+        }
+      } else {
+        bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+        console.log(`📦 Using default bucket for version (no tenant): ${bucketName}`);
+      }
+    }
+
     // Check if version is in tenant-specific bucket
-    if (fileMeta.bucket_name && fileMeta.bucket_name !== process.env.AWS_BUCKET) {
+    if (bucketName && bucketName !== process.env.AWS_BUCKET) {
       // Use tenant-specific S3 service
-      console.log(`📥 Generating download URL for version in tenant bucket: ${fileMeta.bucket_name}`);
+      console.log(`📥 Generating download URL for version in tenant bucket: ${bucketName}`);
       const tenantS3Service = new TenantS3Service();
       urlResult = await tenantS3Service.generatePresignedUrlForTenantBucket(
-        fileMeta.bucket_name,
+        bucketName,
         fileMeta.file_key,
         3600 // 1 hour expiry
       );
@@ -3921,6 +4008,28 @@ router.post('/:id/restore-version', validateObjectId, async (req, res) => {
     document.version = newVersionNumber;
     document.version_sequence = newVersionSequence;
     document.file = versionToRestore.file;
+
+    // Ensure bucket_name is preserved - if missing from restored version, determine from tenant
+    if (document.file?.file_meta && !document.file.file_meta.bucket_name) {
+      let bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+
+      // Try to get tenant-specific bucket
+      const tenantId = document.tenant_id;
+      if (tenantId) {
+        try {
+          const tenant = await Tenant.findById(tenantId);
+          if (tenant && tenant.s3_bucket_name && tenant.s3_bucket_status === 'created') {
+            bucketName = tenant.s3_bucket_name;
+            console.log(`✅ Using tenant bucket for restored version: ${bucketName}`);
+          }
+        } catch (error) {
+          console.error(`⚠️  Error fetching tenant bucket, using default:`, error.message);
+        }
+      }
+
+      document.file.file_meta.bucket_name = bucketName;
+      console.log(`⚠️  bucket_name missing in restored version, set to: ${bucketName}`);
+    }
 
     // Update version metadata
     document.version_metadata = {
@@ -4481,13 +4590,39 @@ router.get('/:id/download', validateObjectId, async (req, res) => {
     const fileMeta = document.file.file_meta;
     let result;
 
+    // Determine bucket name - use from file_meta if available, otherwise determine from tenant
+    let bucketName = fileMeta.bucket_name;
+
+    if (!bucketName) {
+      // Bucket name missing - determine from tenant
+      const tenantId = document.tenant_id;
+      if (tenantId) {
+        try {
+          const tenant = await Tenant.findById(tenantId);
+          if (tenant && tenant.s3_bucket_name && tenant.s3_bucket_status === 'created') {
+            bucketName = tenant.s3_bucket_name;
+            console.log(`📦 Determined bucket from tenant: ${bucketName}`);
+          } else {
+            bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+            console.log(`📦 Using default bucket (tenant has no bucket): ${bucketName}`);
+          }
+        } catch (error) {
+          console.error('⚠️  Error fetching tenant, using default bucket:', error.message);
+          bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+        }
+      } else {
+        bucketName = process.env.AWS_BUCKET || 'dev-saas-common';
+        console.log(`📦 Using default bucket (no tenant): ${bucketName}`);
+      }
+    }
+
     // Check if document is in tenant-specific bucket
-    if (fileMeta.bucket_name && fileMeta.bucket_name !== process.env.AWS_BUCKET) {
+    if (bucketName && bucketName !== process.env.AWS_BUCKET) {
       // Use tenant-specific S3 service
-      console.log(`📥 Generating download URL for tenant bucket: ${fileMeta.bucket_name}`);
+      console.log(`📥 Generating download URL for tenant bucket: ${bucketName}`);
       const tenantS3Service = new TenantS3Service();
       result = await tenantS3Service.generatePresignedUrlForTenantBucket(
-        fileMeta.bucket_name,
+        bucketName,
         fileMeta.file_key,
         3600 // 1 hour expiry
       );

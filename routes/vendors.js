@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const Vendor = require('../models/Vendor');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
+const { logCreate, logUpdate, logDelete, logStatusChange } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -388,6 +389,16 @@ router.post('/', checkModulePermission('vendors', 'create'), async (req, res) =>
     const vendor = new Vendor(vendorData);
     await vendor.save();
 
+    // Log audit for vendor creation
+    const vendorName = vendor.contractor_name || vendor.trading_name || 'New Vendor';
+    await logCreate({
+      module: 'vendor',
+      resourceName: vendorName,
+      req,
+      moduleId: vendor._id,
+      resource: vendor.toObject()
+    });
+
     res.status(201).json({
       success: true,
       message: 'Vendor created successfully',
@@ -486,9 +497,19 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
 
     // Apply updates via Object.assign (Load-Modify-Save pattern)
     Object.assign(vendor, req.body);
-    
+
     // Save (Mongoose auto-increments __v on save)
     await vendor.save();
+
+    // Log audit for vendor update
+    const vendorName = vendor.contractor_name || vendor.trading_name || 'Vendor';
+    await logUpdate({
+      module: 'vendor',
+      resourceName: vendorName,
+      req,
+      moduleId: vendor._id,
+      resource: vendor.toObject()
+    });
 
     res.status(200).json({
       success: true,
@@ -542,8 +563,8 @@ router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.p
       });
     }
 
-    // Delete vendor ONLY if it belongs to the user's tenant
-    const vendor = await Vendor.findOneAndDelete({
+    // Find vendor first to get data for audit log
+    const vendor = await Vendor.findOne({
       _id: vendorId,
       tenant_id: tenantId  // Ensure user owns this vendor
     });
@@ -554,6 +575,25 @@ router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.p
         message: 'Vendor not found or you do not have permission to delete it'
       });
     }
+
+    // Store vendor data before deletion
+    const vendorName = vendor.contractor_name || vendor.trading_name || 'Vendor';
+    const vendorData = vendor.toObject();
+
+    // Delete vendor
+    await Vendor.findOneAndDelete({
+      _id: vendorId,
+      tenant_id: tenantId
+    });
+
+    // Log audit for vendor deletion
+    await logDelete({
+      module: 'vendor',
+      resourceName: vendorName,
+      req,
+      moduleId: vendorId,
+      resource: vendorData
+    });
 
     res.status(200).json({
       success: true,
@@ -641,10 +681,23 @@ router.patch('/:id/status', checkResourcePermission('vendor', 'edit', (req) => r
     }
 
     // Apply status update (Load-Modify-Save pattern)
+    const oldStatus = vendor.status;
     vendor.status = status;
-    
+
     // Save (Mongoose auto-increments __v on save)
     await vendor.save();
+
+    // Log audit for vendor status change
+    const vendorName = vendor.contractor_name || vendor.trading_name || 'Vendor';
+    await logStatusChange({
+      module: 'vendor',
+      resourceName: vendorName,
+      req,
+      moduleId: vendor._id,
+      oldStatus,
+      newStatus: status,
+      resource: vendor.toObject()
+    });
 
     res.status(200).json({
       success: true,

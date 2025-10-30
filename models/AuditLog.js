@@ -21,8 +21,8 @@ const AuditLogSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: [
-      'auth', 'customer', 'site', 'building', 'floor', 
-      'asset', 'tenant', 'building_tenant', 'document', 'user', 'vendor'
+      'auth', 'customer', 'site', 'building', 'floor',
+      'asset', 'tenant', 'building_tenant', 'document', 'user', 'vendor', 'contact'
     ],
     trim: true,
     index: true
