@@ -250,31 +250,8 @@ AssetSchema.index({ category: 1, status: 1 });
 // Unique constraint: One asset_no per customer_id (sparse index - only applies when asset_no exists)
 AssetSchema.index({ customer_id: 1, asset_no: 1 }, { unique: true, sparse: true });
 
-// Ensure virtual fields are serialized and preserve unpopulated IDs
-AssetSchema.set('toJSON', {
-  virtuals: true,
-  transform: function(doc, ret) {
-    // Preserve ObjectId if population returned null
-    if (ret.customer_id === null) {
-      const originalId = doc.populated('customer_id') || doc._doc?.customer_id || doc.customer_id;
-      if (originalId) ret.customer_id = originalId;
-    }
-    if (ret.site_id === null) {
-      const originalId = doc.populated('site_id') || doc._doc?.site_id || doc.site_id;
-      if (originalId) ret.site_id = originalId;
-    }
-    if (ret.building_id === null) {
-      const originalId = doc.populated('building_id') || doc._doc?.building_id || doc.building_id;
-      if (originalId) ret.building_id = originalId;
-    }
-    if (ret.floor_id === null) {
-      const originalId = doc.populated('floor_id') || doc._doc?.floor_id || doc.floor_id;
-      if (originalId) ret.floor_id = originalId;
-    }
-
-    return ret;
-  }
-});
+// Ensure virtual fields are serialized (similar to Vendor model)
+AssetSchema.set('toJSON', { virtuals: true });
 AssetSchema.set('toObject', { virtuals: true });
 
 // Apply tenant plugin for multi-tenancy support

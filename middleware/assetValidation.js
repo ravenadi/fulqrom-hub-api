@@ -140,7 +140,10 @@ const updateAssetSchema = Joi.object({
   installation_date: dateSchema,
 
   // System fields
-  is_active: Joi.boolean().optional()
+  is_active: Joi.boolean().optional(),
+
+  // Version field for optimistic concurrency control
+  __v: Joi.number().integer().min(0).optional()
 }).options({
   stripUnknown: false, // Keep unknown fields for flexibility
   abortEarly: false

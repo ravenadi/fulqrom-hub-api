@@ -419,8 +419,7 @@ router.get('/:id', checkResourcePermission('asset', 'view', (req) => req.params.
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address')
       .populate('building_id', 'building_name building_code')
-      .populate('floor_id', 'floor_name floor_level')
-      .lean();
+      .populate('floor_id', 'floor_name floor_level');
 
     if (!asset) {
       return res.status(404).json({
@@ -429,13 +428,22 @@ router.get('/:id', checkResourcePermission('asset', 'view', (req) => req.params.
       });
     }
 
+    // Convert to plain object
+    const assetObj = asset.toObject();
+
+    // Get version or default to 0 for documents that don't have __v yet
+    // This handles legacy documents created before version tracking
+    const version = asset.__v !== undefined ? asset.__v :
+                   (asset._doc?.__v !== undefined ? asset._doc.__v : 0);
+
     // Add backward compatibility fields for frontend
     const assetWithCompatibility = {
-      ...asset,
-      purchase_cost: asset.purchase_cost_aud || asset.purchase_cost || undefined,
-      current_book_value: asset.current_book_value_aud || asset.current_book_value || undefined,
-      weight: asset.weight_kgs || asset.weight || undefined,
-      installation_date: asset.date_of_installation || asset.installation_date || undefined
+      ...assetObj,
+      __v: version, // Always include version (0 for legacy documents)
+      purchase_cost: assetObj.purchase_cost_aud || assetObj.purchase_cost || undefined,
+      current_book_value: assetObj.current_book_value_aud || assetObj.current_book_value || undefined,
+      weight: assetObj.weight_kgs || assetObj.weight || undefined,
+      installation_date: assetObj.date_of_installation || assetObj.installation_date || undefined
     };
 
     res.status(200).json({
@@ -588,10 +596,13 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
     }
 
     // Check version match for optimistic concurrency control
-    if (asset.__v !== clientVersion) {
+    // Handle legacy documents that don't have __v (treat as version 0)
+    const currentVersion = asset.__v !== undefined ? asset.__v : 0;
+
+    if (currentVersion !== clientVersion) {
       return sendVersionConflict(res, {
         clientVersion,
-        currentVersion: asset.__v,
+        currentVersion: currentVersion,
         resource: 'Asset',
         id: req.params.id
       });
@@ -653,23 +664,42 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
     atomicUpdate.updated_at = new Date().toISOString();
 
     // Perform atomic update with version check (prevents lost updates)
-    const result = await Asset.findOneAndUpdate(
-      { 
-        _id: req.params.id,
-        __v: clientVersion  // Version check prevents lost updates
-      },
-      {
-        $set: atomicUpdate,
-        $inc: { __v: 1 }  // Atomic version increment
-      },
-      { new: true, runValidators: true }
-    );
+    // Handle legacy documents that don't have __v field
+    let result;
+
+    if (currentVersion === 0 && asset.__v === undefined) {
+      // Legacy document without __v - initialize versioning
+      // First update: set __v to 1 (since we're saving changes)
+      result = await Asset.findOneAndUpdate(
+        {
+          _id: req.params.id,
+          __v: { $exists: false } // Only match if __v doesn't exist
+        },
+        {
+          $set: { ...atomicUpdate, __v: 1 } // Initialize __v to 1
+        },
+        { new: true, runValidators: true }
+      );
+    } else {
+      // Normal version-controlled update
+      result = await Asset.findOneAndUpdate(
+        {
+          _id: req.params.id,
+          __v: clientVersion  // Version check prevents lost updates
+        },
+        {
+          $set: atomicUpdate,
+          $inc: { __v: 1 }  // Atomic version increment
+        },
+        { new: true, runValidators: true }
+      );
+    }
     
     if (!result) {
       // Version conflict - resource was modified
       return sendVersionConflict(res, {
         clientVersion,
-        currentVersion: asset.__v,
+        currentVersion: currentVersion,
         resource: 'Asset',
         id: req.params.id
       });
@@ -686,6 +716,18 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
 
     // Log audit for asset update
     await logUpdate({ module: 'asset', resourceName: result.asset_no || result.category, req, moduleId: result._id.toString(), resource: assetPlain });
+    
+    // Emit socket notification for real-time updates
+    const socketManager = require('../utils/socketManager');
+    socketManager.emitAssetUpdate(result._id.toString(), {
+      tenant_id: result.tenant_id?.toString(),
+      updatedBy: req.user?.name || req.user?.email || 'Unknown user',
+      asset_no: result.asset_no,
+      asset_name: result.name || result.asset_no,
+      category: result.category,
+      updatedAt: result.updated_at || new Date().toISOString(),
+      version: result.__v
+    });
 
     // Add backward compatibility fields for frontend
     const assetWithCompatibility = {
