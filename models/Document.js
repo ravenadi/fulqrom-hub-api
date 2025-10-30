@@ -405,6 +405,44 @@ const DocumentSchema = new mongoose.Schema({
     default: 1
   },
   version_metadata: VersionMetadataSchema,
+  
+  // Version History Array (for single-record versioning)
+  version_history: [{
+    version_number: {
+      type: String,
+      trim: true
+    },
+    version_sequence: {
+      type: Number
+    },
+    file: FileSchema,
+    uploaded_by: {
+      user_id: {
+        type: String,
+        trim: true
+      },
+      user_name: {
+        type: String,
+        trim: true
+      },
+      email: {
+        type: String,
+        trim: true
+      }
+    },
+    upload_timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    change_notes: {
+      type: String,
+      trim: true
+    },
+    superseded_version: {
+      type: String,
+      trim: true
+    }
+  }],
 
   // Audit Fields
   created_by: {

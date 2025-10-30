@@ -525,6 +525,18 @@ router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering(
       filterQuery = { ...filterQuery, ...searchQuery };
     }
 
+    // Filter out version documents (legacy records) - we now maintain version history in version_history array
+    if (filterQuery.category && filterQuery.category.$in) {
+      // If category filter is already an array, filter out 'Version' from it
+      filterQuery.category.$in = filterQuery.category.$in.filter(cat => cat !== 'Version');
+    } else if (filterQuery.category && typeof filterQuery.category === 'object' && !filterQuery.category.$ne) {
+      // If category already has filters, add $ne condition
+      filterQuery.category = { ...filterQuery.category, $ne: 'Version' };
+    } else {
+      // If no category filter, just exclude Version
+      filterQuery.category = { $ne: 'Version' };
+    }
+
     // Pagination and sorting
     const pagination = buildPagination(page, limit);
     const sortObj = buildSort(sort, order);
@@ -3311,7 +3323,21 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       _id: String, // document_group_id
       seq: { type: Number, default: 0 }
     }, { _id: false }));
-    
+
+    // Check if current document has version_sequence (for backward compatibility with old documents)
+    const currentVersionSeq = currentDocument.version_sequence;
+
+    // If this is the first version upload for an old document without version_sequence,
+    // initialize counter to account for the existing version
+    if (!currentVersionSeq) {
+      // First time uploading to this document - current version is 1, new version will be 2
+      await Counter.findByIdAndUpdate(
+        documentGroupId,
+        { $setOnInsert: { _id: documentGroupId, seq: 1 } },
+        { upsert: true }
+      );
+    }
+
     // Atomically get and increment sequence number
     const counter = await Counter.findByIdAndUpdate(
       documentGroupId,
@@ -3383,116 +3409,73 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       }
     });
 
-    // Use atomic operations without transactions (standalone MongoDB doesn't support transactions)
-    let newVersionDocument;
+    // Update existing document instead of creating new one
+    let updatedDocument;
     try {
-      // Atomically mark current version as not current (only if still current)
-      const currentUpdateResult = await Document.updateOne(
-        { 
-          _id: currentDocument._id,
-          is_current_version: true  // Only update if still current (prevents race condition)
-        },
-        {
-          $set: {
-            is_current_version: false,
-            document_group_id: documentGroupId,
-            updated_at: new Date().toISOString()
-          }
-        }
-      );
-      
-      // If update didn't match, another process may have updated it
-      if (currentUpdateResult.matchedCount === 0) {
-        return res.status(409).json({
-          success: false,
-          message: 'The record was modified by another user. Please refresh and try again',
-          code: 'VERSION_STATE_CONFLICT'
-        });
-      }
-      
-      // Update all other versions in the group to ensure document_group_id is set
-      await Document.updateMany(
-        {
-          document_group_id: { $exists: false },
-          _id: { $in: [currentDocument._id] }
-        },
-        { $set: { document_group_id: documentGroupId } }
-      );
+      // Prepare current file data to add to version history
+      // If current document doesn't have version_sequence (old document), set it to 1
+      const currentVersionSeqForHistory = currentDocument.version_sequence || 1;
 
-      // Create minimal version document - ONLY file data and version metadata
-      const newVersionData = {
-        // Minimal required fields (schema requires these)
-        name: `${currentDocument.name} - v${newVersionNumber}`,
-        category: 'Version',
-        type: 'Version',
-
-        // File data
-        file: uploadResult.data,
-
-        // Version tracking
-        version: newVersionNumber,
-        document_group_id: documentGroupId,
-        version_number: newVersionNumber,
-        is_current_version: true,
-        version_sequence: newVersionSequence,
-
-        // Version metadata - WHO, WHEN, WHERE uploaded
-        version_metadata: {
-          uploaded_by: {
-            user_id: uploadedBy.user_id,
-            user_name: uploadedBy.user_name || '',
-            email: uploadedBy.email || ''
-          },
-          upload_timestamp: new Date(),
-          change_notes: req.body.change_notes || '',
-          superseded_version: currentVersionNumber,
-          file_changes: {
-            original_filename: req.file.originalname,
-            file_size_bytes: req.file.size,
-            file_hash: req.body.file_hash || ''
-          }
-        },
-
-        // Timestamps
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        
-        // Tenant and customer info from current document
-        tenant_id: currentDocument.tenant_id,
-        customer: currentDocument.customer
+      const currentVersionHistory = {
+        version_number: currentVersionNumber,
+        version_sequence: currentVersionSeqForHistory,
+        file: currentDocument.file,
+        uploaded_by: currentDocument.version_metadata?.uploaded_by || currentDocument.created_by || {},
+        upload_timestamp: currentDocument.version_metadata?.upload_timestamp || new Date(currentDocument.created_at),
+        change_notes: currentDocument.version_metadata?.change_notes || '',
+        superseded_version: currentDocument.version_metadata?.superseded_version || null,
+        is_current_version: false // Mark as not current since we're moving it to history
       };
 
-      newVersionDocument = new Document(newVersionData);
-      await newVersionDocument.save();
-
-      // Update the original/current document with new version info
-      await Document.findByIdAndUpdate(
+      // Update the existing document with new version info
+      updatedDocument = await Document.findByIdAndUpdate(
         id,
         {
           $set: {
             version_number: newVersionNumber,
             version: newVersionNumber,
-            is_current_version: true,
+            version_sequence: newVersionSequence,
+            file: uploadResult.data,
+            document_group_id: documentGroupId,
+            version_metadata: {
+              uploaded_by: {
+                user_id: uploadedBy.user_id,
+                user_name: uploadedBy.user_name || '',
+                email: uploadedBy.email || ''
+              },
+              upload_timestamp: new Date(),
+              change_notes: req.body.change_notes || '',
+              superseded_version: currentVersionNumber,
+              file_changes: {
+                original_filename: req.file.originalname,
+                file_size_bytes: req.file.size,
+                file_hash: req.body.file_hash || ''
+              }
+            },
             updated_at: new Date().toISOString()
+          },
+          $push: {
+            version_history: {
+              $each: [currentVersionHistory],
+              $position: 0  // Add at the beginning (most recent first)
+            }
           }
-        }
+        },
+        { new: true }
       );
 
-      // Atomically mark all other versions as not current
-      await Document.updateMany(
-        {
-          document_group_id: documentGroupId,
-          _id: { $nin: [id, newVersionDocument._id] }
-        },
-        {
-          $set: { is_current_version: false }
-        }
-      );
+      if (!updatedDocument) {
+        return res.status(404).json({
+          success: false,
+          message: 'Document not found',
+          code: 'DOCUMENT_NOT_FOUND'
+        });
+      }
     } catch (error) {
-      console.error('Error creating document version:', error);
+      console.error('Error updating document version:', error);
       return res.status(500).json({
         success: false,
-        message: 'Error creating document version',
+        message: 'Error updating document version',
         error: error.message
       });
     }
@@ -3500,9 +3483,9 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     // Non-blocking: Send notification emails and in-app notifications to all approvers after response
     if (currentDocument.approval_config?.enabled && currentDocument.approval_config.approvers?.length > 0) {
       const documentDetails = {
-        name: newVersionDocument.name || newVersionDocument.file?.file_meta?.file_name || 'Unnamed Document',
-        category: newVersionDocument.category,
-        type: newVersionDocument.type
+        name: updatedDocument.name || updatedDocument.file?.file_meta?.file_name || 'Unnamed Document',
+        category: updatedDocument.category,
+        type: updatedDocument.type
       };
 
       const statusUpdate = {
@@ -3520,7 +3503,7 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
         sendEmailAsync(
           () => emailService.sendDocumentUpdate({
             to: approver.user_email,
-            documentId: newVersionDocument._id.toString(),
+            documentId: updatedDocument._id.toString(),
             creatorName: approver.user_name || approver.user_email,
             documentDetails,
             statusUpdate
@@ -3555,13 +3538,76 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
     res.status(200).json({
       success: true,
       message: 'New version uploaded successfully',
-      data: newVersionDocument
+      data: updatedDocument
     });
 
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error uploading new version',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/:id/version-history - Get version history from single document record
+router.get('/:id/version-history', validateObjectId, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const document = await Document.findById(id).lean();
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found',
+        code: 'DOCUMENT_NOT_FOUND'
+      });
+    }
+
+    // Build version history array from the document
+    const versionHistory = [];
+    
+    // Add current version as first entry
+    const currentUploadTimestamp = document.version_metadata?.upload_timestamp || document.created_at;
+    versionHistory.push({
+      version_number: document.version_number || document.version || '1.0',
+      version_sequence: document.version_sequence || 1,
+      file: document.file,
+      uploaded_by: document.version_metadata?.uploaded_by || document.created_by || {},
+      upload_timestamp: currentUploadTimestamp instanceof Date ? currentUploadTimestamp.toISOString() : currentUploadTimestamp,
+      change_notes: document.version_metadata?.change_notes || '',
+      is_current_version: true
+    });
+
+    // Add historical versions from version_history array
+    if (document.version_history && document.version_history.length > 0) {
+      document.version_history.forEach(hist => {
+        const histUploadTimestamp = hist.upload_timestamp;
+        versionHistory.push({
+          version_number: hist.version_number,
+          version_sequence: hist.version_sequence,
+          file: hist.file,
+          uploaded_by: hist.uploaded_by || {},
+          upload_timestamp: histUploadTimestamp instanceof Date ? histUploadTimestamp.toISOString() : histUploadTimestamp,
+          change_notes: hist.change_notes || '',
+          is_current_version: false
+        });
+      });
+    }
+
+    // Sort by version_sequence descending (newest first)
+    versionHistory.sort((a, b) => (b.version_sequence || 0) - (a.version_sequence || 0));
+
+    res.status(200).json({
+      success: true,
+      data: versionHistory
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching version history',
       error: error.message
     });
   }
@@ -3678,6 +3724,343 @@ router.get('/versions/:versionId/download', validateObjectId, async (req, res) =
     res.status(500).json({
       success: false,
       message: 'Error downloading version',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/documents/:id/download-version/:versionSequence - Download a specific version from single-record history
+router.get('/:id/download-version/:versionSequence', validateObjectId, async (req, res) => {
+  try {
+    const { id, versionSequence } = req.params;
+    const versionSeq = parseInt(versionSequence);
+
+    const document = await Document.findById(id);
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found',
+        code: 'DOCUMENT_NOT_FOUND'
+      });
+    }
+
+    let fileToDownload;
+    let versionNumber;
+
+    // Check if requesting current version
+    const currentVersionSequence = document.version_sequence || 1;
+    if (versionSeq === currentVersionSequence) {
+      fileToDownload = document.file;
+      versionNumber = document.version_number || document.version;
+    } else {
+      // Find in version history
+      const historicalVersion = document.version_history?.find(
+        v => v.version_sequence === versionSeq
+      );
+
+      if (!historicalVersion) {
+        return res.status(404).json({
+          success: false,
+          message: 'Version not found in history',
+          code: 'VERSION_NOT_FOUND'
+        });
+      }
+
+      fileToDownload = historicalVersion.file;
+      versionNumber = historicalVersion.version_number;
+    }
+
+    if (!fileToDownload || !fileToDownload.file_meta || !fileToDownload.file_meta.file_key) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found for this version',
+        code: 'FILE_NOT_FOUND'
+      });
+    }
+
+    const fileMeta = fileToDownload.file_meta;
+    let urlResult;
+
+    // Check if version is in tenant-specific bucket
+    if (fileMeta.bucket_name && fileMeta.bucket_name !== process.env.AWS_BUCKET) {
+      // Use tenant-specific S3 service
+      console.log(`📥 Generating download URL for version in tenant bucket: ${fileMeta.bucket_name}`);
+      const tenantS3Service = new TenantS3Service();
+      urlResult = await tenantS3Service.generatePresignedUrlForTenantBucket(
+        fileMeta.bucket_name,
+        fileMeta.file_key,
+        3600 // 1 hour expiry
+      );
+    } else {
+      // Use shared bucket
+      console.log('📥 Generating download URL for version in shared bucket');
+      urlResult = await generatePresignedUrl(fileMeta.file_key, 3600);
+    }
+
+    if (!urlResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate download URL',
+        code: 'DOWNLOAD_URL_ERROR',
+        error: urlResult.error
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      download_url: urlResult.url,
+      expires_in: 3600,
+      file_name: fileMeta.file_name,
+      version_number: versionNumber
+    });
+
+  } catch (error) {
+    console.error('Error downloading version:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error downloading version',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/documents/:id/restore-version - Restore a version from single-record version history
+router.post('/:id/restore-version', validateObjectId, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { version_sequence, restored_by } = req.body;
+
+    // Validate inputs
+    if (!version_sequence) {
+      return res.status(400).json({
+        success: false,
+        message: 'version_sequence is required',
+        code: 'VERSION_SEQUENCE_REQUIRED'
+      });
+    }
+
+    if (!restored_by || !restored_by.user_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'restored_by with user_id is required',
+        code: 'RESTORED_BY_REQUIRED'
+      });
+    }
+
+    // Find the document
+    const document = await Document.findById(id);
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found',
+        code: 'DOCUMENT_NOT_FOUND'
+      });
+    }
+
+    // Check if trying to restore the current version
+    const currentVersionSequence = document.version_sequence || 1;
+
+    console.log('🔍 Restore Version Debug:', {
+      requestedVersionSequence: version_sequence,
+      currentVersionSequence: currentVersionSequence,
+      documentVersionNumber: document.version_number || document.version,
+      versionHistoryCount: document.version_history?.length || 0,
+      versionHistorySequences: document.version_history?.map(v => v.version_sequence) || []
+    });
+
+    if (version_sequence === currentVersionSequence) {
+      return res.status(400).json({
+        success: false,
+        message: 'This version is already the current version',
+        code: 'ALREADY_CURRENT'
+      });
+    }
+
+    // Find the version to restore in version_history
+    const versionToRestore = document.version_history?.find(
+      v => v.version_sequence === version_sequence
+    );
+
+    if (!versionToRestore) {
+      return res.status(404).json({
+        success: false,
+        message: 'Version not found in history',
+        code: 'VERSION_NOT_FOUND'
+      });
+    }
+
+    // Calculate new version number
+    const currentVersionNumber = document.version_number || document.version || '1.0';
+    const calculateNextVersion = (currentVer) => {
+      const parts = currentVer.split('.');
+      const major = parseInt(parts[0]) || 1;
+      const minor = parseInt(parts[1]) || 0;
+      return `${major}.${minor + 1}`;
+    };
+    const newVersionNumber = calculateNextVersion(currentVersionNumber);
+    const newVersionSequence = Math.max(
+      currentVersionSequence,
+      ...(document.version_history || []).map(v => v.version_sequence || 0)
+    ) + 1;
+
+    // Save current version to history
+    const currentVersionForHistory = {
+      version_number: currentVersionNumber,
+      version_sequence: currentVersionSequence,
+      file: document.file,
+      uploaded_by: document.version_metadata?.uploaded_by || {},
+      upload_timestamp: document.version_metadata?.upload_timestamp || document.updated_at || new Date(),
+      change_notes: document.version_metadata?.change_notes || '',
+      is_current_version: false
+    };
+
+    // Update document with restored version as current
+    document.version_number = newVersionNumber;
+    document.version = newVersionNumber;
+    document.version_sequence = newVersionSequence;
+    document.file = versionToRestore.file;
+
+    // Update version metadata
+    document.version_metadata = {
+      uploaded_by: {
+        user_id: restored_by.user_id,
+        user_name: restored_by.user_name || '',
+        email: restored_by.email || ''
+      },
+      upload_timestamp: new Date(),
+      change_notes: `Restored from version ${versionToRestore.version_number}`,
+      superseded_version: currentVersionNumber,
+      file_changes: versionToRestore.file?.file_meta ? {
+        original_filename: versionToRestore.file.file_meta.file_name || '',
+        file_size_bytes: versionToRestore.file.file_meta.file_size || 0
+      } : {}
+    };
+
+    // Remove the restored version from history (it's now becoming current)
+    if (!document.version_history) {
+      document.version_history = [];
+    }
+    const restoredVersionIndex = document.version_history.findIndex(
+      v => v.version_sequence === version_sequence
+    );
+    if (restoredVersionIndex !== -1) {
+      document.version_history.splice(restoredVersionIndex, 1);
+    }
+
+    // Add current version to history (before it was replaced)
+    document.version_history.unshift(currentVersionForHistory);
+
+    // Update timestamps
+    document.updated_at = new Date();
+
+    // Save the document
+    await document.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Version ${versionToRestore.version_number} restored as version ${newVersionNumber}`,
+      data: document
+    });
+
+  } catch (error) {
+    console.error('Error restoring version:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error restoring version',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/documents/:id/delete-version - Delete a version from single-record version history
+router.delete('/:id/delete-version', validateObjectId, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { version_sequence } = req.body;
+
+    // Validate inputs
+    if (!version_sequence) {
+      return res.status(400).json({
+        success: false,
+        message: 'version_sequence is required',
+        code: 'VERSION_SEQUENCE_REQUIRED'
+      });
+    }
+
+    // Find the document
+    const document = await Document.findById(id);
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found',
+        code: 'DOCUMENT_NOT_FOUND'
+      });
+    }
+
+    // Check if trying to delete the current version
+    const currentVersionSequence = document.version_sequence || 1;
+    if (version_sequence === currentVersionSequence) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete the current version. Please restore a different version first if you want to remove this one.',
+        code: 'CANNOT_DELETE_CURRENT'
+      });
+    }
+
+    // Find the version to delete in version_history
+    const versionIndex = document.version_history?.findIndex(
+      v => v.version_sequence === version_sequence
+    );
+
+    if (versionIndex === -1 || versionIndex === undefined) {
+      return res.status(404).json({
+        success: false,
+        message: 'Version not found in history',
+        code: 'VERSION_NOT_FOUND'
+      });
+    }
+
+    // Get version info before deletion for logging
+    const versionToDelete = document.version_history[versionIndex];
+    console.log('🗑️ Deleting version:', {
+      documentId: id,
+      versionNumber: versionToDelete.version_number,
+      versionSequence: versionToDelete.version_sequence
+    });
+
+    // Optional: Delete the file from S3 if needed
+    // const fileKey = versionToDelete.file?.file_meta?.file_key;
+    // if (fileKey) {
+    //   await deleteFileFromS3(fileKey);
+    // }
+
+    // Remove the version from history
+    document.version_history.splice(versionIndex, 1);
+
+    // Update timestamps
+    document.updated_at = new Date();
+
+    // Save the document
+    await document.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Version ${versionToDelete.version_number} has been deleted`,
+      data: {
+        deleted_version: versionToDelete.version_number,
+        deleted_sequence: versionToDelete.version_sequence,
+        remaining_versions: document.version_history.length + 1 // +1 for current version
+      }
+    });
+
+  } catch (error) {
+    console.error('Error deleting version:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting version',
       error: error.message
     });
   }
