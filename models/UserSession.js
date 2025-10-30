@@ -9,6 +9,7 @@
  */
 
 const mongoose = require('mongoose');
+const { emitSessionInvalidation } = require('../utils/socketManager');
 
 const UserSessionSchema = new mongoose.Schema({
   // Session identifier (stored in sid cookie)
@@ -132,7 +133,7 @@ const UserSessionSchema = new mongoose.Schema({
 
   invalidation_reason: {
     type: String,
-    enum: ['logout', 'new_session', 'expired', 'revoked', 'security'],
+    enum: ['logout', 'new_session', 'expired', 'revoked', 'security', 'logout_all', 'revoked_by_user'],
     trim: true
   }
 }, {
@@ -178,7 +179,7 @@ UserSessionSchema.methods.touch = function() {
  * Used for single-session enforcement and security events
  */
 UserSessionSchema.statics.invalidateAllForUser = async function(userId, reason = 'new_session') {
-  return this.updateMany(
+  const result = await this.updateMany(
     { user_id: userId, is_active: true },
     {
       $set: {
@@ -188,6 +189,18 @@ UserSessionSchema.statics.invalidateAllForUser = async function(userId, reason =
       }
     }
   );
+  
+  // Emit Socket.IO event to notify all user sessions about invalidation
+  if (result.modifiedCount > 0) {
+    try {
+      emitSessionInvalidation(userId.toString(), null, reason);
+    } catch (socketError) {
+      console.warn('⚠️  Failed to emit session invalidation via Socket.IO:', socketError.message);
+      // Don't fail if Socket.IO fails
+    }
+  }
+  
+  return result;
 };
 
 /**
@@ -216,14 +229,75 @@ UserSessionSchema.statics.createSession = async function(userData, options = {})
     session_name,
     ttlSeconds = 86400, // 24 hours default
     singleSession = true,
-    // Legacy field names for backwards compatibility
     userAgent,
     ipAddress
   } = options;
 
-  // Invalidate existing sessions if single-session mode
+  const now = new Date();
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+
+  // STRICT SINGLE SESSION: Invalidate all previous active sessions for this user
   if (singleSession) {
-    await this.invalidateAllForUser(userData.user_id, 'new_session');
+    const result = await this.updateMany(
+      { user_id: userData.user_id, is_active: true },
+      {
+        $set: {
+          is_active: false,
+          invalidated_at: new Date(),
+          invalidation_reason: 'new_session'
+        }
+      }
+    );
+
+    // Log invalidations for monitoring/debugging
+    if (result.modifiedCount > 0) {
+      console.log(`🔒 Invalidated ${result.modifiedCount} previous session(s) for user: ${userData.email}`);
+      
+      // Emit Socket.IO event to notify all user sessions about invalidation
+      try {
+        emitSessionInvalidation(userData.user_id.toString(), sessionId, 'new_session');
+      } catch (socketError) {
+        console.warn('⚠️  Failed to emit session invalidation via Socket.IO:', socketError.message);
+        // Don't fail session creation if Socket.IO fails
+      }
+    }
+  }
+
+  // Try to find recently rotated session (edge case if concurrent calls)
+  let existing = null;
+  if (device_fingerprint) {
+    existing = await this.findOne({
+      user_id: userData.user_id,
+      device_fingerprint,
+      is_active: true,
+      expires_at: { $gt: now }
+    }).sort({ created_at: -1 });
+  } else {
+    existing = await this.findOne({
+      user_id: userData.user_id,
+      is_active: true,
+      expires_at: { $gt: now },
+      user_agent: user_agent || userAgent,
+      ip_address: ip_address || ipAddress,
+      created_at: { $gt: new Date(Date.now() - 30 * 1000) }
+    }).sort({ created_at: -1 });
+  }
+
+  if (existing) {
+    // Edge case: re-use if prior update flush/rotation hasn't completed yet
+    existing.session_id = sessionId;
+    existing.csrf_token = csrfToken;
+    existing.user_agent = user_agent || userAgent || existing.user_agent;
+    existing.ip_address = ip_address || ipAddress || existing.ip_address;
+    existing.device_info = device_info || existing.device_info || {};
+    existing.device_fingerprint = device_fingerprint || existing.device_fingerprint || null;
+    existing.geolocation = geolocation || existing.geolocation || null;
+    existing.session_name = session_name || existing.session_name || 'Unknown Device';
+    existing.last_activity = now;
+    existing.expires_at = expiresAt;
+    existing.is_active = true;
+    await existing.save();
+    return existing;
   }
 
   const session = new this({
@@ -233,16 +307,15 @@ UserSessionSchema.statics.createSession = async function(userData, options = {})
     email: userData.email,
     tenant_id: userData.tenant_id,
     csrf_token: csrfToken,
-    // Use new field names, fallback to legacy
     user_agent: user_agent || userAgent,
     ip_address: ip_address || ipAddress,
     device_info: device_info || {},
     device_fingerprint: device_fingerprint || null,
     geolocation: geolocation || null,
     session_name: session_name || 'Unknown Device',
-    created_at: new Date(),
-    last_activity: new Date(),
-    expires_at: new Date(Date.now() + ttlSeconds * 1000),
+    created_at: now,
+    last_activity: now,
+    expires_at: expiresAt,
     is_active: true
   });
 

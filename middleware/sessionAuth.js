@@ -38,18 +38,48 @@ async function authenticateSession(req, res, next) {
       });
     }
 
-    // Find active session
+    // Find active session (includes checking is_active flag and expiry)
     const session = await UserSession.findActiveSession(sessionId);
 
     if (!session) {
+      // Check if session exists but was invalidated (for better error messaging)
+      const invalidatedSession = await UserSession.findOne({ session_id: sessionId });
+
+      if (invalidatedSession && !invalidatedSession.is_active) {
+        // Session was invalidated (likely due to new login from another device)
+        const reason = invalidatedSession.invalidation_reason || 'unknown';
+        console.log(`🚫 Session invalidated (${reason}): ${sessionId.substring(0, 8)}... for user ${invalidatedSession.email}`);
+
+        // Clear cookies
+        res.clearCookie('sid');
+        res.clearCookie('csrf');
+
+        // Return specific error code based on invalidation reason
+        if (reason === 'new_session') {
+          return res.status(401).json({
+            success: false,
+            message: 'You have been logged out because a new login was detected from another device or browser.',
+            code: 'SESSION_REPLACED',
+            reason: 'new_session'
+          });
+        }
+
+        return res.status(401).json({
+          success: false,
+          message: 'Your session has been invalidated. Please log in again.',
+          code: 'SESSION_INVALIDATED',
+          reason: reason
+        });
+      }
+
       if (process.env.NODE_ENV === 'development') {
         console.log('❌ Invalid or expired session:', sessionId);
       }
-      
+
       // Clear invalid cookie
       res.clearCookie('sid');
       res.clearCookie('csrf');
-      
+
       return res.status(401).json({
         success: false,
         message: 'Session expired or invalid. Please log in again.',
@@ -57,15 +87,15 @@ async function authenticateSession(req, res, next) {
       });
     }
 
-    // Check if session is still valid
+    // Check if session is still valid (double-check expiry)
     if (!session.isValid()) {
       if (process.env.NODE_ENV === 'development') {
         console.log('❌ Session no longer valid:', sessionId);
       }
-      
+
       res.clearCookie('sid');
       res.clearCookie('csrf');
-      
+
       return res.status(401).json({
         success: false,
         message: 'Session expired. Please log in again.',

@@ -26,7 +26,7 @@ const router = express.Router();
 const SESSION_TTL = parseInt(process.env.SESSION_TTL_SECONDS) || 86400; // 24 hours default
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined; // undefined = same domain
 const COOKIE_SECURE = process.env.NODE_ENV === 'production'; // HTTPS only in production
-const SINGLE_SESSION = process.env.ALLOW_MULTI_SESSION !== 'true'; // Default: single session
+const SINGLE_SESSION =  true ; // process.env.ALLOW_MULTI_SESSION !== 'true'; // Default: single session
 
 /**
  * POST /auth/login
@@ -79,6 +79,23 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
 
     // Session TTL (longer if remember_me)
     const ttl = req.body.remember_me ? SESSION_TTL * 7 : SESSION_TTL;
+
+    console.log(`🔐 Single-session enforcement: ${SINGLE_SESSION}`);
+
+    // Log if single-session mode is enabled
+    if (SINGLE_SESSION) {
+      console.log(`🔐 Single-session enforcement: Invalidating existing session(s) for user: ${user.email}`);
+      // Count existing active sessions before invalidation
+      const existingSessions = await UserSession.countDocuments({
+        user_id: user._id,
+        is_active: true,
+        expires_at: { $gt: new Date() }
+      });
+
+      if (existingSessions > 0) {
+        console.log(`🔐 Single-session enforcement: Invalidating ${existingSessions} existing session(s) for user: ${user.email}`);
+      }
+    }
 
     // Create session (invalidates old sessions if single-session mode)
     const session = await UserSession.createSession({

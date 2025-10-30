@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
+const http = require('http');
 require('dotenv').config();
 
 const errorHandler = require('./middleware/errorHandler');
@@ -14,8 +15,10 @@ const { registerRoutes, getEndpointDocs } = require('./config/routes.config');
 const { runWithContext } = require('./utils/requestContext');
 const { attachETag, parseIfMatch } = require('./middleware/etagVersion');
 const { optionalCSRF } = require('./middleware/csrf');
+const { initializeSocketIO } = require('./utils/socketManager');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 30001;
 const MONGODB_URI = process.env.MONGODB_CONNECTION;
 
@@ -227,8 +230,11 @@ process.on('SIGINT', async () => {
 
 // Start server (skip in test environment)
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
+  server.listen(PORT, async () => {
     console.log(`✓ Server is running on port ${PORT}`);
+    
+    // Initialize Socket.IO after server starts
+    initializeSocketIO(server);
   });
 }
 

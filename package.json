@@ -48,6 +48,7 @@
     "multer": "^2.0.2",
     "node-cron": "^3.0.3",
     "nodemailer": "^7.0.7",
+    "socket.io": "^4.8.1",
     "ua-parser-js": "^2.0.6",
     "uuid": "^13.0.0"
   },
