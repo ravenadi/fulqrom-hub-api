@@ -320,34 +320,128 @@ router.post('/sync-user', async (req, res) => {
       });
     }
 
-    // Find or create user
-    let user = await User.findOne({ auth0_id }).populate('role_ids tenant_id');
+    // Check if user is super admin (from Auth0 roles or check existing roles)
+    // Use v2/Role for super_admin role lookup (matches superAdmin middleware)
+    const Role = require('../models/v2/Role');
+    const isSuperAdmin = roles && Array.isArray(roles) && roles.includes('super_admin');
+    
+    // Also check Auth0 payload if available
+    const auth0Payload = req.auth?.payload || req.auth;
+    const auth0Roles = auth0Payload?.['https://fulqrom.com.au/roles'] || [];
+    const isSuperAdminFromAuth0 = auth0Roles.includes('super_admin');
+
+    // Find or create user (bypass tenant filter for super admin lookup)
+    let user = await User.findOne({ auth0_id })
+      .setOptions({ _bypassTenantFilter: true })
+      .populate('role_ids tenant_id');
+
+    // Check if existing user is super admin
+    let existingIsSuperAdmin = false;
+    if (user && user.role_ids && user.role_ids.length > 0) {
+      const superAdminRole = await Role.findOne({ 
+        name: 'super_admin', 
+        tenant_id: null 
+      }).setOptions({ _bypassTenantFilter: true });
+      
+      if (superAdminRole) {
+        existingIsSuperAdmin = user.role_ids.some(
+          role => role._id?.toString() === superAdminRole._id.toString() || 
+                  role.toString() === superAdminRole._id.toString()
+        );
+      }
+    }
+
+    // Determine if this is a super admin user
+    const userIsSuperAdmin = isSuperAdmin || isSuperAdminFromAuth0 || existingIsSuperAdmin;
 
     if (!user) {
-      // Create new user
-      user = new User({
+      // Prepare user data
+      const userData = {
         auth0_id,
         email: email.toLowerCase(),
         full_name: full_name || email.split('@')[0],
-        phone,
+        phone: phone || undefined,
         is_active: true
-      });
+      };
 
-      // Assign roles if provided
-      if (roles && roles.length > 0) {
-        const Role = require('../models/Role');
-        const roleObjects = await Role.find({ name: { $in: roles } });
-        user.role_ids = roleObjects.map(r => r._id);
+      // Super admin users don't have tenant_id (set to null explicitly)
+      if (userIsSuperAdmin) {
+        userData.tenant_id = null;
       }
 
-      await user.save();
-      user = await User.findById(user._id).populate('role_ids tenant_id');
+      // Assign roles if provided
+      let roleIds = [];
+      if (roles && roles.length > 0) {
+        // Build role query - super_admin should have tenant_id: null
+        const roleQuery = { name: { $in: roles } };
+        const roleObjects = await Role.find(roleQuery)
+          .setOptions({ _bypassTenantFilter: true });
+        roleIds = roleObjects.map(r => r._id);
+        userData.role_ids = roleIds;
+      }
+
+      // For super admin, create without tenant validation
+      if (userIsSuperAdmin) {
+        // Temporarily make tenant_id optional for this operation
+        // Create using create() with skip validation
+        try {
+          user = await User.create([userData], { 
+            runValidators: false,
+            bypassTenantFilter: true 
+          });
+          user = user[0]; // create() returns an array
+          user = await User.findById(user._id)
+            .setOptions({ _bypassTenantFilter: true })
+            .populate('role_ids tenant_id');
+        } catch (createError) {
+          // Fallback: use direct collection operation if create fails
+          console.warn('User.create failed for super admin, using collection insert:', createError.message);
+          const UserCollection = User.collection;
+          const result = await UserCollection.insertOne(userData);
+          user = await User.findById(result.insertedId)
+            .setOptions({ _bypassTenantFilter: true })
+            .populate('role_ids tenant_id');
+        }
+      } else {
+        // Normal user creation with validation
+        user = new User(userData);
+        await user.save();
+        user = await User.findById(user._id)
+          .populate('role_ids tenant_id');
+      }
     } else {
       // Update existing user
-      user.full_name = full_name || user.full_name;
-      user.phone = phone || user.phone;
-      await user.save();
-      user = await User.findById(user._id).populate('role_ids tenant_id');
+      const updateData = {
+        full_name: full_name || user.full_name,
+        phone: phone !== undefined ? phone : user.phone
+      };
+      
+      // Ensure super admin users have tenant_id as null
+      if (userIsSuperAdmin) {
+        updateData.tenant_id = null;
+      }
+      
+      // For super admin, use findOneAndUpdate to bypass validation
+      if (userIsSuperAdmin) {
+        user = await User.findOneAndUpdate(
+          { _id: user._id },
+          { $set: updateData },
+          { 
+            new: true,
+            runValidators: false,
+            setDefaultsOnInsert: false
+          }
+        )
+          .setOptions({ _bypassTenantFilter: true })
+          .populate('role_ids tenant_id');
+      } else {
+        // Normal user update
+        user.full_name = updateData.full_name;
+        user.phone = updateData.phone;
+        await user.save();
+        user = await User.findById(user._id)
+          .populate('role_ids tenant_id');
+      }
     }
 
     // Return user data
@@ -360,8 +454,8 @@ router.post('/sync-user', async (req, res) => {
         full_name: user.full_name,
         phone: user.phone,
         is_active: user.is_active,
-        tenant_id: user.tenant_id?._id,
-        tenant_name: user.tenant_id?.tenant_name,
+        tenant_id: user.tenant_id?._id || user.tenant_id || null,
+        tenant_name: user.tenant_id?.tenant_name || null,
         role_ids: user.role_ids,
         resource_access: user.resource_access || [],
         document_categories: user.document_categories || [],

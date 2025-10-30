@@ -7,6 +7,7 @@ const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { tenantContext } = require('../middleware/tenantContext');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 const router = express.Router();
 
@@ -531,7 +532,7 @@ router.post('/', checkModulePermission('sites', 'create'), tenantContext, async 
 });
 
 // PUT /api/sites/:id - Update site
-router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.id), tenantContext, async (req, res) => {
+router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.id), requireIfMatch, tenantContext, async (req, res) => {
   try {
     // Validate land_area if provided
     if (req.body.land_area !== undefined && req.body.land_area < 0) {
@@ -550,20 +551,18 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
       });
     }
 
-    // Prevent updating tenant_id
-    const updateData = { ...req.body };
-    delete updateData.tenant_id;
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
 
-    // Update ONLY if belongs to user's tenant
-    const site = await Site.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        tenant_id: tenantId  // Ensure user owns this resource
-      },
-      updateData,
-      { new: true, runValidators: true }
-    ).populate('customer_id', 'organisation.organisation_name');
-
+    // Load site document (tenant-scoped automatically via plugin)
+    const site = await Site.findById(req.params.id);
     if (!site) {
       return res.status(404).json({
         success: false,
@@ -571,15 +570,85 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
       });
     }
 
+    // Verify tenant ownership
+    if (site.tenant_id && site.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Site belongs to a different tenant'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (site.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: site.__v,
+        resource: 'Site',
+        id: req.params.id
+      });
+    }
+
+    // Prevent updating tenant_id
+    const updateData = { ...req.body };
+    delete updateData.tenant_id;
+
+    // Build atomic update object - filter out undefined/null to preserve existing data
+    const allowedFields = ['site_name', 'address', 'city', 'state', 'postal_code', 'country', 
+      'site_type', 'land_area', 'status', 'is_active', 'customer_id', 'coordinates', 'contact_info'];
+    const atomicUpdate = {};
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {
+        atomicUpdate[key] = updateData[key];
+      }
+    });
+    
+    // Add updated_at
+    atomicUpdate.updated_at = new Date().toISOString();
+
+    // Perform atomic update with version check (prevents lost updates)
+    const result = await Site.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        __v: clientVersion  // Version check prevents lost updates
+      },
+      {
+        $set: atomicUpdate,
+        $inc: { __v: 1 }  // Atomic version increment
+      },
+      { new: true, runValidators: true }
+    );
+    
+    if (!result) {
+      // Version conflict - resource was modified
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: site.__v,
+        resource: 'Site',
+        id: req.params.id
+      });
+    }
+
+    // Populate customer_id for response
+    await result.populate('customer_id', 'organisation.organisation_name');
+
     // Log audit for site update
-    await logUpdate({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
+    await logUpdate({ module: 'site', resourceName: result.site_name, req, moduleId: result._id, resource: result.toObject() });
 
     res.status(200).json({
       success: true,
       message: 'Site updated successfully',
-      data: site
+      data: result
     });
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'Site',
+        id: req.params.id
+      });
+    }
 
     res.status(400).json({
       success: false,

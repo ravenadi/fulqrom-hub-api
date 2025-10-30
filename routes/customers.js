@@ -9,6 +9,7 @@ const BuildingTenant = require('../models/BuildingTenant');
 const Vendor = require('../models/Vendor');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 const {
   buildPagination,
   buildSort,
@@ -97,28 +98,54 @@ router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => re
     }
 
     // Get counts - also scoped by tenant
-    const [siteCount, buildingCount, assetCount, documentCount] = await Promise.all([
-      Site.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
-      Building.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
-      Asset.countDocuments({ customer_id: customerId }).setOptions({ _tenantId: req.tenant.tenantId }),
-      Document.countDocuments({ 'customer.customer_id': customerId }).setOptions({ _tenantId: req.tenant.tenantId })
-    ]);
+    // Use snapshot read concern for consistent statistics (prevents dirty reads)
+    const mongoose = require('mongoose');
+    const session = await mongoose.startSession();
+    
+    try {
+      // Use read concern snapshot for consistent statistics
+      const [siteCount, buildingCount, assetCount, documentCount] = await Promise.all([
+        Site.countDocuments({ customer_id: customerId })
+          .setOptions({ _tenantId: req.tenant.tenantId })
+          .session(session)
+          .readConcern('snapshot'),
+        Building.countDocuments({ customer_id: customerId })
+          .setOptions({ _tenantId: req.tenant.tenantId })
+          .session(session)
+          .readConcern('snapshot'),
+        Asset.countDocuments({ customer_id: customerId })
+          .setOptions({ _tenantId: req.tenant.tenantId })
+          .session(session)
+          .readConcern('snapshot'),
+        Document.countDocuments({ 'customer.customer_id': customerId })
+          .setOptions({ _tenantId: req.tenant.tenantId })
+          .session(session)
+          .readConcern('snapshot')
+      ]);
+      
+      const stats = {
+        totalSites: siteCount,
+        totalBuildings: buildingCount,
+        totalAssets: assetCount,
+        totalDocuments: documentCount
+      };
 
-    const stats = {
-      totalSites: siteCount,
-      totalBuildings: buildingCount,
-      totalAssets: assetCount,
-      totalDocuments: documentCount
-    };
-
-    res.status(200).json({
-      success: true,
-      data: {
-        customer_id: customerId,
-        customer_name: customer.organisation?.organisation_name || 'Unknown',
-        stats
-      }
-    });
+      res.status(200).json({
+        success: true,
+        data: {
+          customer_id: customerId,
+          customer_name: customer.organisation?.organisation_name || 'Unknown',
+          stats
+        }
+      });
+    } catch (error) {
+      await session.endSession();
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching customer statistics',
+        error: error.message
+      });
+    }
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -290,20 +317,30 @@ router.get('/:id/documents', checkResourcePermission('customer', 'view', (req) =
     const pagination = buildPagination(page, limit);
     const sortObj = buildSort(sort, order);
 
-    // Execute queries in parallel
-    const [documents, totalDocuments] = await Promise.all([
-      Document.find(filterQuery)
-        .setOptions({ _tenantId: req.tenant.tenantId })
-        .sort(sortObj)
-        .skip(pagination.skip)
-        .limit(pagination.limitNum)
-        .lean()
-        .exec(),
-      Document.countDocuments(filterQuery).setOptions({ _tenantId: req.tenant.tenantId }).exec()
-    ]);
-
-    // Batch populate entity names for all documents
-    const documentsWithNames = await batchFetchEntityNames(documents);
+    // Execute queries in parallel with snapshot isolation for consistent reads
+    const mongoose = require('mongoose');
+    const session = await mongoose.startSession();
+    
+    try {
+      const [documents, totalDocuments] = await Promise.all([
+        Document.find(filterQuery)
+          .setOptions({ _tenantId: req.tenant.tenantId })
+          .session(session)
+          .readConcern('snapshot')
+          .sort(sortObj)
+          .skip(pagination.skip)
+          .limit(pagination.limitNum)
+          .lean()
+          .exec(),
+        Document.countDocuments(filterQuery)
+          .setOptions({ _tenantId: req.tenant.tenantId })
+          .session(session)
+          .readConcern('snapshot')
+          .exec()
+      ]);
+      
+      // Batch populate entity names for all documents
+      const documentsWithNames = await batchFetchEntityNames(documents);
 
     // Build response with customer info (read-only) and documents
     const response = {
@@ -326,7 +363,11 @@ router.get('/:id/documents', checkResourcePermission('customer', 'view', (req) =
       }
     };
 
-    res.status(200).json(response);
+      res.status(200).json(response);
+    } catch (error) {
+      await session.endSession();
+      handleError(error, res, 'fetching customer documents');
+    }
   } catch (error) {
     handleError(error, res, 'fetching customer documents');
   }
@@ -450,7 +491,7 @@ router.post('/', checkModulePermission('customers', 'create'), async (req, res) 
 });
 
 // PUT /api/customers/:id - Update customer (requires edit permission for this customer)
-router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.params.id), async (req, res) => {
+router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.params.id), requireIfMatch, async (req, res) => {
   try {
     // Get tenant_id from authenticated user's context
     const tenantId = req.tenant?.tenantId;
@@ -461,28 +502,95 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
       });
     }
 
-    // Prevent tenant_id from being changed
-    const updateData = { ...req.body };
-    delete updateData.tenant_id;
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
 
-    // Update ONLY if belongs to user's tenant
-    const customer = await Customer.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        tenant_id: tenantId  // Ensure user owns this resource
-      },
-      updateData,
-      {
-        new: true,
-        runValidators: true
-      }
-    );
-
+    // Load customer document (tenant-scoped automatically via plugin)
+    const customer = await Customer.findById(req.params.id);
     if (!customer) {
       return res.status(404).json({
         success: false,
         message: 'Customer not found or you do not have permission to update it'
       });
+    }
+
+    // Verify tenant ownership
+    if (customer.tenant_id && customer.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Customer belongs to a different tenant'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (customer.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: customer.__v,
+        resource: 'Customer',
+        id: req.params.id
+      });
+    }
+
+    // Prevent tenant_id from being changed
+    const updateData = { ...req.body };
+    delete updateData.tenant_id;
+
+    // Use atomic findOneAndUpdate instead of Object.assign to prevent lost updates
+    // Only update fields that are explicitly provided (preserve existing data)
+    const allowedFields = [
+      'organisation', 'company_profile', 'business_address', 'postal_address',
+      'contact_methods', 'metadata', 'is_active', 'plan_id', 'plan_start_date',
+      'plan_end_date', 'is_trial', 'trial_start_date', 'trial_end_date'
+    ];
+    
+    // Filter out undefined/null fields and non-allowed fields to preserve existing data
+    const atomicUpdate = {};
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {
+        atomicUpdate[key] = updateData[key];
+      }
+    });
+    
+    // Add updated_at if updates exist
+    if (Object.keys(atomicUpdate).length > 0) {
+      atomicUpdate.updated_at = new Date().toISOString();
+      
+      // Perform atomic update with version check
+      const result = await Customer.findOneAndUpdate(
+        { 
+          _id: req.params.id,
+          __v: clientVersion  // Version check prevents lost updates
+        },
+        {
+          $set: atomicUpdate,
+          $inc: { __v: 1 }  // Atomic version increment
+        },
+        { new: true, runValidators: true }
+      );
+      
+      if (!result) {
+        // Version conflict - resource was modified
+        return sendVersionConflict(res, {
+          clientVersion,
+          currentVersion: customer.__v,
+          resource: 'Customer',
+          id: req.params.id
+        });
+      }
+      
+      // Update customer reference for audit logging
+      Object.assign(customer, result.toObject());
+    } else {
+      // No valid updates, just save (no changes)
+      await customer.save();
     }
 
     // Log audit for customer update
@@ -495,6 +603,16 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
       data: customer
     });
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'Customer',
+        id: req.params.id
+      });
+    }
+
     res.status(400).json({
       success: false,
       message: 'Error updating customer',

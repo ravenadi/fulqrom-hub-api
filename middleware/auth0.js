@@ -57,7 +57,9 @@ const attachUser = async (req, res, next) => {
       
       // Even super_admin users should have a database record for consistency
       // Try to find the user in MongoDB first
+      // Bypass tenant filter during auth (we're looking up by auth0_id, not tenant)
       const user = await User.findOne({ auth0_id: auth0UserId })
+        .setOptions({ _bypassTenantFilter: true })
         .populate('role_ids', 'name description permissions is_active');
 
       if (user) {
@@ -103,7 +105,9 @@ const attachUser = async (req, res, next) => {
     }
 
     // Find user in MongoDB by auth0_id
+    // Bypass tenant filter during auth (we're looking up by auth0_id, not tenant)
     const user = await User.findOne({ auth0_id: auth0UserId })
+      .setOptions({ _bypassTenantFilter: true })
       .populate('role_ids', 'name description permissions is_active');
 
     if (!user) {

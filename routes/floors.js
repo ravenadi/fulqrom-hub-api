@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const Floor = require('../models/Floor');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 const router = express.Router();
 
@@ -268,7 +269,7 @@ router.post('/', checkModulePermission('floors', 'create'), async (req, res) => 
 });
 
 // PUT /api/floors/:id - Update floor
-router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.id), async (req, res) => {
+router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.id), requireIfMatch, async (req, res) => {
   try {
     // Validation for new fields
     const errors = [];
@@ -336,19 +337,18 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
       });
     }
 
-    // Update ONLY if belongs to user's tenant
-    const floor = await Floor.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        tenant_id: tenantId  // Ensure user owns this resource
-      },
-      floorData,
-      { new: true, runValidators: true }
-    )
-    .populate('site_id', 'site_name address')
-    .populate('building_id', 'building_name building_code')
-    .populate('customer_id', 'organisation.organisation_name');
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
 
+    // Load floor document (tenant-scoped automatically via plugin)
+    const floor = await Floor.findById(req.params.id);
     if (!floor) {
       return res.status(404).json({
         success: false,
@@ -356,15 +356,88 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
       });
     }
 
+    // Verify tenant ownership
+    if (floor.tenant_id && floor.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Floor belongs to a different tenant'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (floor.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: floor.__v,
+        resource: 'Floor',
+        id: req.params.id
+      });
+    }
+
+    // Prevent updating tenant_id
+    const safeFloorData = { ...floorData };
+    delete safeFloorData.tenant_id;
+
+    // Build atomic update object - filter out undefined/null to preserve existing data
+    const allowedFields = ['floor_name', 'floor_number', 'floor_level', 'site_id', 'building_id',
+      'customer_id', 'floor_type', 'total_area', 'status', 'is_active', 'description', 'contact_info'];
+    const atomicUpdate = {};
+    Object.keys(safeFloorData).forEach(key => {
+      if (safeFloorData[key] !== undefined && safeFloorData[key] !== null && allowedFields.includes(key)) {
+        atomicUpdate[key] = safeFloorData[key];
+      }
+    });
+    
+    // Add updated_at
+    atomicUpdate.updated_at = new Date().toISOString();
+
+    // Perform atomic update with version check (prevents lost updates)
+    const result = await Floor.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        __v: clientVersion  // Version check prevents lost updates
+      },
+      {
+        $set: atomicUpdate,
+        $inc: { __v: 1 }  // Atomic version increment
+      },
+      { new: true, runValidators: true }
+    );
+    
+    if (!result) {
+      // Version conflict - resource was modified
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: floor.__v,
+        resource: 'Floor',
+        id: req.params.id
+      });
+    }
+
+    // Populate relationships for response (after save)
+    await result.populate('site_id', 'site_name address');
+    await result.populate('building_id', 'building_name building_code');
+    await result.populate('customer_id', 'organisation.organisation_name');
+
     // Log audit for floor update
-    await logUpdate({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
+    await logUpdate({ module: 'floor', resourceName: result.floor_name, req, moduleId: result._id, resource: result.toObject() });
 
     res.status(200).json({
       success: true,
       message: 'Floor updated successfully',
-      data: floor
+      data: result
     });
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'Floor',
+        id: req.params.id
+      });
+    }
+
     res.status(400).json({
       success: false,
       message: 'Error updating floor',

@@ -5,6 +5,7 @@ const Document = require('../models/Document');
 const { validateCreateAsset, validateUpdateAsset } = require('../middleware/assetValidation');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 const router = express.Router();
 
@@ -548,7 +549,7 @@ router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset,
 });
 
 // PUT /api/assets/:id - Update asset
-router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.id), validateUpdateAsset, async (req, res) => {
+router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.id), requireIfMatch, validateUpdateAsset, async (req, res) => {
   try {
     // Get tenant_id from authenticated user's context
     const tenantId = req.tenant?.tenantId;
@@ -559,57 +560,18 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
       });
     }
 
-    const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
-
-    // Build update object
-    const updateData = {
-      ...otherFields
-    };
-
-    // Only update these fields if they are provided
-    if (customer_id !== undefined) updateData.customer_id = customer_id;
-    if (site_id !== undefined) updateData.site_id = site_id || null;
-    if (building_id !== undefined) updateData.building_id = building_id || null;
-    if (floor_id !== undefined) updateData.floor_id = floor_id || null;
-
-    // Prevent tenant_id from being changed
-    delete updateData.tenant_id;
-
-    // Handle legacy field mapping for backward compatibility
-    if (otherFields.installation_date && !otherFields.date_of_installation) {
-      updateData.date_of_installation = otherFields.installation_date;
-    }
-    if (otherFields.acquisition_cost && !otherFields.purchase_cost_aud) {
-      updateData.purchase_cost_aud = otherFields.acquisition_cost;
-    }
-    if (otherFields.current_value && !otherFields.current_book_value_aud) {
-      updateData.current_book_value_aud = otherFields.current_value;
-    }
-    if (otherFields.purchase_cost && !otherFields.purchase_cost_aud) {
-      updateData.purchase_cost_aud = otherFields.purchase_cost;
-    }
-    if (otherFields.current_book_value && !otherFields.current_book_value_aud) {
-      updateData.current_book_value_aud = otherFields.current_book_value;
-    }
-    if (otherFields.weight && !otherFields.weight_kgs) {
-      updateData.weight_kgs = otherFields.weight;
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
     }
 
-    // Update ONLY if belongs to user's tenant
-    const asset = await Asset.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        tenant_id: tenantId  // Ensure user owns this resource
-      },
-      updateData,
-      { new: true, runValidators: true }
-    )
-    .populate('customer_id', 'organisation.organisation_name')
-    .populate('site_id', 'site_name address')
-    .populate('building_id', 'building_name building_code')
-    .populate('floor_id', 'floor_name floor_level')
-    .lean();
-
+    // Load asset document (tenant-scoped automatically via plugin)
+    const asset = await Asset.findById(req.params.id);
     if (!asset) {
       return res.status(404).json({
         success: false,
@@ -617,16 +579,121 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
       });
     }
 
+    // Verify tenant ownership
+    if (asset.tenant_id && asset.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Asset belongs to a different tenant'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (asset.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: asset.__v,
+        resource: 'Asset',
+        id: req.params.id
+      });
+    }
+
+    const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
+
+    // Prevent tenant_id from being changed
+    delete otherFields.tenant_id;
+
+    // Handle legacy field mapping for backward compatibility
+    const legacyMappings = {};
+    if (otherFields.installation_date && !otherFields.date_of_installation) {
+      legacyMappings.date_of_installation = otherFields.installation_date;
+      delete otherFields.installation_date;
+    }
+    if (otherFields.acquisition_cost && !otherFields.purchase_cost_aud) {
+      legacyMappings.purchase_cost_aud = otherFields.acquisition_cost;
+      delete otherFields.acquisition_cost;
+    }
+    if (otherFields.current_value && !otherFields.current_book_value_aud) {
+      legacyMappings.current_book_value_aud = otherFields.current_value;
+      delete otherFields.current_value;
+    }
+    if (otherFields.purchase_cost && !otherFields.purchase_cost_aud) {
+      legacyMappings.purchase_cost_aud = otherFields.purchase_cost;
+      delete otherFields.purchase_cost;
+    }
+    if (otherFields.current_book_value && !otherFields.current_book_value_aud) {
+      legacyMappings.current_book_value_aud = otherFields.current_book_value;
+      delete otherFields.current_book_value;
+    }
+    if (otherFields.weight && !otherFields.weight_kgs) {
+      legacyMappings.weight_kgs = otherFields.weight;
+      delete otherFields.weight;
+    }
+
+    // Build atomic update object
+    const allowedFields = ['asset_no', 'asset_id', 'device_id', 'name', 'category', 'type', 'subtype',
+      'status', 'manufacturer', 'model', 'serial_number', 'date_of_installation',
+      'purchase_cost_aud', 'current_book_value_aud', 'weight_kgs', 'description', 'notes',
+      'is_active', 'warranty_expiry', 'maintenance_schedule', 'location_details', 'metadata'];
+    const atomicUpdate = { ...legacyMappings };
+    
+    // Add relationship fields if provided
+    if (customer_id !== undefined) atomicUpdate.customer_id = customer_id;
+    if (site_id !== undefined) atomicUpdate.site_id = site_id || null;
+    if (building_id !== undefined) atomicUpdate.building_id = building_id || null;
+    if (floor_id !== undefined) atomicUpdate.floor_id = floor_id || null;
+    
+    // Add other allowed fields
+    Object.keys(otherFields).forEach(key => {
+      if (otherFields[key] !== undefined && otherFields[key] !== null && allowedFields.includes(key)) {
+        atomicUpdate[key] = otherFields[key];
+      }
+    });
+    
+    // Add updated_at
+    atomicUpdate.updated_at = new Date().toISOString();
+
+    // Perform atomic update with version check (prevents lost updates)
+    const result = await Asset.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        __v: clientVersion  // Version check prevents lost updates
+      },
+      {
+        $set: atomicUpdate,
+        $inc: { __v: 1 }  // Atomic version increment
+      },
+      { new: true, runValidators: true }
+    );
+    
+    if (!result) {
+      // Version conflict - resource was modified
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: asset.__v,
+        resource: 'Asset',
+        id: req.params.id
+      });
+    }
+
+    // Populate relationships for response (after save)
+    await result.populate('customer_id', 'organisation.organisation_name');
+    await result.populate('site_id', 'site_name address');
+    await result.populate('building_id', 'building_name building_code');
+    await result.populate('floor_id', 'floor_name floor_level');
+
+    // Convert to plain object for response
+    const assetPlain = result.toObject();
+
     // Log audit for asset update
-    await logUpdate({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id.toString(), resource: asset });
+    await logUpdate({ module: 'asset', resourceName: result.asset_no || result.category, req, moduleId: result._id.toString(), resource: assetPlain });
 
     // Add backward compatibility fields for frontend
     const assetWithCompatibility = {
-      ...asset,
-      purchase_cost: asset.purchase_cost_aud || asset.purchase_cost || undefined,
-      current_book_value: asset.current_book_value_aud || asset.current_book_value || undefined,
-      weight: asset.weight_kgs || asset.weight || undefined,
-      installation_date: asset.date_of_installation || asset.installation_date || undefined
+      ...assetPlain,
+      purchase_cost: assetPlain.purchase_cost_aud || assetPlain.purchase_cost || undefined,
+      current_book_value: assetPlain.current_book_value_aud || assetPlain.current_book_value || undefined,
+      weight: assetPlain.weight_kgs || assetPlain.weight || undefined,
+      installation_date: assetPlain.date_of_installation || assetPlain.installation_date || undefined
     };
 
     res.status(200).json({
@@ -635,6 +702,16 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
       data: assetWithCompatibility
     });
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'Asset',
+        id: req.params.id
+      });
+    }
+
     // Check for duplicate asset_no error
     if (error.code === 11000 && error.keyPattern?.asset_no) {
       return res.status(400).json({

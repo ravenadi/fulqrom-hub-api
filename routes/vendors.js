@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Vendor = require('../models/Vendor');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 const router = express.Router();
 
@@ -417,7 +418,7 @@ router.post('/', checkModulePermission('vendors', 'create'), async (req, res) =>
 });
 
 // PUT /api/vendors/:id - Update vendor
-router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params.id), async (req, res) => {
+router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params.id), requireIfMatch, async (req, res) => {
   try {
     // Get tenant_id from authenticated user's context
     const tenantId = req.tenant?.tenantId;
@@ -425,6 +426,43 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
       return res.status(403).json({
         success: false,
         message: 'Tenant context required to update vendor'
+      });
+    }
+
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
+
+    // Load vendor document (tenant-scoped automatically via plugin)
+    const vendor = await Vendor.findById(req.params.id);
+    if (!vendor) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vendor not found or you do not have permission to update it'
+      });
+    }
+
+    // Verify tenant ownership
+    if (vendor.tenant_id && vendor.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Vendor belongs to a different tenant'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (vendor.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: vendor.__v,
+        resource: 'Vendor',
+        id: req.params.id
       });
     }
 
@@ -446,19 +484,11 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
       }
     }
 
-    // Update vendor ONLY if it belongs to the user's tenant
-    const vendor = await Vendor.findOneAndUpdate(
-      { _id: req.params.id, tenant_id: tenantId },
-      req.body,
-      { new: true, runValidators: true }
-    );
-
-    if (!vendor) {
-      return res.status(404).json({
-        success: false,
-        message: 'Vendor not found or you do not have permission to update it'
-      });
-    }
+    // Apply updates via Object.assign (Load-Modify-Save pattern)
+    Object.assign(vendor, req.body);
+    
+    // Save (Mongoose auto-increments __v on save)
+    await vendor.save();
 
     res.status(200).json({
       success: true,
@@ -466,6 +496,15 @@ router.put('/:id', checkResourcePermission('vendor', 'edit', (req) => req.params
       data: vendor
     });
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'Vendor',
+        id: req.params.id
+      });
+    }
 
     // Handle validation errors
     if (error.name === 'ValidationError') {
@@ -531,7 +570,7 @@ router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.p
 });
 
 // PATCH /api/vendors/:id/status - Update vendor status
-router.patch('/:id/status', checkResourcePermission('vendor', 'edit', (req) => req.params.id), async (req, res) => {
+router.patch('/:id/status', checkResourcePermission('vendor', 'edit', (req) => req.params.id), requireIfMatch, async (req, res) => {
   try {
     const vendorId = req.params.id;
     const { status } = req.body;
@@ -564,13 +603,18 @@ router.patch('/:id/status', checkResourcePermission('vendor', 'edit', (req) => r
       });
     }
 
-    // Update vendor status within tenant scope only
-    const vendor = await Vendor.findOneAndUpdate(
-      { _id: vendorId, tenant_id: tenantId },
-      { status },
-      { new: true, runValidators: true }
-    );
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
 
+    // Load vendor document (tenant-scoped automatically via plugin)
+    const vendor = await Vendor.findById(vendorId);
     if (!vendor) {
       return res.status(404).json({
         success: false,
@@ -578,12 +622,45 @@ router.patch('/:id/status', checkResourcePermission('vendor', 'edit', (req) => r
       });
     }
 
+    // Verify tenant ownership
+    if (vendor.tenant_id && vendor.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Vendor belongs to a different tenant'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (vendor.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: vendor.__v,
+        resource: 'Vendor',
+        id: vendorId
+      });
+    }
+
+    // Apply status update (Load-Modify-Save pattern)
+    vendor.status = status;
+    
+    // Save (Mongoose auto-increments __v on save)
+    await vendor.save();
+
     res.status(200).json({
       success: true,
       message: 'Vendor status updated successfully',
       data: vendor
     });
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'Vendor',
+        id: req.params.id
+      });
+    }
 
     res.status(400).json({
       success: false,

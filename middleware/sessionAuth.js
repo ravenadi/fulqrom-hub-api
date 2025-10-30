@@ -27,7 +27,8 @@ async function authenticateSession(req, res, next) {
     const sessionId = req.cookies?.sid;
 
     if (!sessionId) {
-      if (process.env.NODE_ENV === 'development') {
+      // Only log if DEBUG_LOGS is enabled to reduce noise
+      if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
         console.log('❌ No session cookie found');
       }
       return res.status(401).json({
@@ -117,7 +118,8 @@ async function authenticateSession(req, res, next) {
     // Attach session to request for logout/refresh operations
     req.session = session;
 
-    if (process.env.NODE_ENV === 'development') {
+    // Reduce logging verbosity - only log if DEBUG_LOGS is enabled
+    if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
       console.log(`✅ Session authenticated: ${user.email}`);
     }
 

@@ -28,31 +28,44 @@ const authorize = (req, res, next) => {
 
   // Skip authorization for dropdowns (read-only data, no module-specific permissions needed)
   if (req.path.startsWith('/dropdowns')) {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
       console.log(`⚠️  Skipping permission check for dropdowns endpoint: ${req.method} ${req.path}`);
     }
     return next();
   }
 
-  // Skip authorization if user is not authenticated
+  // SECURITY FIX: Require authentication for all non-public routes
+  // If user is not authenticated, deny access (authentication middleware should have set req.user)
   if (!req.user) {
-    return next();
+    console.error(`⛔ Unauthenticated access attempt to protected route: ${req.method} ${req.path}`);
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required. Please log in.',
+      code: 'UNAUTHORIZED'
+    });
   }
 
   // Get module name from path
   const targetModule = getModuleFromPath(req.path);
 
+  // SECURITY FIX: Deny access if no module mapping found
+  // This prevents new routes from accidentally bypassing security checks
   if (!targetModule) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`⚠️  No module mapping for path: ${req.path}`);
-    }
-    return next(); // Allow if no mapping found
+    console.error(`⛔ Route without module mapping (potential security bypass): ${req.method} ${req.path}`);
+    return res.status(403).json({
+      success: false,
+      message: 'Route not authorized. No module mapping found for this endpoint.',
+      code: 'MODULE_NOT_MAPPED',
+      path: req.path,
+      hint: 'Add this route to MODULE_MAP in config/middleware.config.js if it should be accessible'
+    });
   }
 
   // Get required permission based on HTTP method
   const requiredPermission = getPermissionFromMethod(req.method);
 
-  if (process.env.NODE_ENV === 'development') {
+  // Reduce logging verbosity - only log if DEBUG_LOGS is enabled
+  if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
     console.log(`🔐 Checking ${requiredPermission} permission for module: ${targetModule}`);
   }
 

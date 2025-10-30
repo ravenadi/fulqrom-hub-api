@@ -27,12 +27,13 @@ const { setTenant, setBypassTenantFilter } = require('../utils/requestContext');
  */
 const fetchUserById = async (userId) => {
   // If userId is already a valid ObjectId, use it directly
+  // Bypass tenant filter during tenant context lookup (we need user to get tenant_id)
   if (mongoose.Types.ObjectId.isValid(userId)) {
-    return await User.findById(userId);
+    return await User.findById(userId).setOptions({ _bypassTenantFilter: true });
   }
   
   // Otherwise, treat it as an auth0_id
-  return await User.findOne({ auth0_id: userId });
+  return await User.findOne({ auth0_id: userId }).setOptions({ _bypassTenantFilter: true });
 };
 
 /**
@@ -66,22 +67,26 @@ async function tenantContext(req, res, next) {
     // Super admins can bypass tenant context or switch tenants via header
     const isSuperAdmin = req.user.is_super_admin || req.user.isSuperAdmin || false;
 
-    // Super admins bypass tenant context
+    // Super admins: allow impersonation via x-tenant-id or tenant_id, otherwise bypass tenant
     if (isSuperAdmin) {
-      // Set bypass flag in ALS
-      setBypassTenantFilter(true);
-      
-      req.tenant = {
-        tenantId: null,
-        organizationId: null,
-        tenantSlug: null,
-        tenantName: 'Super Admin',
-        organization: null,
-        tenant: null,
-        isSuperAdmin: true,
-        bypassTenant: true
-      };
-      return next();
+      const impersonateTenantId = req.headers['x-tenant-id'] || req.query?.tenant_id;
+
+      // If no target tenant provided, bypass tenant context as before
+      if (!impersonateTenantId) {
+        setBypassTenantFilter(true);
+        req.tenant = {
+          tenantId: null,
+          organizationId: null,
+          tenantSlug: null,
+          tenantName: 'Super Admin',
+          organization: null,
+          tenant: null,
+          isSuperAdmin: true,
+          bypassTenant: true
+        };
+        return next();
+      }
+      // Else: fall through to normal tenant resolution below using impersonated tenant
     }
 
     // Get user from database to retrieve tenant_id
@@ -104,10 +109,10 @@ async function tenantContext(req, res, next) {
       });
     }
 
-    // Allow super admins to impersonate a tenant via header
+    // Resolve target tenant id
     let targetTenantId = user.tenant_id;
-    if (isSuperAdmin && req.headers['x-tenant-id']) {
-      targetTenantId = req.headers['x-tenant-id'];
+    if (isSuperAdmin && (req.headers['x-tenant-id'] || req.query?.tenant_id)) {
+      targetTenantId = req.headers['x-tenant-id'] || req.query.tenant_id;
     }
 
     // Get tenant
