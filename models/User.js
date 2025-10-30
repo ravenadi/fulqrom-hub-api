@@ -100,6 +100,13 @@ const UserSchema = new mongoose.Schema({
     trim: true
   }],
 
+  // Multi-Factor Authentication requirement
+  mfa_required: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+
   // Audit fields
   created_at: {
     type: Date,

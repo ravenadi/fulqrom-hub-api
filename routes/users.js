@@ -98,7 +98,11 @@ router.get('/', async (req, res) => {
       total: totalUsers,
       page: pageNum,
       pages: Math.ceil(totalUsers / limitNum),
-      data: users
+      data: users.map(u => ({
+        ...u,
+        mfa_required: u.mfa_required ?? false,
+        // TODO: Populate mfa_enrolled from Auth0 when available
+      }))
     });
 
   } catch (error) {
@@ -152,7 +156,9 @@ router.get('/:id', async (req, res) => {
       success: true,
       data: {
         ...userObject,
-        role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User'
+        role_name: user.role_ids && user.role_ids.length > 0 ? user.role_ids[0].name : 'User',
+        mfa_required: userObject.mfa_required ?? false,
+        // TODO: Populate mfa_enrolled from Auth0 here
       }
     });
 
@@ -183,6 +189,8 @@ router.post('/', validateUserCreation, async (req, res) => {
       roleIds,
       is_active,
       isActive,
+      mfa_required,
+      mfaRequired,
       resource_access,
       replace_resource_access,
       document_categories,
@@ -195,6 +203,7 @@ router.post('/', validateUserCreation, async (req, res) => {
     last_name = last_name || lastName;
     role_ids = role_ids || roleIds;
     is_active = is_active !== undefined ? is_active : isActive;
+    mfa_required = mfa_required !== undefined ? mfa_required : (mfaRequired !== undefined ? mfaRequired : false);
 
     // Validate required fields
     if (!email) {
@@ -346,6 +355,7 @@ router.post('/', validateUserCreation, async (req, res) => {
       phone: phone?.trim(),
       role_ids: role_ids || [],
       is_active: is_active !== undefined ? is_active : true,
+      mfa_required: mfa_required !== undefined ? mfa_required : false,
       tenant_id: req.tenant?.tenantId // Add tenant_id from request context
     };
 
@@ -454,6 +464,8 @@ router.put('/:id', validateUserElevation, async (req, res) => {
       roleIds,
       is_active,
       isActive,
+      mfa_required,
+      mfaRequired,
       resource_access,
       replace_resource_access,
       document_categories,
@@ -466,6 +478,7 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     last_name = last_name || lastName;
     role_ids = role_ids || roleIds;
     is_active = is_active !== undefined ? is_active : isActive;
+    mfa_required = mfa_required !== undefined ? mfa_required : mfaRequired;
 
     // Handle both formats: full_name or first_name + last_name
     if (!full_name && (first_name || last_name)) {
@@ -608,6 +621,7 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     if (phone !== undefined) updateData.phone = phone?.trim();
     if (role_ids !== undefined) updateData.role_ids = role_ids;
     if (is_active !== undefined) updateData.is_active = is_active;
+    if (mfa_required !== undefined) updateData.mfa_required = mfa_required;
 
     // Log role_ids update for debugging
     if (role_ids !== undefined) {
@@ -624,6 +638,7 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     if (phone !== undefined) user.phone = phone?.trim();
     if (role_ids !== undefined) user.role_ids = role_ids;
     if (is_active !== undefined) user.is_active = is_active;
+    if (mfa_required !== undefined) user.mfa_required = mfa_required;
 
     // Handle resource_access update
     if (resource_access !== undefined) {
@@ -956,6 +971,29 @@ router.post('/:id/deactivate', async (req, res) => {
       message: 'Error deactivating user',
       error: error.message
     });
+  }
+});
+
+/**
+ * DELETE /api/users/:id/mfa
+ * Reset MFA for a user (sets mfa_required to false)
+ * TODO: Integrate with Auth0 to remove enrolled factors once Management API wired up
+ */
+router.delete('/:id/mfa', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid user ID format' });
+    }
+    // Find and update user
+    const user = await User.findByIdAndUpdate(id, { mfa_required: false }, { new: true });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    // TODO: Remove enrolled factors via Auth0 Management API if connected
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error resetting MFA', error: error.message });
   }
 });
 

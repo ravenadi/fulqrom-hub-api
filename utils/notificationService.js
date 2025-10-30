@@ -6,6 +6,11 @@ const emailService = require('./emailService');
  * Handles both in-app notifications and email notifications
  */
 class NotificationService {
+  constructor() {
+    // Check single time for performance. Env var should be set in all environments.
+    this.disableEmail =
+      process.env.DISABLE_EMAIL_DELIVERY === 'true' || process.env.DISABLE_EMAIL_DELIVERY === '1';
+  }
   /**
    * Send a notification to a single user
    * @param {Object} params - Notification parameters
@@ -75,8 +80,8 @@ class NotificationService {
 
       const notification = await Notification.create(notificationData);
 
-      // Send email notification if requested
-      if (sendEmail && emailTemplate && userEmail) {
+      // Send email notification if requested AND global email is not disabled
+      if (sendEmail && emailTemplate && userEmail && !this.disableEmail) {
         try {
           console.log(`📨 Notification Service: Attempting to send email to ${userEmail} for document ${documentId || documentName}`);
           notification.email_status = 'pending';
@@ -109,6 +114,11 @@ class NotificationService {
           await notification.save();
           // Continue even if email fails - in-app notification is created
         }
+      } else if (sendEmail && this.disableEmail) {
+        // Mark as skipped for traceability
+        notification.email_status = 'suppressed';
+        notification.email_error = 'Email delivery globally disabled (DISABLE_EMAIL_DELIVERY)';
+        await notification.save();
       }
 
       return notification;
