@@ -8,12 +8,13 @@ const mongoose = require('mongoose');
  */
 const fetchUserById = async (userId) => {
   // If userId is already a valid ObjectId, use it directly
+  // Bypass tenant filter during auth/permission checks (we're looking up by ID, not tenant)
   if (mongoose.Types.ObjectId.isValid(userId)) {
-    return await User.findById(userId).populate('role_ids');
+    return await User.findById(userId).setOptions({ _bypassTenantFilter: true }).populate('role_ids');
   }
   
   // Otherwise, treat it as an auth0_id
-  return await User.findOne({ auth0_id: userId }).populate('role_ids');
+  return await User.findOne({ auth0_id: userId }).setOptions({ _bypassTenantFilter: true }).populate('role_ids');
 };
 
 /**

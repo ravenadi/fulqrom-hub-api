@@ -36,6 +36,7 @@ const emailService = require('../utils/emailService');
 const notificationService = require('../utils/notificationService');
 const { sendNotificationAsync, sendEmailAsync } = require('../utils/asyncHelpers');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -1150,12 +1151,18 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
 });
 
 // PUT /api/documents/bulk-update - Bulk update multiple documents
-router.put('/bulk-update', async (req, res) => {
+router.put('/bulk-update', requireIfMatch, async (req, res) => {
+  const mongoose = require('mongoose');
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
-    const { document_ids, updates } = req.body;
+    const { document_ids, updates, versions } = req.body; // versions is optional map: { docId: version }
 
     // Validate request body
     if (!document_ids || !Array.isArray(document_ids) || document_ids.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'document_ids array is required and must not be empty'
@@ -1163,6 +1170,8 @@ router.put('/bulk-update', async (req, res) => {
     }
 
     if (!updates || typeof updates !== 'object' || Object.keys(updates).length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'updates object is required and must not be empty'
@@ -1172,10 +1181,23 @@ router.put('/bulk-update', async (req, res) => {
     // Validate all document IDs are valid ObjectIds
     const invalidIds = document_ids.filter(id => !id || !id.match(/^[0-9a-fA-F]{24}$/));
     if (invalidIds.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Invalid document ID format',
         invalid_ids: invalidIds
+      });
+    }
+
+    // Verify tenant context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required'
       });
     }
 
@@ -1210,7 +1232,7 @@ router.put('/bulk-update', async (req, res) => {
     // Handle multiple assets (new feature)
     if (updates.asset_ids && Array.isArray(updates.asset_ids) && updates.asset_ids.length > 0) {
       // Fetch asset details from database
-      const assets = await Asset.find({ _id: { $in: updates.asset_ids.map(id => id.toString()) } });
+      const assets = await Asset.find({ _id: { $in: updates.asset_ids.map(id => id.toString()) } }).session(session);
       updateObject['location.assets'] = assets.map(asset => ({
         asset_id: asset._id.toString(),
         asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
@@ -1275,22 +1297,90 @@ router.put('/bulk-update', async (req, res) => {
     // Add updated_at timestamp
     updateObject.updated_at = new Date().toISOString();
 
-    // Perform bulk update
-    const result = await Document.updateMany(
-      { _id: { $in: document_ids } },
-      { $set: updateObject }
-    );
+    // Perform individual updates with version checking (prevents lost updates)
+    const updateResults = [];
+    const conflicts = [];
+    
+    for (const docId of document_ids) {
+      const clientVersion = versions?.[docId] ?? req.clientVersion ?? req.body.__v;
+      
+      // If versions provided, check each document's version
+      const query = { 
+        _id: docId,
+        tenant_id: tenantId
+      };
+      
+      if (clientVersion !== undefined && versions) {
+        query.__v = clientVersion;
+      }
+      
+      const result = await Document.findOneAndUpdate(
+        query,
+        {
+          $set: updateObject,
+          $inc: { __v: 1 }
+        },
+        { 
+          new: true,
+          session,
+          runValidators: true
+        }
+      );
+      
+      if (!result) {
+        if (clientVersion !== undefined) {
+          // Version conflict or not found
+          const existingDoc = await Document.findById(docId).session(session);
+          if (existingDoc) {
+            conflicts.push({
+              document_id: docId,
+              clientVersion,
+              currentVersion: existingDoc.__v,
+              message: 'Version conflict'
+            });
+          } else {
+            conflicts.push({
+              document_id: docId,
+              message: 'Document not found or access denied'
+            });
+          }
+        } else {
+          conflicts.push({
+            document_id: docId,
+            message: 'Document not found or access denied'
+          });
+        }
+      } else {
+        updateResults.push(docId);
+      }
+    }
+
+    // If any conflicts, abort transaction
+    if (conflicts.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(409).json({
+        success: false,
+        message: 'Some documents had version conflicts or were not found',
+        conflicts,
+        updated_count: updateResults.length,
+        failed_count: conflicts.length
+      });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(200).json({
       success: true,
       message: 'Documents updated successfully',
-      matched_count: result.matchedCount,
-      modified_count: result.modifiedCount,
-      document_ids: document_ids
+      updated_count: updateResults.length,
+      document_ids: updateResults
     });
 
   } catch (error) {
-
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({
       success: false,
       message: 'Error updating documents',
@@ -1300,7 +1390,7 @@ router.put('/bulk-update', async (req, res) => {
 });
 
 // PUT /api/documents/:id - Update document
-router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId, async (req, res) => {
+router.put('/:id', checkModulePermission('documents', 'edit'), requireIfMatch, validateObjectId, async (req, res) => {
 
   // Fields to store 
  /* {
@@ -1449,12 +1539,18 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
       });
     }
 
-    // Update ONLY if belongs to user's tenant
-    // Use findOne, set audit context, and save to trigger hooks properly
-    const document = await Document.findOne({
-      _id: req.params.id,
-      tenant_id: tenantId
-    });
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
+
+    // Load document (tenant-scoped automatically via plugin, but verify manually too)
+    const document = await Document.findById(req.params.id);
 
     if (!document) {
       return res.status(404).json({
@@ -1463,13 +1559,70 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
       });
     }
 
-    // Set audit context and update
-    document.$setAuditContext(req, 'update');
-    Object.assign(document, updateData);
-    await document.save();
+    // Verify tenant ownership
+    if (document.tenant_id && document.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Document belongs to a different tenant'
+      });
+    }
 
-    // Convert to lean object for response
-    const documentLean = document.toObject();
+    // Check version match for optimistic concurrency control
+    if (document.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: req.params.id
+      });
+    }
+
+    // Use atomic findOneAndUpdate instead of Object.assign to prevent lost updates
+    // Build atomic update object with allowed fields only
+    const allowedFields = [
+      'name', 'description', 'category', 'type', 'engineering_discipline',
+      'regulatory_framework', 'certification_number', 'compliance_framework',
+      'compliance_status', 'issue_date', 'expiry_date', 'review_date', 'frequency',
+      'status', 'tags', 'customer', 'location', 'drawing_info', 'access_control',
+      'approval_config', 'file', 'version_number', 'version', 'is_current_version'
+    ];
+    
+    // Filter out undefined/null and non-allowed fields to preserve existing data
+    const atomicUpdate = {};
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {
+        atomicUpdate[key] = updateData[key];
+      }
+    });
+    
+    // Add updated_at
+    atomicUpdate.updated_at = new Date().toISOString();
+    
+    // Perform atomic update with version check
+    const result = await Document.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        __v: clientVersion  // Version check prevents lost updates
+      },
+      {
+        $set: atomicUpdate,
+        $inc: { __v: 1 }  // Atomic version increment
+      },
+      { new: true, runValidators: true }
+    );
+    
+    if (!result) {
+      // Version conflict - resource was modified
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: req.params.id
+      });
+    }
+    
+    // Update document reference for entity name population
+    const documentLean = result.toObject();
 
     // Populate entity names dynamically
     const names = await fetchEntityNames(documentLean);
@@ -1605,6 +1758,16 @@ router.put('/:id', checkModulePermission('documents', 'edit'), validateObjectId,
       data: documentWithNames
     });
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'Document',
+        id: req.params.id
+      });
+    }
+
     res.status(400).json({
       success: false,
       message: 'Error updating document',
@@ -1861,40 +2024,56 @@ router.get('/by-building/:buildingId', async (req, res) => {
     const sortObj = {};
     sortObj[sort] = order === 'asc' ? 1 : -1;
 
-    const [documents, totalDocuments, categoryStats] = await Promise.all([
-      Document.find(filterQuery)
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Document.countDocuments(filterQuery),
-      Document.aggregate([
-        { $match: filterQuery },
-        { $group: { _id: '$category', count: { $sum: 1 } } }
-      ])
-    ]);
+    // Use snapshot isolation for consistent reads
+    const mongoose = require('mongoose');
+    const session = await mongoose.startSession();
+    
+    try {
+      const [documents, totalDocuments, categoryStats] = await Promise.all([
+        Document.find(filterQuery)
+          .session(session)
+          .readConcern('snapshot')
+          .sort(sortObj)
+          .skip(skip)
+          .limit(limitNum)
+          .lean(),
+        Document.countDocuments(filterQuery)
+          .session(session)
+          .readConcern('snapshot'),
+        Document.aggregate([
+          { $match: filterQuery },
+          { $group: { _id: '$category', count: { $sum: 1 } } }
+        ]).session(session).readConcern('snapshot')
+      ]);
+      
+      const summary = {
+        total_documents: totalDocuments,
+        by_category: {}
+      };
 
-    const summary = {
-      total_documents: totalDocuments,
-      by_category: {}
-    };
+      categoryStats.forEach(stat => {
+        summary.by_category[stat._id || 'Unknown'] = stat.count;
+      });
 
-    categoryStats.forEach(stat => {
-      summary.by_category[stat._id || 'Unknown'] = stat.count;
-    });
-
-    res.status(200).json({
-      success: true,
-      count: documents.length,
-      total: totalDocuments,
-      page: pageNum,
-      pages: Math.ceil(totalDocuments / limitNum),
-      building_id: req.params.buildingId,
-      summary,
-      data: documents
-    });
+      res.status(200).json({
+        success: true,
+        count: documents.length,
+        total: totalDocuments,
+        page: pageNum,
+        pages: Math.ceil(totalDocuments / limitNum),
+        building_id: req.params.buildingId,
+        summary,
+        data: documents
+      });
+    } catch (error) {
+      await session.endSession();
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching documents by building',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
   } catch (error) {
-
     res.status(500).json({
       success: false,
       message: 'Error fetching documents by building',
@@ -1913,28 +2092,41 @@ router.get('/summary/stats', async (req, res) => {
     if (site_id) matchQuery['location.site.site_id'] = site_id;
     if (building_id) matchQuery['location.building.building_id'] = building_id;
 
-    const stats = await Document.aggregate([
-      { $match: matchQuery },
-      {
-        $group: {
-          _id: null,
-          totalDocuments: { $sum: 1 },
-          byCategory: {
-            $push: { category: '$category', type: '$type' }
+    // Use read concern snapshot for consistent aggregations (prevents dirty reads)
+    const mongoose = require('mongoose');
+    const session = await mongoose.startSession();
+    
+    try {
+      const stats = await Document.aggregate([
+        { $match: matchQuery },
+        {
+          $group: {
+            _id: null,
+            totalDocuments: { $sum: 1 },
+            byCategory: {
+              $push: { category: '$category', type: '$type' }
+            }
           }
         }
-      }
-    ]);
+      ]).session(session).readConcern('snapshot');
+      
+      const result = stats[0] || {
+        totalDocuments: 0,
+        byCategory: []
+      };
 
-    const result = stats[0] || {
-      totalDocuments: 0,
-      byCategory: []
-    };
-
-    res.status(200).json({
-      success: true,
-      data: result
-    });
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      await session.endSession();
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching document statistics',
+        error: error.message
+      });
+    }
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -2024,22 +2216,35 @@ router.get('/by-category', async (req, res) => {
     if (site_id) matchQuery['location.site.site_id'] = site_id;
     if (building_id) matchQuery['location.building.building_id'] = building_id;
 
-    const categoryStats = await Document.aggregate([
-      { $match: matchQuery },
-      {
-        $group: {
-          _id: '$category',
-          count: { $sum: 1 },
-          types: { $addToSet: '$type' }
-        }
-      },
-      { $sort: { count: -1 } }
-    ]);
-
-    res.status(200).json({
-      success: true,
-      data: categoryStats
-    });
+    // Use read concern snapshot for consistent category statistics (prevents dirty reads)
+    const mongoose = require('mongoose');
+    const session = await mongoose.startSession();
+    
+    try {
+      const categoryStats = await Document.aggregate([
+        { $match: matchQuery },
+        {
+          $group: {
+            _id: '$category',
+            count: { $sum: 1 },
+            types: { $addToSet: '$type' }
+          }
+        },
+        { $sort: { count: -1 } }
+      ]).session(session).readConcern('snapshot');
+      
+      res.status(200).json({
+        success: true,
+        data: categoryStats
+      });
+    } catch (error) {
+      await session.endSession();
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching category statistics',
+        error: error.message
+      });
+    }
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -2148,13 +2353,19 @@ const {
 } = require('../middleware/approvalValidation');
 
 // POST /api/documents/:id/request-approval - Request approval for a document
-router.post('/:id/request-approval', validateObjectId, validateRequestApproval, async (req, res) => {
+router.post('/:id/request-approval', validateObjectId, validateRequestApproval, requireIfMatch, async (req, res) => {
+  const mongoose = require('mongoose');
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
     const { id } = req.params;
     const { assigned_to, assigned_to_name, requested_by, requested_by_name, comments } = req.body;
 
     // Validate required fields
     if (!assigned_to) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'assigned_to is required'
@@ -2162,34 +2373,89 @@ router.post('/:id/request-approval', validateObjectId, validateRequestApproval, 
     }
 
     if (!requested_by) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'requested_by is required'
       });
     }
 
-    // Find the document
-    const document = await Document.findById(id);
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include version for concurrent safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
+
+    // Find the document with version check
+    const document = await Document.findById(id).session(session);
     if (!document) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({
         success: false,
         message: 'Document not found'
       });
     }
 
-    // Update document approval fields
+    // Check version match
+    if (document.__v !== clientVersion) {
+      await session.abortTransaction();
+      session.endSession();
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: id
+      });
+    }
+
+    // Store previous status for history
     const previousStatus = document.approval_status;
-    document.approval_required = true;
-    document.approval_status = 'Pending';
-    document.approved_by = assigned_to;
-    document.updated_at = new Date().toISOString();
 
-    await document.save();
+    // Atomic update with transaction
+    const result = await Document.findOneAndUpdate(
+      { 
+        _id: id,
+        __v: clientVersion
+      },
+      {
+        $set: {
+          approval_required: true,
+          approval_status: 'Pending',
+          approved_by: assigned_to,
+          updated_at: new Date().toISOString()
+        },
+        $inc: { __v: 1 }
+      },
+      { 
+        new: true,
+        session,
+        runValidators: true
+      }
+    );
 
-    // Create approval history record
+    if (!result) {
+      await session.abortTransaction();
+      session.endSession();
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: id
+      });
+    }
+
+    // Create approval history record in transaction
     const approvalHistory = new ApprovalHistory({
-      document_id: document._id,
-      document_name: document.name,
+      document_id: result._id,
+      document_name: result.name,
       action: 'requested',
       previous_status: previousStatus,
       new_status: 'Pending',
@@ -2204,21 +2470,25 @@ router.post('/:id/request-approval', validateObjectId, validateRequestApproval, 
       }
     });
 
-    await approvalHistory.save();
+    await approvalHistory.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(200).json({
       success: true,
       message: 'Approval request submitted successfully',
       data: {
-        document_id: document._id,
-        approval_status: document.approval_status,
-        approved_by: document.approved_by,
+        document_id: result._id,
+        approval_status: result.approval_status,
+        approved_by: result.approved_by,
         history_id: approvalHistory._id
       }
     });
 
   } catch (error) {
-
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({
       success: false,
       message: 'Error requesting approval',
@@ -2228,49 +2498,133 @@ router.post('/:id/request-approval', validateObjectId, validateRequestApproval, 
 });
 
 // PUT /api/documents/:id/approve - Approve a document
-router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) => {
+router.put('/:id/approve', validateObjectId, validateApprove, requireIfMatch, async (req, res) => {
+  const mongoose = require('mongoose');
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
     const { id } = req.params;
     const { approved_by, approved_by_name, comments } = req.body;
 
     // Validate required fields
     if (!approved_by) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'approved_by is required'
       });
     }
 
-    // Find the document
-    const document = await Document.findById(id);
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include version for concurrent safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
+
+    // Find the document with version check
+    const document = await Document.findById(id).session(session);
     if (!document) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({
         success: false,
         message: 'Document not found'
       });
     }
 
-    // Check if approval is required
+    // Check version match
+    if (document.__v !== clientVersion) {
+      await session.abortTransaction();
+      session.endSession();
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: id
+      });
+    }
+
+    // Check if approval is required and not already approved
     if (!document.approval_required) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Document does not require approval'
       });
     }
 
-    // Update document approval fields
+    if (document.approval_status === 'Approved') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: 'Document already approved'
+      });
+    }
+
+    // Store previous status for history
     const previousStatus = document.approval_status;
-    document.approval_status = 'Approved';
-    document.approved_by = approved_by;
-    document.status = 'Approved'; // Also update main status
-    document.updated_at = new Date().toISOString();
 
-    await document.save();
+    // Atomic update with conditional check (prevents duplicate approvals)
+    const result = await Document.findOneAndUpdate(
+      { 
+        _id: id,
+        __v: clientVersion,
+        approval_status: { $ne: 'Approved' }  // Prevent overwriting existing approval
+      },
+      {
+        $set: {
+          approval_status: 'Approved',
+          approved_by: approved_by,
+          status: 'Approved',
+          updated_at: new Date().toISOString()
+        },
+        $inc: { __v: 1 }
+      },
+      { 
+        new: true,
+        session,
+        runValidators: true
+      }
+    );
 
-    // Create approval history record
+    if (!result) {
+      await session.abortTransaction();
+      session.endSession();
+      // Re-check document to provide better error message
+      const currentDoc = await Document.findById(id);
+      if (currentDoc && currentDoc.approval_status === 'Approved') {
+        return res.status(409).json({
+          success: false,
+          message: 'Document was already approved by another user',
+          code: 'ALREADY_APPROVED',
+          details: {
+            currentVersion: currentDoc.__v,
+            approval_status: currentDoc.approval_status
+          }
+        });
+      }
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: id
+      });
+    }
+
+    // Create approval history record in transaction
     const approvalHistory = new ApprovalHistory({
-      document_id: document._id,
-      document_name: document.name,
+      document_id: result._id,
+      document_name: result.name,
       action: 'approved',
       previous_status: previousStatus,
       new_status: 'Approved',
@@ -2283,7 +2637,10 @@ router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) =
       }
     });
 
-    await approvalHistory.save();
+    await approvalHistory.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
 
     // Send notifications (async, don't block response)
     setImmediate(async () => {
@@ -2291,16 +2648,16 @@ router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) =
         const recipients = [];
 
         // Add document creator if available
-        if (document.created_by) {
+        if (result.created_by) {
           recipients.push({
-            user_id: document.created_by,
-            user_email: document.created_by // Assuming email, might need to fetch from User model
+            user_id: result.created_by,
+            user_email: result.created_by // Assuming email, might need to fetch from User model
           });
         }
 
         // Add all approvers from approval_config
-        if (document.approval_config && document.approval_config.approvers) {
-          document.approval_config.approvers.forEach(approver => {
+        if (result.approval_config && result.approval_config.approvers) {
+          result.approval_config.approvers.forEach(approver => {
             if (approver.user_email) {
               recipients.push({
                 user_id: approver.user_id,
@@ -2320,7 +2677,7 @@ router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) =
           // Non-blocking: Send notifications after response
           sendNotificationAsync(
             () => notificationService.notifyDocumentApprovalStatusChanged(
-              document,
+              result,
               'Approved',
               uniqueRecipients,
               {
@@ -2341,16 +2698,17 @@ router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) =
       success: true,
       message: 'Document approved successfully',
       data: {
-        document_id: document._id,
-        approval_status: document.approval_status,
-        status: document.status,
-        approved_by: document.approved_by,
+        document_id: result._id,
+        approval_status: result.approval_status,
+        status: result.status,
+        approved_by: result.approved_by,
         history_id: approvalHistory._id
       }
     });
 
   } catch (error) {
-
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({
       success: false,
       message: 'Error approving document',
@@ -2360,13 +2718,19 @@ router.put('/:id/approve', validateObjectId, validateApprove, async (req, res) =
 });
 
 // PUT /api/documents/:id/reject - Reject a document
-router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => {
+router.put('/:id/reject', validateObjectId, validateReject, requireIfMatch, async (req, res) => {
+  const mongoose = require('mongoose');
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
     const { id } = req.params;
     const { rejected_by, rejected_by_name, comments } = req.body;
 
     // Validate required fields
     if (!rejected_by) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'rejected_by is required'
@@ -2374,42 +2738,122 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
     }
 
     if (!comments) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'comments are required when rejecting a document'
       });
     }
 
-    // Find the document
-    const document = await Document.findById(id);
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include version for concurrent safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
+
+    // Find the document with version check
+    const document = await Document.findById(id).session(session);
     if (!document) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({
         success: false,
         message: 'Document not found'
       });
     }
 
-    // Check if approval is required
+    // Check version match
+    if (document.__v !== clientVersion) {
+      await session.abortTransaction();
+      session.endSession();
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: id
+      });
+    }
+
+    // Check if approval is required and not already approved/rejected
     if (!document.approval_required) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Document does not require approval'
       });
     }
 
-    // Update document approval fields
+    if (document.approval_status === 'Approved') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot reject an already approved document'
+      });
+    }
+
+    // Store previous status for history
     const previousStatus = document.approval_status;
-    document.approval_status = 'Rejected';
-    document.approved_by = rejected_by;
-    document.status = 'Rejected'; // Also update main status
-    document.updated_at = new Date().toISOString();
 
-    await document.save();
+    // Atomic update with conditional check
+    const result = await Document.findOneAndUpdate(
+      { 
+        _id: id,
+        __v: clientVersion,
+        approval_status: { $ne: 'Approved' }  // Prevent rejecting already approved docs
+      },
+      {
+        $set: {
+          approval_status: 'Rejected',
+          approved_by: rejected_by,
+          status: 'Rejected',
+          updated_at: new Date().toISOString()
+        },
+        $inc: { __v: 1 }
+      },
+      { 
+        new: true,
+        session,
+        runValidators: true
+      }
+    );
 
-    // Create approval history record
+    if (!result) {
+      await session.abortTransaction();
+      session.endSession();
+      // Re-check document to provide better error message
+      const currentDoc = await Document.findById(id);
+      if (currentDoc && currentDoc.approval_status === 'Approved') {
+        return res.status(409).json({
+          success: false,
+          message: 'Document was approved by another user and cannot be rejected',
+          code: 'ALREADY_APPROVED',
+          details: {
+            currentVersion: currentDoc.__v,
+            approval_status: currentDoc.approval_status
+          }
+        });
+      }
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: id
+      });
+    }
+
+    // Create approval history record in transaction
     const approvalHistory = new ApprovalHistory({
-      document_id: document._id,
-      document_name: document.name,
+      document_id: result._id,
+      document_name: result.name,
       action: 'rejected',
       previous_status: previousStatus,
       new_status: 'Rejected',
@@ -2422,7 +2866,10 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
       }
     });
 
-    await approvalHistory.save();
+    await approvalHistory.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
 
     // Send notifications (async, don't block response)
     setImmediate(async () => {
@@ -2430,16 +2877,16 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
         const recipients = [];
 
         // Add document creator if available
-        if (document.created_by) {
+        if (result.created_by) {
           recipients.push({
-            user_id: document.created_by,
-            user_email: document.created_by // Assuming email, might need to fetch from User model
+            user_id: result.created_by,
+            user_email: result.created_by // Assuming email, might need to fetch from User model
           });
         }
 
         // Add all approvers from approval_config
-        if (document.approval_config && document.approval_config.approvers) {
-          document.approval_config.approvers.forEach(approver => {
+        if (result.approval_config && result.approval_config.approvers) {
+          result.approval_config.approvers.forEach(approver => {
             if (approver.user_email) {
               recipients.push({
                 user_id: approver.user_id,
@@ -2459,7 +2906,7 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
           // Non-blocking: Send notifications after response
           sendNotificationAsync(
             () => notificationService.notifyDocumentApprovalStatusChanged(
-              document,
+              result,
               'Rejected',
               uniqueRecipients,
               {
@@ -2480,16 +2927,17 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
       success: true,
       message: 'Document rejected',
       data: {
-        document_id: document._id,
-        approval_status: document.approval_status,
-        status: document.status,
-        approved_by: document.approved_by,
+        document_id: result._id,
+        approval_status: result.approval_status,
+        status: result.status,
+        approved_by: result.approved_by,
         history_id: approvalHistory._id
       }
     });
 
   } catch (error) {
-
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({
       success: false,
       message: 'Error rejecting document',
@@ -2499,50 +2947,135 @@ router.put('/:id/reject', validateObjectId, validateReject, async (req, res) => 
 });
 
 // PUT /api/documents/:id/revoke-approval - Revoke/cancel approval request
-router.put('/:id/revoke-approval', validateObjectId, validateRevokeApproval, async (req, res) => {
+router.put('/:id/revoke-approval', validateObjectId, validateRevokeApproval, requireIfMatch, async (req, res) => {
+  const mongoose = require('mongoose');
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
     const { id } = req.params;
     const { revoked_by, revoked_by_name, comments } = req.body;
 
     // Validate required fields
     if (!revoked_by) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'revoked_by is required'
       });
     }
 
-    // Find the document
-    const document = await Document.findById(id);
+    // Get version for optimistic locking
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include version for concurrent safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
+
+    // Find the document with version check
+    const document = await Document.findById(id).session(session);
     if (!document) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({
         success: false,
         message: 'Document not found'
       });
     }
 
-    // Check if approval is required
+    // Check version match
+    if (document.__v !== clientVersion) {
+      await session.abortTransaction();
+      session.endSession();
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: id
+      });
+    }
+
+    // Check if approval is required (cannot revoke if already approved/rejected)
     if (!document.approval_required) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Document does not have an active approval request'
       });
     }
 
-    // Update document approval fields
+    if (document.approval_status === 'Approved') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot revoke an already approved document'
+      });
+    }
+
+    // Store previous status for history
     const previousStatus = document.approval_status;
-    document.approval_required = false;
-    document.approval_status = 'Revoked';
-    document.approved_by = null;
-    document.status = 'Draft'; // Reset to draft
-    document.updated_at = new Date().toISOString();
 
-    await document.save();
+    // Atomic update with conditional check
+    const result = await Document.findOneAndUpdate(
+      { 
+        _id: id,
+        __v: clientVersion,
+        approval_required: true,
+        approval_status: { $ne: 'Approved' }  // Cannot revoke if approved
+      },
+      {
+        $set: {
+          approval_required: false,
+          approval_status: 'Revoked',
+          approved_by: null,
+          status: 'Draft',
+          updated_at: new Date().toISOString()
+        },
+        $inc: { __v: 1 }
+      },
+      { 
+        new: true,
+        session,
+        runValidators: true
+      }
+    );
 
-    // Create approval history record
+    if (!result) {
+      await session.abortTransaction();
+      session.endSession();
+      // Re-check document to provide better error message
+      const currentDoc = await Document.findById(id);
+      if (currentDoc && currentDoc.approval_status === 'Approved') {
+        return res.status(409).json({
+          success: false,
+          message: 'Document was approved and cannot be revoked',
+          code: 'ALREADY_APPROVED',
+          details: {
+            currentVersion: currentDoc.__v,
+            approval_status: currentDoc.approval_status
+          }
+        });
+      }
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: document.__v,
+        resource: 'Document',
+        id: id
+      });
+    }
+
+    // Create approval history record in transaction
     const approvalHistory = new ApprovalHistory({
-      document_id: document._id,
-      document_name: document.name,
+      document_id: result._id,
+      document_name: result.name,
       action: 'revoked',
       previous_status: previousStatus,
       new_status: 'Revoked',
@@ -2555,21 +3088,25 @@ router.put('/:id/revoke-approval', validateObjectId, validateRevokeApproval, asy
       }
     });
 
-    await approvalHistory.save();
+    await approvalHistory.save({ session });
+    
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(200).json({
       success: true,
       message: 'Approval request revoked',
       data: {
-        document_id: document._id,
-        approval_status: document.approval_status,
-        status: document.status,
+        document_id: result._id,
+        approval_status: result.approval_status,
+        status: result.status,
         history_id: approvalHistory._id
       }
     });
 
   } catch (error) {
-
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({
       success: false,
       message: 'Error revoking approval',
@@ -2767,12 +3304,21 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       });
     }
 
-    // Get max version_sequence
-    const maxSequenceDoc = await Document.findOne({ document_group_id: documentGroupId })
-      .sort({ version_sequence: -1 })
-      .limit(1);
-
-    const newVersionSequence = (maxSequenceDoc?.version_sequence || 0) + 1;
+    // Use atomic counter for version_sequence to prevent race conditions
+    const mongoose = require('mongoose');
+    // Create a counter document per document group if it doesn't exist
+    const Counter = mongoose.models.VersionCounter || mongoose.model('VersionCounter', new mongoose.Schema({
+      _id: String, // document_group_id
+      seq: { type: Number, default: 0 }
+    }, { _id: false }));
+    
+    // Atomically get and increment sequence number
+    const counter = await Counter.findByIdAndUpdate(
+      documentGroupId,
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    const newVersionSequence = counter.seq;
 
     // Upload new file to S3 with date-based versioned key
     const now = new Date();
@@ -2837,92 +3383,132 @@ router.post('/:id/versions', upload.single('file'), validateObjectId, async (req
       }
     });
 
-    // Mark current version as not current
-    await Document.updateOne(
-      { _id: currentDocument._id },
-      {
-        $set: {
-          is_current_version: false,
-          document_group_id: documentGroupId,
-          updated_at: new Date().toISOString()
-        }
-      }
-    );
-
-    // Update all other versions in the group to ensure document_group_id is set
-    await Document.updateMany(
-      {
-        document_group_id: { $exists: false },
-        _id: { $in: [currentDocument._id] }
-      },
-      { $set: { document_group_id: documentGroupId } }
-    );
-
-    // Create minimal version document - ONLY file data and version metadata
-    const newVersionData = {
-      // Minimal required fields (schema requires these)
-      name: `${currentDocument.name} - v${newVersionNumber}`,
-      category: 'Version',
-      type: 'Version',
-
-      // File data
-      file: uploadResult.data,
-
-      // Version tracking
-      version: newVersionNumber,
-      document_group_id: documentGroupId,
-      version_number: newVersionNumber,
-      is_current_version: true,
-      version_sequence: newVersionSequence,
-
-      // Version metadata - WHO, WHEN, WHERE uploaded
-      version_metadata: {
-        uploaded_by: {
-          user_id: uploadedBy.user_id,
-          user_name: uploadedBy.user_name || '',
-          email: uploadedBy.email || ''
+    // Use transaction for atomic multi-document update (prevents race conditions)
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    
+    try {
+      // Atomically mark current version as not current (only if still current)
+      const currentUpdateResult = await Document.updateOne(
+        { 
+          _id: currentDocument._id,
+          is_current_version: true  // Only update if still current (prevents race condition)
         },
-        upload_timestamp: new Date(),
-        change_notes: req.body.change_notes || '',
-        superseded_version: currentVersionNumber,
-        file_changes: {
-          original_filename: req.file.originalname,
-          file_size_bytes: req.file.size,
-          file_hash: req.body.file_hash || ''
-        }
-      },
-
-      // Timestamps
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const newVersionDocument = new Document(newVersionData);
-    await newVersionDocument.save();
-
-    // Update the original/current document with new version info
-    await Document.findByIdAndUpdate(
-      id,
-      {
-        $set: {
-          version_number: newVersionNumber,
-          version: newVersionNumber,
-          is_current_version: true,
-          updated_at: new Date().toISOString()
-        }
+        {
+          $set: {
+            is_current_version: false,
+            document_group_id: documentGroupId,
+            updated_at: new Date().toISOString()
+          }
+        },
+        { session }
+      );
+      
+      // If update didn't match, another process may have updated it
+      if (currentUpdateResult.matchedCount === 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(409).json({
+          success: false,
+          message: 'Document version state changed. Please refresh and try again.',
+          code: 'VERSION_STATE_CONFLICT'
+        });
       }
-    );
+      
+      // Update all other versions in the group to ensure document_group_id is set
+      await Document.updateMany(
+        {
+          document_group_id: { $exists: false },
+          _id: { $in: [currentDocument._id] }
+        },
+        { $set: { document_group_id: documentGroupId } },
+        { session }
+      );
 
-    // Mark all other versions as not current
-    await Document.updateMany(
-      {
+      // Create minimal version document - ONLY file data and version metadata
+      const newVersionData = {
+        // Minimal required fields (schema requires these)
+        name: `${currentDocument.name} - v${newVersionNumber}`,
+        category: 'Version',
+        type: 'Version',
+
+        // File data
+        file: uploadResult.data,
+
+        // Version tracking
+        version: newVersionNumber,
         document_group_id: documentGroupId,
-        _id: { $nin: [id, newVersionDocument._id] }
-      },
-      {
-        $set: { is_current_version: false }
-      }
-    );
+        version_number: newVersionNumber,
+        is_current_version: true,
+        version_sequence: newVersionSequence,
+
+        // Version metadata - WHO, WHEN, WHERE uploaded
+        version_metadata: {
+          uploaded_by: {
+            user_id: uploadedBy.user_id,
+            user_name: uploadedBy.user_name || '',
+            email: uploadedBy.email || ''
+          },
+          upload_timestamp: new Date(),
+          change_notes: req.body.change_notes || '',
+          superseded_version: currentVersionNumber,
+          file_changes: {
+            original_filename: req.file.originalname,
+            file_size_bytes: req.file.size,
+            file_hash: req.body.file_hash || ''
+          }
+        },
+
+        // Timestamps
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        
+        // Tenant and customer info from current document
+        tenant_id: currentDocument.tenant_id,
+        customer: currentDocument.customer
+      };
+
+      const newVersionDocument = new Document(newVersionData);
+      await newVersionDocument.save({ session });
+
+      // Update the original/current document with new version info
+      await Document.findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            version_number: newVersionNumber,
+            version: newVersionNumber,
+            is_current_version: true,
+            updated_at: new Date().toISOString()
+          }
+        },
+        { session }
+      );
+
+      // Atomically mark all other versions as not current
+      await Document.updateMany(
+        {
+          document_group_id: documentGroupId,
+          _id: { $nin: [id, newVersionDocument._id] }
+        },
+        {
+          $set: { is_current_version: false }
+        },
+        { session }
+      );
+      
+      await session.commitTransaction();
+      await session.endSession();
+    } catch (error) {
+      await session.abortTransaction();
+      await session.endSession();
+      console.error('Error creating document version:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error creating document version',
+        error: error.message
+      });
+    }
 
     // Non-blocking: Send notification emails and in-app notifications to all approvers after response
     if (currentDocument.approval_config?.enabled && currentDocument.approval_config.approvers?.length > 0) {

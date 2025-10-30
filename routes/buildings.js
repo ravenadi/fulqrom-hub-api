@@ -6,6 +6,7 @@ const Asset = require('../models/Asset');
 const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 const router = express.Router();
 
@@ -431,7 +432,7 @@ router.post('/', checkModulePermission('buildings', 'create'), async (req, res) 
 });
 
 // PUT /api/buildings/:id - Update building
-router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.params.id), async (req, res) => {
+router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.params.id), requireIfMatch, async (req, res) => {
   try {
     // Validation for new fields
     const errors = [];
@@ -480,15 +481,18 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       });
     }
 
-    // Update building ONLY if it belongs to the user's tenant
-    const building = await Building.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        tenant_id: tenantId  // Ensure user owns this building
-      },
-      req.body,
-      { new: true, runValidators: true }
-    );
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
+
+    // Load building document (tenant-scoped automatically via plugin)
+    const building = await Building.findById(req.params.id);
 
     if (!building) {
       return res.status(404).json({
@@ -497,13 +501,72 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       });
     }
 
+    // Verify tenant ownership
+    if (building.tenant_id && building.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Building belongs to a different tenant'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (building.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: building.__v,
+        resource: 'Building',
+        id: req.params.id
+      });
+    }
+
+    // Prevent updating tenant_id
+    const updateData = { ...req.body };
+    delete updateData.tenant_id;
+
+    // Build atomic update object - filter out undefined/null to preserve existing data
+    const allowedFields = ['building_name', 'building_code', 'site_id', 'site_name', 'customer_id',
+      'building_type', 'operational_status', 'status', 'is_active', 'address', 'coordinates',
+      'total_floors', 'total_area', 'year_built', 'contact_info'];
+    const atomicUpdate = {};
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {
+        atomicUpdate[key] = updateData[key];
+      }
+    });
+    
+    // Add updated_at
+    atomicUpdate.updated_at = new Date().toISOString();
+
+    // Perform atomic update with version check (prevents lost updates)
+    const result = await Building.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        __v: clientVersion  // Version check prevents lost updates
+      },
+      {
+        $set: atomicUpdate,
+        $inc: { __v: 1 }  // Atomic version increment
+      },
+      { new: true, runValidators: true }
+    );
+    
+    if (!result) {
+      // Version conflict - resource was modified
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: building.__v,
+        resource: 'Building',
+        id: req.params.id
+      });
+    }
+
     // Log audit for building update
-    await logUpdate({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
+    await logUpdate({ module: 'building', resourceName: result.building_name, req, moduleId: result._id, resource: result.toObject() });
 
     // Add raw IDs to the response for convenience
-    const responseData = building.toObject();
-    responseData.site_id_raw = building.site_id;
-    responseData.customer_id_raw = building.customer_id;
+    const responseData = result.toObject();
+    responseData.site_id_raw = result.site_id;
+    responseData.customer_id_raw = result.customer_id;
 
     res.status(200).json({
       success: true,

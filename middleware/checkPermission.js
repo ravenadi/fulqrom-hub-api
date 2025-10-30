@@ -14,12 +14,13 @@ const fetchUserById = async (userId) => {
   }
   
   // If userId is already a valid ObjectId, use it directly
+  // Bypass tenant filter during auth/permission checks (we're looking up by ID, not tenant)
   if (mongoose.Types.ObjectId.isValid(userId)) {
-    return await User.findById(userId).populate('role_ids');
+    return await User.findById(userId).setOptions({ _bypassTenantFilter: true }).populate('role_ids');
   }
   
   // Otherwise, treat it as an auth0_id
-  return await User.findOne({ auth0_id: userId }).populate('role_ids');
+  return await User.findOne({ auth0_id: userId }).setOptions({ _bypassTenantFilter: true }).populate('role_ids');
 };
 
 /**
@@ -62,7 +63,7 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
 
       // CHECK 0: Check for super admin first (before database query)
       if (req.user.is_super_admin) {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
           console.log(`✅ Super admin bypass: ${req.user.email || req.user.full_name} has super admin privileges - granting access to ${resourceType}`);
         }
         req.permissionSource = 'super_admin';
@@ -95,7 +96,7 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         );
 
         if (hasAdminRole) {
-          if (process.env.NODE_ENV === 'development') {
+          if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
             console.log(`✅ Admin bypass: ${user.email} has Admin role - granting access`);
           }
           req.permissionSource = 'admin_role';
@@ -228,7 +229,7 @@ const checkModulePermission = (moduleName, action) => {
 
       // CHECK 0: Check for super admin first (before database query)
       if (req.user.is_super_admin) {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
           console.log(`✅ Super admin bypass: ${req.user.email || req.user.full_name} has super admin privileges - granting access to ${moduleName}`);
         }
         req.permissionSource = 'super_admin';
@@ -261,7 +262,7 @@ const checkModulePermission = (moduleName, action) => {
         );
 
         if (hasAdminRole) {
-          if (process.env.NODE_ENV === 'development') {
+          if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
             console.log(`✅ Admin bypass: ${user.email} has Admin role - granting access to ${moduleName}`);
           }
           req.permissionSource = 'admin_role';

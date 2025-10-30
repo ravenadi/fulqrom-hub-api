@@ -66,8 +66,8 @@ function unflattenDropdowns(flattened) {
 // GET /api/dropdowns/entities/customers - Get all customers for dropdown
 router.get('/entities/customers', async (req, res) => {
   try {
-    // Get tenant ID from request context (mandatory)
-    const tenantId = req.tenant?.tenantId;
+    // Get tenant ID from request context, allow fallback to header or query
+    const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
 
     if (!tenantId) {
       return res.status(400).json({
@@ -111,7 +111,8 @@ router.get('/entities/customers', async (req, res) => {
 router.get('/entities/sites', async (req, res) => {
   try {
     const { customer_id } = req.query;
-    const tenantId = req.tenant?.tenantId;
+    // Allow fallback to header or query when no tenant context
+    const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
 
     if (!tenantId) {
       return res.status(400).json({
@@ -164,7 +165,7 @@ router.get('/entities/sites', async (req, res) => {
 router.get('/entities/buildings', async (req, res) => {
   try {
     const { site_id, customer_id } = req.query;
-    const tenantId = req.tenant?.tenantId;
+    const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
 
     if (!tenantId) {
       return res.status(400).json({
@@ -225,7 +226,7 @@ router.get('/entities/buildings', async (req, res) => {
 router.get('/entities/floors', async (req, res) => {
   try {
     const { building_id, site_id, customer_id } = req.query;
-    const tenantId = req.tenant?.tenantId;
+    const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
 
     if (!tenantId) {
       return res.status(400).json({
@@ -293,7 +294,7 @@ router.get('/entities/floors', async (req, res) => {
 router.get('/entities/assets', async (req, res) => {
   try {
     const { floor_id, building_id, site_id, customer_id, category, status, condition } = req.query;
-    const tenantId = req.tenant?.tenantId;
+    const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
 
     if (!tenantId) {
       return res.status(400).json({
@@ -376,7 +377,7 @@ router.get('/entities/assets', async (req, res) => {
 router.get('/entities/tenants', async (req, res) => {
   try {
     const { building_id, site_id, customer_id, floor_id, tenant_status } = req.query;
-    const tenantId = req.tenant?.tenantId;
+    const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
 
     if (!tenantId) {
       return res.status(400).json({
@@ -454,7 +455,7 @@ router.get('/entities/tenants', async (req, res) => {
 router.get('/entities/vendors', async (req, res) => {
   try {
     const { category } = req.query;
-    const tenantId = req.tenant?.tenantId;
+    const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
 
     if (!tenantId) {
       return res.status(400).json({
@@ -539,16 +540,12 @@ router.get('/', async (req, res) => {
     const tenantId = req.tenant?.tenantId;
 
     if (!tenantId) {
-      console.error('❌ Dropdowns endpoint - No tenant ID found');
-      console.error('req.tenant:', req.tenant);
-      console.error('req.user:', req.user);
-      return res.status(400).json({
-        success: false,
-        message: 'Tenant ID is required',
-        debug: {
-          hasTenantObject: !!req.tenant,
-          hasUserObject: !!req.user
-        }
+      // If no tenant/auth context, serve safe fallback constants publicly
+      const flattened = flattenDropdowns(DROPDOWN_CONSTANTS);
+      return res.status(200).json({
+        success: true,
+        data: flattened,
+        source: 'fallback_constants_public'
       });
     }
 

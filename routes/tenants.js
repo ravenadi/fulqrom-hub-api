@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 
 const router = express.Router();
 
@@ -313,7 +314,7 @@ router.post('/', checkModulePermission('tenants', 'create'), validateTenantData,
 });
 
 // PUT /api/tenants/:id - Update tenant
-router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params.id), validateTenantData, async (req, res) => {
+router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params.id), requireIfMatch, validateTenantData, async (req, res) => {
   try {
     // Get tenant_id from authenticated user's context
     const tenantId = req.tenant?.tenantId;
@@ -324,13 +325,18 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
       });
     }
 
-    // Update ONLY if belongs to user's tenant
-    // Use findOneAndUpdate with audit context to trigger hooks
-    const tenant = await BuildingTenant.findOne({
-      _id: req.params.id,
-      tenant_id: tenantId
-    });
+    // Get version from If-Match header or request body (parsed by requireIfMatch middleware)
+    const clientVersion = req.clientVersion ?? req.body.__v;
+    if (clientVersion === undefined) {
+      return res.status(428).json({
+        success: false,
+        message: 'Precondition required. Include If-Match header or __v in body for concurrent write safety.',
+        code: 'PRECONDITION_REQUIRED'
+      });
+    }
 
+    // Load tenant document (tenant-scoped automatically via plugin)
+    const tenant = await BuildingTenant.findById(req.params.id);
     if (!tenant) {
       return res.status(404).json({
         success: false,
@@ -338,23 +344,90 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
       });
     }
 
-    // Set audit context and update
-    tenant.$setAuditContext(req, 'update');
-    Object.assign(tenant, req.body);
-    await tenant.save();
+    // Verify tenant ownership
+    if (tenant.tenant_id && tenant.tenant_id.toString() !== tenantId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Building tenant belongs to a different tenant'
+      });
+    }
+
+    // Check version match for optimistic concurrency control
+    if (tenant.__v !== clientVersion) {
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: tenant.__v,
+        resource: 'BuildingTenant',
+        id: req.params.id
+      });
+    }
+
+    // Prevent updating tenant_id
+    const updateData = { ...req.body };
+    delete updateData.tenant_id;
+
+    // Build atomic update object - filter out undefined/null to preserve existing data
+    const allowedFields = ['tenant_name', 'customer_id', 'site_id', 'building_id', 'floor_id',
+      'unit_number', 'lease_start', 'lease_end', 'lease_status', 'status', 'is_active',
+      'contact_info', 'notes', 'rent_amount', 'deposit_amount'];
+    const atomicUpdate = {};
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {
+        atomicUpdate[key] = updateData[key];
+      }
+    });
+    
+    // Add updated_at
+    atomicUpdate.updated_at = new Date().toISOString();
+
+    // Perform atomic update with version check (prevents lost updates)
+    const result = await BuildingTenant.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        __v: clientVersion  // Version check prevents lost updates
+      },
+      {
+        $set: atomicUpdate,
+        $inc: { __v: 1 }  // Atomic version increment
+      },
+      { new: true, runValidators: true }
+    );
+    
+    if (!result) {
+      // Version conflict - resource was modified
+      return sendVersionConflict(res, {
+        clientVersion,
+        currentVersion: tenant.__v,
+        resource: 'BuildingTenant',
+        id: req.params.id
+      });
+    }
+
+    // Set audit context on result
+    result.$setAuditContext(req, 'update');
 
     // Populate tenant before returning
-    await tenant.populate('customer_id', 'organisation.organisation_name');
-    await tenant.populate('site_id', 'site_name address');
-    await tenant.populate('building_id', 'building_name building_code');
-    await tenant.populate('floor_id', 'floor_name floor_number');
+    await result.populate('customer_id', 'organisation.organisation_name');
+    await result.populate('site_id', 'site_name address');
+    await result.populate('building_id', 'building_name building_code');
+    await result.populate('floor_id', 'floor_name floor_number');
 
     res.status(200).json({
       success: true,
       message: 'Tenant updated successfully',
-      data: tenant
+      data: result
     });
   } catch (error) {
+    // Handle Mongoose VersionError (shouldn't happen with manual check above, but safety net)
+    if (error.name === 'VersionError') {
+      return sendVersionConflict(res, {
+        clientVersion: req.clientVersion ?? req.body.__v,
+        currentVersion: error.version,
+        resource: 'BuildingTenant',
+        id: req.params.id
+      });
+    }
+
     res.status(400).json({
       success: false,
       message: 'Error updating tenant',

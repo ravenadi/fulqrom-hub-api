@@ -8,12 +8,13 @@ const mongoose = require('mongoose');
  */
 const fetchUserById = async (userId) => {
   // If userId is already a valid ObjectId, use it directly
+  // Bypass tenant filter during auth/permission checks (we're looking up by ID, not tenant)
   if (mongoose.Types.ObjectId.isValid(userId)) {
-    return await User.findById(userId).populate('role_ids');
+    return await User.findById(userId).setOptions({ _bypassTenantFilter: true }).populate('role_ids');
   }
   
   // Otherwise, treat it as an auth0_id
-  return await User.findOne({ auth0_id: userId }).populate('role_ids');
+  return await User.findOne({ auth0_id: userId }).setOptions({ _bypassTenantFilter: true }).populate('role_ids');
 };
 
 /**
@@ -22,23 +23,8 @@ const fetchUserById = async (userId) => {
  */
 const checkSuperAdmin = async (req, res, next) => {
   try {
-    // Skip authentication if SUPER_ADMIN_BYPASS is enabled (for testing)
-    if (process.env.SUPER_ADMIN_BYPASS === 'true') {
-      req.superAdmin = {
-        id: 'test-super-admin',
-        email: 'test@fulqrom.com',
-        full_name: 'Test Super Admin',
-        permissions: {
-          can_manage_tenants: true,
-          can_manage_users: true,
-          can_manage_plans: true,
-          can_view_analytics: true,
-          can_manage_roles: true,
-          can_view_audit_logs: true
-        }
-      };
-      return next();
-    }
+    
+    
 
     // Check Auth0 JWT claims first (primary method for super_admin)
     const payload = req.auth?.payload || req.auth;
