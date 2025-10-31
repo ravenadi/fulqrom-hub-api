@@ -1,5 +1,6 @@
 const { auth } = require('express-oauth2-jwt-bearer');
 const User = require('../models/User');
+const { setBypassTenantFilter } = require('../utils/requestContext');
 
 /**
  * Auth0 JWT Validation Middleware
@@ -24,6 +25,10 @@ const checkJwt = auth({
  */
 const attachUser = async (req, res, next) => {
   try {
+    // Enable tenant filter bypass for authentication
+    // Required because we're looking up user by auth0_id, not tenant_id
+    setBypassTenantFilter(true);
+
     // Debug: Log what we received from JWT validation (only in development)
     if (process.env.NODE_ENV === 'development') {
       console.log('📋 attachUser: req.auth =', JSON.stringify(req.auth, null, 2));
@@ -105,9 +110,8 @@ const attachUser = async (req, res, next) => {
     }
 
     // Find user in MongoDB by auth0_id
-    // Bypass tenant filter during auth (we're looking up by auth0_id, not tenant)
+    // Tenant filter already bypassed above via setBypassTenantFilter(true)
     const user = await User.findOne({ auth0_id: auth0UserId })
-      .setOptions({ _bypassTenantFilter: true })
       .populate('role_ids', 'name description permissions is_active');
 
     if (!user) {
