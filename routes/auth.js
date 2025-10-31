@@ -19,6 +19,7 @@ const { generateCSRFToken } = require('../middleware/csrf');
 const { authenticateSession, optionalSession } = require('../middleware/sessionAuth');
 const { requireAuth } = require('../middleware/auth0');
 const { extractDeviceInfo } = require('../utils/deviceFingerprint');
+const { setBypassTenantFilter } = require('../utils/requestContext');
 
 const router = express.Router();
 
@@ -399,6 +400,10 @@ router.get('/me', authenticateSession, async (req, res) => {
  */
 router.post('/sync-user', async (req, res) => {
   try {
+    // Enable tenant filter bypass for authentication endpoint
+    // This is required because we don't know the user's tenant until AFTER we look them up
+    setBypassTenantFilter(true);
+
     const { auth0_id, email, full_name, phone, roles } = req.body;
 
     if (!auth0_id || !email) {
@@ -412,24 +417,23 @@ router.post('/sync-user', async (req, res) => {
     // Use v2/Role for super_admin role lookup (matches superAdmin middleware)
     const Role = require('../models/v2/Role');
     const isSuperAdmin = roles && Array.isArray(roles) && roles.includes('super_admin');
-    
+
     // Also check Auth0 payload if available
     const auth0Payload = req.auth?.payload || req.auth;
     const auth0Roles = auth0Payload?.['https://fulqrom.com.au/roles'] || [];
     const isSuperAdminFromAuth0 = auth0Roles.includes('super_admin');
 
-    // Find or create user (bypass tenant filter for super admin lookup)
+    // Find or create user (tenant filter already bypassed above)
     let user = await User.findOne({ auth0_id })
-      .setOptions({ _bypassTenantFilter: true })
       .populate('role_ids tenant_id');
 
     // Check if existing user is super admin
     let existingIsSuperAdmin = false;
     if (user && user.role_ids && user.role_ids.length > 0) {
-      const superAdminRole = await Role.findOne({ 
-        name: 'super_admin', 
-        tenant_id: null 
-      }).setOptions({ _bypassTenantFilter: true });
+      const superAdminRole = await Role.findOne({
+        name: 'super_admin',
+        tenant_id: null
+      });
       
       if (superAdminRole) {
         existingIsSuperAdmin = user.role_ids.some(
@@ -462,8 +466,7 @@ router.post('/sync-user', async (req, res) => {
       if (roles && roles.length > 0) {
         // Build role query - super_admin should have tenant_id: null
         const roleQuery = { name: { $in: roles } };
-        const roleObjects = await Role.find(roleQuery)
-          .setOptions({ _bypassTenantFilter: true });
+        const roleObjects = await Role.find(roleQuery);
         roleIds = roleObjects.map(r => r._id);
         userData.role_ids = roleIds;
       }
@@ -479,7 +482,6 @@ router.post('/sync-user', async (req, res) => {
           });
           user = user[0]; // create() returns an array
           user = await User.findById(user._id)
-            .setOptions({ _bypassTenantFilter: true })
             .populate('role_ids tenant_id');
         } catch (createError) {
           // Fallback: use direct collection operation if create fails
@@ -487,7 +489,6 @@ router.post('/sync-user', async (req, res) => {
           const UserCollection = User.collection;
           const result = await UserCollection.insertOne(userData);
           user = await User.findById(result.insertedId)
-            .setOptions({ _bypassTenantFilter: true })
             .populate('role_ids tenant_id');
         }
       } else {
@@ -514,13 +515,12 @@ router.post('/sync-user', async (req, res) => {
         user = await User.findOneAndUpdate(
           { _id: user._id },
           { $set: updateData },
-          { 
+          {
             new: true,
             runValidators: false,
             setDefaultsOnInsert: false
           }
         )
-          .setOptions({ _bypassTenantFilter: true })
           .populate('role_ids tenant_id');
       } else {
         // Normal user update
@@ -607,9 +607,11 @@ router.get('/config', (req, res) => {
  */
 router.get('/user/:auth0Id', async (req, res) => {
   try {
+    // Enable tenant filter bypass for authentication endpoint
+    setBypassTenantFilter(true);
+
     const { auth0Id } = req.params;
     const user = await User.findOne({ auth0_id: auth0Id })
-      .setOptions({ _bypassTenantFilter: true })
       .populate('role_ids tenant_id');
 
     if (!user) {
