@@ -1,15 +1,16 @@
 /**
  * Session Authentication Middleware
- * 
+ *
  * BFF (Backend-for-Frontend) cookie-based authentication.
  * Reads session ID from HttpOnly cookie, validates against session store,
  * and attaches user to req.user.
- * 
+ *
  * Replaces Bearer token authentication for browser clients.
  */
 
 const UserSession = require('../models/UserSession');
 const User = require('../models/User');
+const { setBypassTenantFilter } = require('../utils/requestContext');
 
 /**
  * Session authentication middleware
@@ -23,6 +24,11 @@ const User = require('../models/User');
  */
 async function authenticateSession(req, res, next) {
   try {
+    // Enable tenant filter bypass for session authentication
+    // Required because we lookup sessions by session_id (not tenant_id)
+    // and populate user which may need bypass
+    setBypassTenantFilter(true);
+
     // Get session ID from cookie
     const sessionId = req.cookies?.sid;
 
@@ -176,6 +182,9 @@ async function authenticateSession(req, res, next) {
  */
 async function optionalSession(req, res, next) {
   try {
+    // Enable tenant filter bypass for session lookups
+    setBypassTenantFilter(true);
+
     const sessionId = req.cookies?.sid;
 
     if (!sessionId) {
