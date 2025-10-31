@@ -237,10 +237,16 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
             $ifNull: [{ $arrayElemAt: ['$tenants_data.count', 0] }, 0]
           },
           // Apply defaults for new fields if missing
+          building_type: { $ifNull: ['$building_type', 'Office'] },
+          number_of_floors: { $ifNull: ['$number_of_floors', 0] },
+          total_area: { $ifNull: ['$total_area', 0] },
+          nabers_rating: { $ifNull: ['$nabers_rating', null] },
           primary_use: { $ifNull: ['$primary_use', 'Office'] },
           last_inspection_date: { $ifNull: ['$last_inspection_date', null] },
           accessibility_features: { $ifNull: ['$accessibility_features', []] },
           parking_spaces: { $ifNull: ['$parking_spaces', 0] },
+          year_built: { $ifNull: ['$year_built', null] },
+          manager: { $ifNull: ['$manager', {}] },
           onboarding_status: {
             $cond: {
               if: { $eq: ['$status', 'Active'] },
@@ -526,7 +532,9 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
     // Build atomic update object - filter out undefined/null to preserve existing data
     const allowedFields = ['building_name', 'building_code', 'site_id', 'site_name', 'customer_id',
       'building_type', 'operational_status', 'status', 'is_active', 'address', 'coordinates',
-      'total_floors', 'total_area', 'year_built', 'contact_info'];
+      'total_floors', 'total_area', 'year_built', 'contact_info', 'number_of_floors',
+      'nabers_rating', 'primary_use', 'last_inspection_date', 'accessibility_features',
+      'parking_spaces', 'latitude', 'longitude', 'manager', 'metadata'];
     const atomicUpdate = {};
     Object.keys(updateData).forEach(key => {
       if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {
