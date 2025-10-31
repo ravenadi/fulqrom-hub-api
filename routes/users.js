@@ -348,43 +348,56 @@ router.post('/', validateUserCreation, async (req, res) => {
       }
     }
 
-    // Create user
-    const userData = {
-      email: email.toLowerCase().trim(),
-      full_name: full_name.trim(),
-      phone: phone?.trim(),
-      role_ids: role_ids || [],
-      is_active: is_active !== undefined ? is_active : true,
-      mfa_required: mfa_required !== undefined ? mfa_required : false,
-      tenant_id: req.tenant?.tenantId // Add tenant_id from request context
-    };
+    // Try to use transactions if MongoDB supports it (replica set)
+    const mongoose = require('mongoose');
+ 
 
-    // Add resource_access if provided
-    if (resource_access !== undefined) {
-      userData.resource_access = resource_access.map(access => ({
-        ...access,
-        granted_at: new Date()
-      }));
-    }
+ 
 
-    // Add document_categories if provided
-    if (document_categories !== undefined) {
-      userData.document_categories = document_categories.map(category => category.trim()).filter(category => category.length > 0);
-    }
-
-    // Add engineering_disciplines if provided
-    if (engineering_disciplines !== undefined) {
-      userData.engineering_disciplines = engineering_disciplines.map(discipline => discipline.trim()).filter(discipline => discipline.length > 0);
-    }
-
-    const user = new User(userData);
-
-    await user.save();
-
-    // Create user in Auth0 (or link existing)
-    let auth0User = null;
     try {
-      auth0User = await ensureAuth0User({
+ 
+
+      
+      // Create user
+      const userData = {
+        email: email.toLowerCase().trim(),
+        full_name: full_name.trim(),
+        phone: phone?.trim(),
+        role_ids: role_ids || [],
+        is_active: is_active !== undefined ? is_active : true,
+        // mfa_required: mfa_required !== undefined ? mfa_required : false, // not used anymore always mfa enabled
+        tenant_id: req.tenant?.tenantId // Add tenant_id from request context
+      };
+
+      // Add resource_access if provided
+      if (resource_access !== undefined) {
+        userData.resource_access = resource_access.map(access => ({
+          ...access,
+          granted_at: new Date()
+        }));
+      }
+
+      // Add document_categories if provided
+      if (document_categories !== undefined) {
+        userData.document_categories = document_categories.map(category => category.trim()).filter(category => category.length > 0);
+      }
+
+      // Add engineering_disciplines if provided
+      if (engineering_disciplines !== undefined) {
+        userData.engineering_disciplines = engineering_disciplines.map(discipline => discipline.trim()).filter(discipline => discipline.length > 0);
+      }
+
+      const user = new User(userData);
+
+      // Save with session if available
+      
+        await user.save();
+       
+
+      // Create user in Auth0 - REQUIRED for success
+      console.log(`🔐 Creating Auth0 user for: ${email.toLowerCase().trim()}`);
+
+      const auth0User = await ensureAuth0User({
         _id: user._id,
         email: user.email,
         full_name: user.full_name,
@@ -392,53 +405,97 @@ router.post('/', validateUserCreation, async (req, res) => {
         password: password, // Pass password if provided
         is_active: user.is_active,
         role_ids: user.role_ids,
-        mfa_required: user.mfa_required
+        mfa_required: true // always require MFA for new users
       });
 
-      // Store Auth0 user ID in MongoDB
-      if (auth0User) {
-        user.auth0_id = auth0User.user_id;
-        await user.save();
-        console.log(`✅ Auth0 user ensured: ${auth0User.user_id}${password ? ' with password' : ''}`);
+      // Verify Auth0 user was created
+      if (!auth0User || !auth0User.user_id) {
+        throw new Error('Failed to create user in Auth0 - no user ID returned');
       }
-    } catch (auth0Error) {
-      console.error('Auth0 user creation/linking failed:', auth0Error.message);
-      // Continue even if Auth0 creation fails - user exists in MongoDB
+
+      // Store Auth0 user ID in MongoDB
+      user.auth0_id = auth0User.user_id;
+ 
+        await user.save();
+     
+
+      
+
+      console.log(`✅ Auth0 user created successfully: ${auth0User.user_id}${password ? ' with password' : ''}`);
+
+      
+
+      // Log audit
+      // await logAudit({
+      //   action: 'create',
+      //   resource_type: 'user',
+      //   resource_id: user._id.toString(),
+      //   resource_name: user.full_name,
+      //   status: 'success',
+      //   details: {
+      //     auth0_synced: true,
+      //     auth0_id: auth0User.user_id
+      //   }
+      // }, req);
+
+      // Populate roles before returning
+      await user.populate('role_ids', 'name description permissions');
+ 
+
+      
+      res.status(201).json({
+        success: true,
+        message: 'User created successfully',
+        data: user,
+        auth0_synced: true
+      });
+
+    } catch (error) {
+       
+
+      console.error('❌ Error creating user:', error);
+
+      // If Auth0 failed and we're not using transactions, manually delete the MongoDB user
+      if (error.message.includes('Auth0')) {
+        try {
+          const userId = error.userId || (error.user && error.user._id);
+          if (userId) {
+            await User.findByIdAndDelete(userId);
+            console.log('⚠️  Rolled back MongoDB user creation after Auth0 failure');
+          }
+        } catch (deleteError) {
+          console.error('Failed to rollback user creation:', deleteError);
+        }
+      }
+
+      // Log audit failure
+      // await logAudit({
+      //   action: 'create',
+      //   resource_type: 'user',
+      //   status: 'error',
+      //   error_message: error.message
+      // }, req);
+
+      res.status(400).json({
+        success: false,
+        message: 'Error creating user',
+        error: error.message
+      });
     }
-
-    // Log audit
-    // await logAudit({
-    //   action: 'create',
-    //   resource_type: 'user',
-    //   resource_id: user._id.toString(),
-    //   resource_name: user.full_name,
-    //   status: 'success',
-    //   details: {
-    //     auth0_synced: !!auth0User,
-    //     auth0_id: auth0User?.user_id
-    //   }
-    // }, req);
-
-    // Populate roles before returning
-    await user.populate('role_ids', 'name description permissions');
-
-    res.status(201).json({
-      success: true,
-      message: 'User created successfully',
-      data: user,
-      auth0_synced: !!auth0User
-    });
 
   } catch (error) {
 
-    // Log audit failure
-    // await logAudit({
-    //   action: 'create',
-    //   resource_type: 'user',
-    //   status: 'error',
-    //   error_message: error.message
-    // }, req);
+    // rollback transaction if using transactions
+    if (useTransaction && session) {
+      try {
+        await session.abortTransaction();
+        session.endSession();
+      } catch (abortError) {
+        console.error('Failed to abort transaction:', abortError);
+      }
+    }
 
+    console.error('❌ Outer error creating user:', error);
     res.status(400).json({
       success: false,
       message: 'Error creating user',

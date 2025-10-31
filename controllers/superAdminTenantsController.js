@@ -1474,87 +1474,103 @@ const createTenantUser = async (req, res) => {
       });
     }
 
-    // Create user in MongoDB (password only stored in Auth0)
-    const newUser = new User({
-      full_name: name.trim(),
-      email: email.trim(),
-      phone: phone?.trim() || '',
-      tenant_id: tenant,
-      role_ids: roleIds,
-      is_active: is_active !== undefined ? is_active : true
-    });
+    // Create user in MongoDB first
+    let newUser;
 
-    await newUser.save();
-
-    // Populate roles for response
-    await newUser.populate('role_ids', 'name description permissions');
-
-    // Create user in Auth0
-    let auth0User = null;
     try {
+      newUser = new User({
+        full_name: name.trim(),
+        email: email.trim(),
+        phone: phone?.trim() || '',
+        tenant_id: tenant,
+        role_ids: roleIds,
+        is_active: is_active !== undefined ? is_active : true
+      });
+
+      await newUser.save();
+
+      // Populate roles for response
+      await newUser.populate('role_ids', 'name description permissions');
+
+      // Create user in Auth0 - REQUIRED for success
       console.log(`🔐 Creating Auth0 user for: ${email.trim()}`);
       const auth0Service = require('../services/auth0Service');
 
-      auth0User = await auth0Service.createAuth0User({
+      const auth0User = await auth0Service.ensureAuth0User({
+        _id: newUser._id,
         email: email.trim(),
         full_name: name.trim(),
         phone: phone?.trim() || '',
         password: password, // Use the password from admin form
         is_active: is_active !== undefined ? is_active : true,
-        role_ids: roleIds,
-        _id: newUser._id
+        role_ids: roleIds
       });
 
-      // Assign roles to Auth0 user
-      if (roleIds && roleIds.length > 0) {
-        await auth0Service.assignRolesToUser(auth0User.user_id, roleIds);
+      // Verify Auth0 user was created
+      if (!auth0User || !auth0User.user_id) {
+        throw new Error('Failed to create user in Auth0 - no user ID returned');
       }
 
-      // Save Auth0 user ID to MongoDB user
+      // Store Auth0 user ID in MongoDB
       newUser.auth0_id = auth0User.user_id;
       await newUser.save();
 
       console.log(`✅ Auth0 user created successfully: ${auth0User.user_id}`);
-    } catch (auth0Error) {
-      console.error('❌ Failed to create Auth0 user:', auth0Error.message);
-      // Don't fail the entire operation if Auth0 fails
-      // User is still created in MongoDB, but will need manual Auth0 sync
-      console.log('⚠️ User created in MongoDB without Auth0 integration');
-    }
 
-    // Log audit
-    // await AuditLog.create({
-    //   action: 'create',
-    //   resource_type: 'user',
-    //   resource_id: newUser._id,
-    //   tenant_id: tenant,
-    //   user_id: req.superAdmin?.id,
-    //   user_email: req.superAdmin?.email,
-    //   details: {
-    //     user_email: email.trim(),
-    //     user_name: name.trim(),
-    //     roles: roleIds,
-    //     auth0_created: !!auth0User,
-    //     auth0_id: auth0User?.user_id || null
-    //   }
-    // });
+      // Log audit
+      // await AuditLog.create({
+      //   action: 'create',
+      //   resource_type: 'user',
+      //   resource_id: newUser._id,
+      //   tenant_id: tenant,
+      //   user_id: req.superAdmin?.id,
+      //   user_email: req.superAdmin?.email,
+      //   details: {
+      //     user_email: email.trim(),
+      //     user_name: name.trim(),
+      //     roles: roleIds,
+      //     auth0_created: true,
+      //     auth0_id: auth0User.user_id
+      //   }
+      // });
 
-    res.status(201).json({
-      success: true,
-      message: 'User created successfully',
-      data: {
-        id: newUser._id,
-        full_name: newUser.full_name,
-        email: newUser.email,
-        phone: newUser.phone,
-        is_active: newUser.is_active,
-        roles: newUser.role_ids || [],
-        created_at: newUser.created_at,
-        updated_at: newUser.updated_at
+      res.status(201).json({
+        success: true,
+        message: 'User created successfully with Auth0',
+        data: {
+          id: newUser._id,
+          full_name: newUser.full_name,
+          email: newUser.email,
+          phone: newUser.phone,
+          is_active: newUser.is_active,
+          roles: newUser.role_ids || [],
+          created_at: newUser.created_at,
+          updated_at: newUser.updated_at,
+          auth0_id: newUser.auth0_id
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error creating tenant user:', error);
+
+      // If user was created in MongoDB but Auth0 failed, delete the MongoDB user
+      if (newUser && newUser._id) {
+        try {
+          await User.findByIdAndDelete(newUser._id);
+          console.log('⚠️  Rolled back MongoDB user creation after error');
+        } catch (deleteError) {
+          console.error('Failed to rollback user creation:', deleteError);
+        }
       }
-    });
+
+      res.status(500).json({
+        success: false,
+        message: 'Error creating user',
+        error: error.message
+      });
+    }
   } catch (error) {
-    console.error('Error creating tenant user:', error);
+    console.error('❌ Outer error creating tenant user:', error);
     res.status(500).json({
       success: false,
       message: 'Error creating user',

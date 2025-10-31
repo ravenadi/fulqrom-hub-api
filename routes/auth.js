@@ -570,9 +570,12 @@ router.post('/sync-user', async (req, res) => {
 router.get('/config', (req, res) => {
   try {
     const config = {
-      domain: process.env.AUTH0_DOMAIN,
-      clientId: process.env.AUTH0_CLIENT_ID,
-      audience: process.env.AUTH0_AUDIENCE,
+      //dont send backend client only send frontend client 
+      domain: process.env.FRONTEND_AUTH0_DOMAIN,
+      clientId: process.env.FRONTEND_AUTH0_CLIENT_ID,
+      audience: process.env.FRONTEND_AUTH0_AUDIENCE,
+
+
       callbackUrl: process.env.CLIENT_URL ? `${process.env.CLIENT_URL}/callback` : 'http://localhost:8080/callback'
     };
 
