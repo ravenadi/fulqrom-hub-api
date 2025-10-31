@@ -398,18 +398,18 @@ const createTenant = async (req, res) => {
     }
 
     // Log audit
-    await AuditLog.create({
-      action: 'create',
-      resource_type: 'tenant',
-      resource_id: tenant._id,
-      tenant_id: tenant._id, // Add tenant_id field
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        tenant_name: tenantName,
-        phone: phone
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'create',
+    //   resource_type: 'tenant',
+    //   resource_id: tenant._id,
+    //   tenant_id: tenant._id, // Add tenant_id field
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     tenant_name: tenantName,
+    //     phone: phone
+    //   }
+    // });
 
     res.status(201).json({
       success: true,
@@ -539,21 +539,21 @@ const provisionTenant = async (req, res) => {
     );
 
     // Log audit
-    await AuditLog.create({
-      action: 'provision_tenant',
-      resource_type: 'tenant',
-      resource_id: provisioningResult.tenant._id,
-      tenant_id: provisioningResult.tenant._id, // Add tenant_id field
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        tenant_name: provisioningData.name,
-        email_domain: email_domain,
-        provisioning_steps_completed: Object.keys(provisioningResult.provisioning_steps).length,
-        s3_bucket_created: !!(provisioningResult.s3_bucket_info && provisioningResult.s3_bucket_info.success),
-        user_created: !!provisioningResult.user
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'provision_tenant',
+    //   resource_type: 'tenant',
+    //   resource_id: provisioningResult.tenant._id,
+    //   tenant_id: provisioningResult.tenant._id, // Add tenant_id field
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     tenant_name: provisioningData.name,
+    //     email_domain: email_domain,
+    //     provisioning_steps_completed: Object.keys(provisioningResult.provisioning_steps).length,
+    //     s3_bucket_created: !!(provisioningResult.s3_bucket_info && provisioningResult.s3_bucket_info.success),
+    //     user_created: !!provisioningResult.user
+    //   }
+    // });
 
     res.status(201).json({
       success: true,
@@ -704,15 +704,15 @@ const updateTenant = async (req, res) => {
     ).populate('plan_id', 'name price time_period');
 
     // Log audit
-    await AuditLog.create({
-      action: 'update',
-      resource_type: 'tenant',
-      resource_id: tenant,
-      tenant_id: tenant, // Add tenant_id field
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: updateData
-    });
+    // await AuditLog.create({
+    //   action: 'update',
+    //   resource_type: 'tenant',
+    //   resource_id: tenant,
+    //   tenant_id: tenant, // Add tenant_id field
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: updateData
+    // });
 
     res.status(200).json({
       success: true,
@@ -927,19 +927,19 @@ const updateTenantRestrictions = async (req, res) => {
     );
 
     // Log audit
-    await AuditLog.create({
-      action: 'update_restrictions',
-      resource_type: 'tenant',
-      resource_id: tenant,
-      tenant_id: tenant, // Add tenant_id field
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        max_users: max_users,
-        max_documents: max_documents,
-        max_storage_gb: max_storage_gb
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'update_restrictions',
+    //   resource_type: 'tenant',
+    //   resource_id: tenant,
+    //   tenant_id: tenant, // Add tenant_id field
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     max_users: max_users,
+    //     max_documents: max_documents,
+    //     max_storage_gb: max_storage_gb
+    //   }
+    // });
 
     res.status(200).json({
       success: true,
@@ -1183,20 +1183,20 @@ const subscribe = async (req, res) => {
     ).populate('plan_id');
 
     // Log the action
-    await AuditLog.create({
-      user_id: req.superAdmin?.id || 'development-user',
-      action: 'subscribe_tenant',
-      resource_type: 'Customer',
-      resource_id: tenant,
-      tenant_id: tenant, // Add tenant_id field
-      details: {
-        plan_id: plan_id,
-        plan_name: plan.name,
-        is_trial: updateData.is_trial
-      },
-      ip_address: req.ip,
-      user_agent: req.get('User-Agent')
-    });
+    // await AuditLog.create({
+    //   user_id: req.superAdmin?.id || 'development-user',
+    //   action: 'subscribe_tenant',
+    //   resource_type: 'Customer',
+    //   resource_id: tenant,
+    //   tenant_id: tenant, // Add tenant_id field
+    //   details: {
+    //     plan_id: plan_id,
+    //     plan_name: plan.name,
+    //     is_trial: updateData.is_trial
+    //   },
+    //   ip_address: req.ip,
+    //   user_agent: req.get('User-Agent')
+    // });
 
     res.status(201).json({
       success: true,
@@ -1275,20 +1275,20 @@ const updateSubscriptionStatus = async (req, res) => {
     ).populate('plan_id');
 
     // Log the action
-    await AuditLog.create({
-      user_id: req.superAdmin?.id || 'development-user',
-      action: 'update_subscription_status',
-      resource_type: 'Customer',
-      resource_id: id,
-      tenant_id: id, // Add tenant_id field
-      details: {
-        old_status: tenant.status,
-        new_status: status,
-        plan_name: tenant.plan_id?.name
-      },
-      ip_address: req.ip,
-      user_agent: req.get('User-Agent')
-    });
+    // await AuditLog.create({
+    //   user_id: req.superAdmin?.id || 'development-user',
+    //   action: 'update_subscription_status',
+    //   resource_type: 'Customer',
+    //   resource_id: id,
+    //   tenant_id: id, // Add tenant_id field
+    //   details: {
+    //     old_status: tenant.status,
+    //     new_status: status,
+    //     plan_name: tenant.plan_id?.name
+    //   },
+    //   ip_address: req.ip,
+    //   user_agent: req.get('User-Agent')
+    // });
 
     res.json({
       success: true,
@@ -1523,21 +1523,21 @@ const createTenantUser = async (req, res) => {
     }
 
     // Log audit
-    await AuditLog.create({
-      action: 'create',
-      resource_type: 'user',
-      resource_id: newUser._id,
-      tenant_id: tenant,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        user_email: email.trim(),
-        user_name: name.trim(),
-        roles: roleIds,
-        auth0_created: !!auth0User,
-        auth0_id: auth0User?.user_id || null
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'create',
+    //   resource_type: 'user',
+    //   resource_id: newUser._id,
+    //   tenant_id: tenant,
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     user_email: email.trim(),
+    //     user_name: name.trim(),
+    //     roles: roleIds,
+    //     auth0_created: !!auth0User,
+    //     auth0_id: auth0User?.user_id || null
+    //   }
+    // });
 
     res.status(201).json({
       success: true,
@@ -1723,20 +1723,20 @@ const updateTenantUser = async (req, res) => {
     }
 
     // Log audit
-    await AuditLog.create({
-      action: 'update',
-      resource_type: 'user',
-      resource_id: userId,
-      tenant_id: tenant,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        user_email: user.email,
-        user_name: user.full_name,
-        updated_fields: Object.keys(req.body),
-        auth0_synced: !!user.auth0_id
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'update',
+    //   resource_type: 'user',
+    //   resource_id: userId,
+    //   tenant_id: tenant,
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     user_email: user.email,
+    //     user_name: user.full_name,
+    //     updated_fields: Object.keys(req.body),
+    //     auth0_synced: !!user.auth0_id
+    //   }
+    // });
 
     // Build response message
     let message = 'User updated successfully';
@@ -1824,20 +1824,20 @@ const deleteTenantUser = async (req, res) => {
     }
 
     // Log audit before deletion
-    await AuditLog.create({
-      action: 'delete',
-      resource_type: 'user',
-      resource_id: userId,
-      tenant_id: tenant,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        user_email: user.email,
-        user_name: user.full_name,
-        auth0_deleted: !!user.auth0_id,
-        auth0_id: user.auth0_id || null
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'delete',
+    //   resource_type: 'user',
+    //   resource_id: userId,
+    //   tenant_id: tenant,
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     user_email: user.email,
+    //     user_name: user.full_name,
+    //     auth0_deleted: !!user.auth0_id,
+    //     auth0_id: user.auth0_id || null
+    //   }
+    // });
 
     // Delete user from MongoDB
     await User.findByIdAndDelete(userId);
@@ -1895,20 +1895,20 @@ const syncUsersToAuth0 = async (req, res) => {
     });
 
     // Log audit
-    await AuditLog.create({
-      action: 'update',
-      resource_type: 'tenant',
-      resource_id: tenant,
-      tenant_id: tenant,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        action: 'sync_users_to_auth0',
-        synced: result.synced,
-        skipped: result.skipped,
-        failed: result.failed
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'update',
+    //   resource_type: 'tenant',
+    //   resource_id: tenant,
+    //   tenant_id: tenant,
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     action: 'sync_users_to_auth0',
+    //     synced: result.synced,
+    //     skipped: result.skipped,
+    //     failed: result.failed
+    //   }
+    // });
 
     res.status(200).json({
       success: true,

@@ -136,19 +136,19 @@ const createUser = async (req, res) => {
       .lean();
 
     // Log audit
-    await AuditLog.create({
-      action: 'create',
-      resource_type: 'user',
-      resource_id: user._id,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        user_name: name,
-        tenant_id: tenant_id,
-        password_set: passwordSet,
-        auth0_synced: !!auth0User
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'create',
+    //   resource_type: 'user',
+    //   resource_id: user._id,
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     user_name: name,
+    //     tenant_id: tenant_id,
+    //     password_set: passwordSet,
+    //     auth0_synced: !!auth0User
+    //   }
+    // });
 
     // Transform user data to match Laravel DR format
     const transformedUser = {
@@ -318,17 +318,17 @@ const updateUser = async (req, res) => {
     }
 
     // Log audit
-    await AuditLog.create({
-      action: 'update',
-      resource_type: 'user',
-      resource_id: user,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        ...updateData,
-        password_updated: passwordUpdated
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'update',
+    //   resource_type: 'user',
+    //   resource_id: user,
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     ...updateData,
+    //     password_updated: passwordUpdated
+    //   }
+    // });
 
     // Transform user data to match Laravel DR format
     const transformedUser = {
@@ -380,17 +380,17 @@ const deleteUser = async (req, res) => {
     await userData.save();
 
     // Log audit
-    await AuditLog.create({
-      action: 'delete',
-      resource_type: 'user',
-      resource_id: user,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        user_name: userData.full_name,
-        user_email: userData.email
-      }
-    });
+    // await AuditLog.create({
+    //   action: 'delete',
+    //   resource_type: 'user',
+    //   resource_id: user,
+    //   user_id: req.superAdmin?.id,
+    //   user_email: req.superAdmin?.email,
+    //   details: {
+    //     user_name: userData.full_name,
+    //     user_email: userData.email
+    //   }
+    // });
 
     res.status(200).json({
       success: true,
