@@ -12,7 +12,7 @@ const authenticate = require('./middleware/authMiddleware');
 const authorize = require('./middleware/authorizationMiddleware');
 const { tenantContext } = require('./middleware/tenantContext');
 const { registerRoutes, getEndpointDocs } = require('./config/routes.config');
-const { runWithContext } = require('./utils/requestContext');
+const { asyncLocalStorage } = require('./utils/requestContext');
 const { attachETag, parseIfMatch } = require('./middleware/etagVersion');
 const { optionalCSRF } = require('./middleware/csrf');
 const { initializeSocketIO } = require('./utils/socketManager');
@@ -123,8 +123,9 @@ app.options('*', (req, res) => {
 });
 
 // Wrap all requests in AsyncLocalStorage context for tenant isolation
+// CRITICAL: This must wrap the entire request-response cycle
 app.use((req, res, next) => {
-  runWithContext({}, () => {
+  asyncLocalStorage.run({}, () => {
     next();
   });
 });

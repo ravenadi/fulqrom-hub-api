@@ -94,6 +94,7 @@ function shouldBypassTenantFilter() {
 }
 
 module.exports = {
+  asyncLocalStorage, // Export the instance for direct middleware use
   runWithContext,
   getStore,
   setTenant,
