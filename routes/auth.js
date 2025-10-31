@@ -112,14 +112,14 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
     });
 
     // Set cookies
-    // IMPORTANT: For cross-origin requests (frontend on different port), we need:
-    // - Development: sameSite='none' to allow cookies across localhost:8080 -> localhost:30001
-    // - Production: sameSite='lax' for better security (same domain)
-    // - sameSite='none' requires secure=true, but we allow secure=false in development
+    // IMPORTANT: For cross-subdomain cookies (hub.ravenlabs.biz <-> api.hub.ravenlabs.biz):
+    // - Use sameSite='none' to allow cookies across subdomains
+    // - Requires secure=true (HTTPS only)
+    // - domain must be set to .ravenlabs.biz (with leading dot)
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
+      sameSite: 'none', // Required for cross-subdomain cookies
       maxAge: ttl * 1000,
       domain: COOKIE_DOMAIN,
       path: '/'
@@ -184,7 +184,7 @@ router.post('/refresh', authenticateSession, async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
+      sameSite: 'none', // Required for cross-subdomain cookies
       maxAge: ttl * 1000,
       domain: COOKIE_DOMAIN,
       path: '/'
@@ -236,7 +236,7 @@ router.get('/refresh-session', authenticateSession, async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
+      sameSite: 'none', // Required for cross-subdomain cookies
       maxAge: ttl * 1000,
       domain: COOKIE_DOMAIN,
       path: '/'
@@ -312,7 +312,7 @@ router.post('/logout', async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
+      sameSite: 'none', // Must match the sameSite used when setting cookies
       domain: COOKIE_DOMAIN,
       path: '/'
     };
