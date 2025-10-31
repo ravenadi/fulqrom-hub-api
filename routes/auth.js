@@ -561,8 +561,47 @@ router.post('/sync-user', async (req, res) => {
 });
 
 /**
+ * GET /auth/config
+ *
+ * Get Auth0 configuration for frontend initialization.
+ * This is a public endpoint (no authentication required).
+ * Returns domain, clientId, audience, and callback URL.
+ */
+router.get('/config', (req, res) => {
+  try {
+    const config = {
+      domain: process.env.AUTH0_DOMAIN,
+      clientId: process.env.AUTH0_CLIENT_ID,
+      audience: process.env.AUTH0_AUDIENCE,
+      callbackUrl: process.env.CLIENT_URL ? `${process.env.CLIENT_URL}/callback` : 'http://localhost:8080/callback'
+    };
+
+    // Validate required fields
+    if (!config.domain || !config.clientId) {
+      console.error('❌ Missing required Auth0 configuration in backend .env');
+      return res.status(500).json({
+        success: false,
+        message: 'Auth0 configuration is incomplete on server'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    console.error('Get Auth0 config error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get Auth0 configuration',
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /auth/user/:auth0Id
- * 
+ *
  * Get user by Auth0 ID (for fallback when sync fails)
  */
 router.get('/user/:auth0Id', async (req, res) => {
