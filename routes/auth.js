@@ -603,11 +603,14 @@ router.get('/config', (req, res) => {
  * GET /auth/user/:auth0Id
  *
  * Get user by Auth0 ID (for fallback when sync fails)
+ * NOTE: This is a public endpoint, must bypass tenant filter
  */
 router.get('/user/:auth0Id', async (req, res) => {
   try {
     const { auth0Id } = req.params;
-    const user = await User.findOne({ auth0_id: auth0Id }).populate('role_ids tenant_id');
+    const user = await User.findOne({ auth0_id: auth0Id })
+      .setOptions({ _bypassTenantFilter: true })
+      .populate('role_ids tenant_id');
 
     if (!user) {
       return res.status(404).json({
