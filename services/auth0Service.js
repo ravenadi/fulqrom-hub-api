@@ -200,6 +200,94 @@ const sendPasswordResetEmail = async (email) => {
 };
 
 /**
+ * Send invite email with password setup link
+ * This sends an email to the user with a secure link to set their password for the first time
+ * If the user doesn't exist in Auth0, creates them first
+ * @param {string} email - User email
+ * @param {Object} [userData] - Optional user data for Auth0 user creation if user doesn't exist
+ * @param {string} [userData.full_name] - User's full name
+ * @param {string} [userData.phone] - User's phone number
+ * @param {Array<string>} [userData.role_ids] - MongoDB role IDs
+ * @returns {Promise<Object>} Object containing ticket URL and success status
+ */
+const sendInviteEmail = async (email, userData = null) => {
+  try {
+    console.log(`[sendInviteEmail] Sending invite to: ${email}`);
+    const management = getAuth0Client();
+
+    // Get the Auth0 user to retrieve user_id
+    let auth0User = await getAuth0UserByEmail(email);
+    let userWasCreated = false;
+
+    if (!auth0User) {
+      console.log(`[sendInviteEmail] User not found via email search, attempting creation...`);
+
+      if (userData) {
+        // Try to create user in Auth0
+        console.log(`[sendInviteEmail] Creating Auth0 user for: ${email}`);
+        try {
+          auth0User = await createAuth0User({
+            email: email,
+            full_name: userData.full_name || email.split('@')[0],
+            phone: userData.phone || null,
+            password: null, // No password - they'll set it via invite link
+            is_active: true,
+            role_ids: userData.role_ids || [],
+            mfa_required: userData.mfa_required !== undefined ? userData.mfa_required : true
+          });
+          userWasCreated = true;
+          console.log(`[sendInviteEmail] ✅ Auth0 user created: ${auth0User.user_id}`);
+        } catch (createError) {
+          // If creation fails with 409 Conflict, user exists but search didn't find them
+          // This can happen due to Auth0 search index delays
+          if (createError.message && createError.message.includes('409')) {
+            console.log(`[sendInviteEmail] ⚠️ User exists in Auth0 but search didn't find them (409 Conflict)`);
+            console.log(`[sendInviteEmail] Retrying search after brief delay...`);
+
+            // Wait a moment and try searching again
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            auth0User = await getAuth0UserByEmail(email);
+
+            if (!auth0User) {
+              throw new Error(`User exists in Auth0 (got 409 Conflict) but cannot be found via search. This may be due to Auth0 search index delay. Please try again in a few moments, or check Auth0 dashboard for user: ${email}`);
+            }
+            console.log(`[sendInviteEmail] ✅ Found user on retry: ${auth0User.user_id}`);
+          } else {
+            throw createError;
+          }
+        }
+      } else {
+        throw new Error(`User not found in Auth0: ${email}. Cannot send invite without user data.`);
+      }
+    }
+
+    // Create a password change ticket (better for invites than password reset)
+    // This allows first-time users to set their password
+    const ticket = await management.tickets.create({
+      result_url: process.env.CLIENT_URL || 'http://localhost:5173',
+      user_id: auth0User.user_id,
+      ttl_sec: 432000, // 5 days validity (Auth0 default)
+      mark_email_as_verified: true, // Auto-verify email when they set password
+      includeEmailInRedirect: false
+    });
+
+    console.log(`[sendInviteEmail] ✅ Invite sent successfully to: ${email}`);
+    console.log(`[sendInviteEmail] Ticket URL: ${ticket.ticket}`);
+
+    return {
+      success: true,
+      ticket_url: ticket.ticket,
+      message: 'Invite email sent successfully',
+      user_created: userWasCreated, // Flag indicating if we created the user
+      auth0_user_id: auth0User.user_id // Return the Auth0 user ID
+    };
+  } catch (error) {
+    console.error('[sendInviteEmail] Error sending invite email:', error);
+    throw new Error(`Failed to send invite email: ${error.message}`);
+  }
+};
+
+/**
  * Create a role in Auth0
  * @param {Object} roleData - Role data
  * @param {string} roleData.name - Role name
@@ -628,11 +716,13 @@ const setAuth0Password = async (auth0_id, password) => {
 };
 
 module.exports = {
+  getAuth0Client,
   createAuth0User,
   updateAuth0User,
   deleteAuth0User,
   getAuth0UserByEmail,
   sendPasswordResetEmail,
+  sendInviteEmail,
   createAuth0Role,
   updateAuth0Role,
   deleteAuth0Role,

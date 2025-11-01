@@ -59,7 +59,8 @@ class EmailService {
       // Map snake_case template names to camelCase file names
       const templateFileMap = {
         'document_assignment': 'documentAssignment',
-        'document_update': 'documentUpdate'
+        'document_update': 'documentUpdate',
+        'user_invite': 'userInvite'
       };
 
       const fileName = templateFileMap[templateName] || templateName;
@@ -77,7 +78,9 @@ class EmailService {
           : `New comment on the document - ${variables.document_name}`,
         documentUpdate: variables.new_status
           ? `Document Status Update: ${variables.new_status} - ${variables.document_name}`
-          : `New comment on the document - ${variables.document_name}`
+          : `New comment on the document - ${variables.document_name}`,
+        user_invite: `Welcome to Fulqrom Hub - Your Account is Ready`,
+        userInvite: `Welcome to Fulqrom Hub - Your Account is Ready`
       };
 
       const subject = subjects[templateName] || 'Fulqrom Hub Notification';
@@ -335,6 +338,38 @@ class EmailService {
       to,
       variables,
       documentId
+    });
+  }
+
+  /**
+   * Send user invite email with credentials
+   * @param {Object} params - Invitation parameters
+   * @param {string} params.to - User email address
+   * @param {string} params.userName - User's full name
+   * @param {string} params.userEmail - User's email (same as to)
+   * @param {string} params.password - Temporary password
+   * @returns {Promise<Object>}
+   */
+  async sendUserInvite(params) {
+    const {
+      to,
+      userName,
+      userEmail,
+      password
+    } = params;
+
+    const variables = {
+      user_name: userName || 'there',
+      user_email: userEmail || to,
+      user_password: password,
+      login_url: `${this.appBaseUrl}/login`,
+      app_url: this.appBaseUrl
+    };
+
+    return this.sendEmail({
+      template: 'user_invite',
+      to,
+      variables
     });
   }
 

@@ -2,18 +2,50 @@ const express = require('express');
 const User = require('../models/User');
 const Role = require('../models/Role');
 const {
+  getAuth0Client,
   createAuth0User,
   updateAuth0User,
   deleteAuth0User,
   getAuth0UserByEmail,
   ensureAuth0User,
   syncUserRoles,
-  setAuth0Password
+  setAuth0Password,
+  sendInviteEmail
 } = require('../services/auth0Service');
 const { validateUserCreation, validateUserElevation, getAccessibleResources } = require('../middleware/authorizationRules');
 const { checkModulePermission } = require('../middleware/checkPermission');
+const emailService = require('../utils/emailService');
 
 const router = express.Router();
+
+/**
+ * Generate a secure random password
+ * @param {number} length - Password length (default: 12)
+ * @returns {string} - Random password
+ */
+function generateRandomPassword(length = 12) {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const numbers = '0123456789';
+  const symbols = '!@#$%^&*';
+
+  const all = uppercase + lowercase + numbers + symbols;
+
+  let password = '';
+  // Ensure at least one of each type
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += symbols[Math.floor(Math.random() * symbols.length)];
+
+  // Fill the rest
+  for (let i = password.length; i < length; i++) {
+    password += all[Math.floor(Math.random() * all.length)];
+  }
+
+  // Shuffle the password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
 
 // GET /api/users/:id/accessible-resources - Get resources accessible to user for assignment (Rule 1)
 router.get('/:id/accessible-resources', async (req, res) => {
@@ -194,7 +226,9 @@ router.post('/', validateUserCreation, async (req, res) => {
       resource_access,
       replace_resource_access,
       document_categories,
-      engineering_disciplines
+      engineering_disciplines,
+      send_invite_email,
+      sendInviteEmail: sendInviteEmailFromBody
     } = req.body;
 
     // Normalize camelCase to snake_case
@@ -204,6 +238,7 @@ router.post('/', validateUserCreation, async (req, res) => {
     role_ids = role_ids || roleIds;
     is_active = is_active !== undefined ? is_active : isActive;
     mfa_required = mfa_required !== undefined ? mfa_required : (mfaRequired !== undefined ? mfaRequired : false);
+    send_invite_email = send_invite_email !== undefined ? send_invite_email : sendInviteEmailFromBody;
 
     // Validate required fields
     if (!email) {
@@ -423,7 +458,39 @@ router.post('/', validateUserCreation, async (req, res) => {
 
       console.log(`✅ Auth0 user created successfully: ${auth0User.user_id}${password ? ' with password' : ''}`);
 
-      
+      // Send invite email if requested
+      let inviteSent = false;
+      let inviteError = null;
+
+      if (send_invite_email && password) {
+        try {
+          console.log(`📧 Sending invite email to: ${user.email} with password`);
+
+          // Send email with credentials directly (not via Auth0)
+          const emailResult = await emailService.sendUserInvite({
+            to: user.email,
+            userName: user.full_name,
+            userEmail: user.email,
+            password: password
+          });
+
+          if (emailResult.success) {
+            inviteSent = true;
+            console.log(`✅ Invite email sent successfully to: ${user.email} (Message ID: ${emailResult.messageId})`);
+          } else {
+            inviteError = emailResult.error || 'Failed to send email';
+            console.error(`⚠️ Failed to send invite email: ${inviteError}`);
+          }
+        } catch (inviteErr) {
+          console.error(`⚠️ Failed to send invite email to ${user.email}:`, inviteErr.message);
+          inviteError = inviteErr.message;
+          // Don't fail user creation if invite email fails
+          // User can be invited manually later
+        }
+      } else if (send_invite_email && !password) {
+        console.log(`⚠️ Cannot send invite email - password is required to send credentials`);
+        inviteError = 'Password is required to send invite email with credentials';
+      }
 
       // Log audit
       // await logAudit({
@@ -440,14 +507,16 @@ router.post('/', validateUserCreation, async (req, res) => {
 
       // Populate roles before returning
       await user.populate('role_ids', 'name description permissions');
- 
 
-      
+
+
       res.status(201).json({
         success: true,
         message: 'User created successfully',
         data: user,
-        auth0_synced: true
+        auth0_synced: true,
+        invite_sent: inviteSent,
+        invite_error: inviteError
       });
 
     } catch (error) {
@@ -527,8 +596,11 @@ router.put('/:id', validateUserElevation, async (req, res) => {
       resource_access,
       replace_resource_access,
       document_categories,
-      engineering_disciplines
+      engineering_disciplines,
+      send_invite_email: sendInviteEmailFromBody
     } = req.body;
+
+    console.log(`📧 req.body here ... ${JSON.stringify(req.body)}`);
 
     // Normalize camelCase to snake_case
     full_name = full_name || fullName;
@@ -679,7 +751,7 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     if (phone !== undefined) updateData.phone = phone?.trim();
     if (role_ids !== undefined) updateData.role_ids = role_ids;
     if (is_active !== undefined) updateData.is_active = is_active;
-    if (mfa_required !== undefined) updateData.mfa_required = mfa_required;
+    // if (mfa_required !== undefined) updateData.mfa_required = mfa_required;
 
     // Log role_ids update for debugging
     if (role_ids !== undefined) {
@@ -738,6 +810,8 @@ router.put('/:id', validateUserElevation, async (req, res) => {
 
     // Update password in Auth0 if provided
     let passwordUpdated = false;
+    let inviteEmailSent = false;
+    let inviteEmailError = null;
     if (password) {
       if (!user.auth0_id) {
         // Create Auth0 user first if it doesn't exist
@@ -751,7 +825,7 @@ router.put('/:id', validateUserElevation, async (req, res) => {
             is_active: user.is_active,
             role_ids: user.role_ids || []
           });
-          
+
           if (auth0User) {
             user.auth0_id = auth0User.user_id;
             await user.save();
@@ -767,6 +841,33 @@ router.put('/:id', validateUserElevation, async (req, res) => {
         } catch (passwordError) {
           console.error('Failed to update password in Auth0:', passwordError.message);
           // Continue - password update failed but user data is updated
+        }
+      }
+
+      console.log(`📧 passwordUpdated ${passwordUpdated} sendInviteEmailFromBody ${sendInviteEmailFromBody}`);
+
+      // Send invite email if requested and password was updated successfully
+      if (passwordUpdated && sendInviteEmailFromBody === true) {
+        console.log(`📧 Sending invite email to ${user.email} with updated password`);
+        try {
+          const emailResult = await emailService.sendUserInvite({
+            to: user.email,
+            userName: user.full_name,
+            userEmail: user.email,
+            password: password
+          });
+
+          if (emailResult.success) {
+            inviteEmailSent = true;
+            console.log(`✅ Invite email sent to ${user.email}`);
+          } else {
+            inviteEmailError = emailResult.error || 'Unknown error sending email';
+            console.error(`❌ Failed to send invite email: ${inviteEmailError}`);
+          }
+        } catch (emailError) {
+          inviteEmailError = emailError.message;
+          console.error('Failed to send invite email:', emailError);
+          // Don't fail the request if email fails - user and password are already updated
         }
       }
     }
@@ -817,7 +918,13 @@ router.put('/:id', validateUserElevation, async (req, res) => {
     if (password && !passwordUpdated) {
       message = 'User updated successfully, but password update failed';
     } else if (password && passwordUpdated) {
-      message = 'User updated successfully, password updated in Auth0';
+      if (inviteEmailSent) {
+        message = 'User updated successfully, password updated and invite email sent';
+      } else if (sendInviteEmailFromBody && inviteEmailError) {
+        message = 'User updated successfully, password updated but invite email failed';
+      } else {
+        message = 'User updated successfully, password updated in Auth0';
+      }
     }
 
     res.status(200).json({
@@ -826,7 +933,9 @@ router.put('/:id', validateUserElevation, async (req, res) => {
       data: user,
       auth0_synced: auth0Updated,
       roles_synced: rolesSynced,
-      password_updated: passwordUpdated
+      password_updated: passwordUpdated,
+      invite_sent: inviteEmailSent,
+      invite_error: inviteEmailError
     });
 
   } catch (error) {
@@ -929,6 +1038,90 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error deleting user',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/users/:id/resend-invite - Resend invite email to existing user
+router.post('/:id/resend-invite', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID format'
+      });
+    }
+
+    // Get user from database
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Send invite email
+    try {
+      console.log(`📧 Resending invite email to: ${user.email}`);
+
+      // Generate a new temporary password
+      const temporaryPassword = generateRandomPassword(14);
+
+      // Update password in Auth0
+      if (user.auth0_id) {
+        try {
+          console.log(`🔐 Setting new password in Auth0 for user: ${user.auth0_id}`);
+          await setAuth0Password(user.auth0_id, temporaryPassword);
+          console.log(`✅ Password updated in Auth0`);
+        } catch (auth0Error) {
+          console.error(`⚠️ Failed to update Auth0 password: ${auth0Error.message}`);
+          throw new Error(`Failed to set password in Auth0: ${auth0Error.message}`);
+        }
+      } else {
+        throw new Error('User does not have Auth0 ID. Cannot resend invite.');
+      }
+
+      // Send email with new credentials
+      const emailResult = await emailService.sendUserInvite({
+        to: user.email,
+        userName: user.full_name,
+        userEmail: user.email,
+        password: temporaryPassword
+      });
+
+      if (!emailResult.success) {
+        throw new Error(emailResult.error || 'Failed to send email');
+      }
+
+      console.log(`✅ Invite email resent successfully to: ${user.email}`);
+
+      res.status(200).json({
+        success: true,
+        message: 'Invite email sent successfully with new credentials',
+        invite_sent: true,
+        messageId: emailResult.messageId
+      });
+    } catch (inviteError) {
+      console.error(`❌ Failed to send invite email to ${user.email}:`, inviteError.message);
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send invite email',
+        error: inviteError.message,
+        invite_sent: false
+      });
+    }
+
+  } catch (error) {
+    console.error('Error resending invite:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error resending invite email',
       error: error.message
     });
   }
