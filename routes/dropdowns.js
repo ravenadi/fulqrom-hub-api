@@ -110,11 +110,22 @@ router.get('/entities/customers', async (req, res) => {
 // GET /api/dropdowns/entities/sites - Get all sites for dropdown (with optional customer filter)
 router.get('/entities/sites', async (req, res) => {
   try {
+
+    console.log(`🔍 [DROPDOWNS] req.body here ... ${JSON.stringify(req.body)}`);
+
+    console.log('🔍 [DROPDOWNS] /entities/sites request received');
+    console.log('🔍 [DROPDOWNS] req.tenant:', req.tenant);
+    console.log('🔍 [DROPDOWNS] req.tenant?.tenantId:', req.tenant?.tenantId);
+    console.log('🔍 [DROPDOWNS] x-tenant-id header:', req.headers['x-tenant-id']);
+
     const { customer_id } = req.query;
     // Allow fallback to header or query when no tenant context
     const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
 
+    console.log('🔍 [DROPDOWNS] Resolved tenantId:', tenantId);
+
     if (!tenantId) {
+      console.log('❌ [DROPDOWNS] No tenant ID found!');
       return res.status(400).json({
         success: false,
         message: 'Tenant ID is required'

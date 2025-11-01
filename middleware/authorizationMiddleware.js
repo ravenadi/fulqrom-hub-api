@@ -26,14 +26,6 @@ const authorize = (req, res, next) => {
     return next();
   }
 
-  // Skip authorization for dropdowns (read-only data, no module-specific permissions needed)
-  if (req.path.startsWith('/dropdowns')) {
-    if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
-      console.log(`⚠️  Skipping permission check for dropdowns endpoint: ${req.method} ${req.path}`);
-    }
-    return next();
-  }
-
   // SECURITY FIX: Require authentication for all non-public routes
   // If user is not authenticated, deny access (authentication middleware should have set req.user)
   if (!req.user) {

@@ -33,7 +33,13 @@ const getAllTenants = async (req, res) => {
 
     // Build filter query
     let filter = {};
-    
+
+    // If tenant_id is provided, filter for specific tenant
+    // This allows super admin to scope data to a specific tenant when needed
+    if (req.query.tenant_id) {
+      filter._id = req.query.tenant_id;
+    }
+
     if (search) {
       filter.$or = [
         { 'tenant_name': { $regex: search, $options: 'i' } },
@@ -56,38 +62,43 @@ const getAllTenants = async (req, res) => {
 
     // Execute query with pagination
     const skip = (parseInt(page) - 1) * parseInt(per_page);
-    
+
+    // Super admin can query all tenants without tenant filtering
+    const queryOptions = { skipTenantFilter: true };
+
     const [tenants, total] = await Promise.all([
       Tenant.find(filter)
+        .setOptions(queryOptions)
         .populate('plan_id', 'name plan_tier price time_period')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(per_page))
         .lean(),
-      Tenant.countDocuments(filter)
+      Tenant.countDocuments(filter).setOptions(queryOptions)
     ]);
 
     // Format tenants with additional data
+
     const formattedTenants = await Promise.all(tenants.map(async (tenant) => {
-      const usersCount = await User.countDocuments({ tenant_id: tenant._id });
+      const usersCount = await User.countDocuments({ tenant_id: tenant._id }).setOptions(queryOptions);
 
       // Count customers for this tenant
-      const customersCount = await Customer.countDocuments({ tenant_id: tenant._id });
+      const customersCount = await Customer.countDocuments({ tenant_id: tenant._id }).setOptions(queryOptions);
 
       // Get all customer IDs for this tenant
-      const customers = await Customer.find({ tenant_id: tenant._id }).select('_id').lean();
+      const customers = await Customer.find({ tenant_id: tenant._id }).select('_id').setOptions(queryOptions).lean();
       const customerIds = customers.map(c => c._id);
 
       // Count entities that belong to customers
-      const sitesCount = await Site.countDocuments({ customer_id: { $in: customerIds } });
-      const buildingsCount = await Building.countDocuments({ customer_id: { $in: customerIds } });
-      const floorsCount = await Floor.countDocuments({ customer_id: { $in: customerIds } });
-      const buildingTenantsCount = await BuildingTenant.countDocuments({ customer_id: { $in: customerIds } });
-      const assetsCount = await Asset.countDocuments({ customer_id: { $in: customerIds } });
+      const sitesCount = await Site.countDocuments({ customer_id: { $in: customerIds } }).setOptions(queryOptions);
+      const buildingsCount = await Building.countDocuments({ customer_id: { $in: customerIds } }).setOptions(queryOptions);
+      const floorsCount = await Floor.countDocuments({ customer_id: { $in: customerIds } }).setOptions(queryOptions);
+      const buildingTenantsCount = await BuildingTenant.countDocuments({ customer_id: { $in: customerIds } }).setOptions(queryOptions);
+      const assetsCount = await Asset.countDocuments({ customer_id: { $in: customerIds } }).setOptions(queryOptions);
 
       // Count entities that belong directly to tenant
-      const documentsCount = await Document.countDocuments({ tenant_id: tenant._id });
-      const vendorsCount = await Vendor.countDocuments({ tenant_id: tenant._id });
+      const documentsCount = await Document.countDocuments({ tenant_id: tenant._id }).setOptions(queryOptions);
+      const vendorsCount = await Vendor.countDocuments({ tenant_id: tenant._id }).setOptions(queryOptions);
 
       // Calculate total storage used (sum of all document file sizes)
       const storageAggregation = await Document.aggregate([
@@ -98,7 +109,7 @@ const getAllTenants = async (req, res) => {
             totalSize: { $sum: { $ifNull: ['$file.file_meta.file_size', 0] } }
           }
         }
-      ]);
+      ]).option({ skipTenantFilter: true });
       const totalStorageBytes = storageAggregation.length > 0 ? storageAggregation[0].totalSize : 0;
       const totalStorageMB = (totalStorageBytes / (1024 * 1024)).toFixed(2);
 
@@ -106,15 +117,17 @@ const getAllTenants = async (req, res) => {
       const users = await User.find({ tenant_id: tenant._id })
         .select('full_name email phone is_active created_at')
         .limit(10)
+        .setOptions(queryOptions)
         .lean();
 
       // Get last activity from AuditLog
-      const lastActivity = await AuditLog.findOne({ 
+      const lastActivity = await AuditLog.findOne({
         resource_type: 'tenant',
-        resource_id: tenant._id 
+        resource_id: tenant._id
       })
         .sort({ created_at: -1 })
         .select('action created_at user_email')
+        .setOptions(queryOptions)
         .lean();
 
       return {

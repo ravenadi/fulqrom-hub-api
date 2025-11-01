@@ -23,21 +23,24 @@ const getAllStats = async (req, res) => {
       queryFilter = { customer_id: tenant_id };
     }
 
+    // Super admin needs to bypass tenant filtering
+    const queryOptions = { skipTenantFilter: true };
+
     const [
       totalUsers, totalDocuments, totalSites, totalBuildings, totalFloors,
       totalBuildingTenants, totalAssets, totalVendors, totalCustomers, activeCustomers,
       totalContacts, totalNotes, storageStats
     ] = await Promise.all([
-      User.countDocuments(queryFilter),
-      Document.countDocuments(queryFilter),
-      Site.countDocuments(queryFilter),
-      Building.countDocuments(queryFilter),
-      Floor.countDocuments(queryFilter),
-      BuildingTenant.countDocuments(queryFilter), // Building tenants (lessees)
-      Asset.countDocuments(queryFilter),
-      Vendor.countDocuments(queryFilter),
-      Customer.countDocuments(tenant_id ? { _id: tenant_id } : {}), // Total tenants (customers)
-      Customer.countDocuments(tenant_id ? { _id: tenant_id, is_active: true } : { is_active: true }), // Active tenants (customers)
+      User.countDocuments(queryFilter).setOptions(queryOptions),
+      Document.countDocuments(queryFilter).setOptions(queryOptions),
+      Site.countDocuments(queryFilter).setOptions(queryOptions),
+      Building.countDocuments(queryFilter).setOptions(queryOptions),
+      Floor.countDocuments(queryFilter).setOptions(queryOptions),
+      BuildingTenant.countDocuments(queryFilter).setOptions(queryOptions), // Building tenants (lessees)
+      Asset.countDocuments(queryFilter).setOptions(queryOptions),
+      Vendor.countDocuments(queryFilter).setOptions(queryOptions),
+      Customer.countDocuments(tenant_id ? { _id: tenant_id } : {}).setOptions(queryOptions), // Total tenants (customers)
+      Customer.countDocuments(tenant_id ? { _id: tenant_id, is_active: true } : { is_active: true }).setOptions(queryOptions), // Active tenants (customers)
       // TODO: Implement Contact and Note models if they exist and are tenant-scoped
       Promise.resolve(0), // Placeholder for totalContacts
       Promise.resolve(0),  // Placeholder for totalNotes
@@ -48,22 +51,22 @@ const getAllStats = async (req, res) => {
           $group: {
             _id: null,
             totalSizeBytes: { $sum: { $ifNull: ['$file.file_meta.file_size', 0] } },
-            documentsWithFiles: { 
-              $sum: { 
+            documentsWithFiles: {
+              $sum: {
                 $cond: [
                   { $and: [
                     { $ne: ['$file.file_meta.file_size', null] },
                     { $gt: ['$file.file_meta.file_size', 0] }
-                  ]}, 
-                  1, 
+                  ]},
+                  1,
                   0
-                ] 
-              } 
+                ]
+              }
             },
             totalRecords: { $sum: 1 }
           }
         }
-      ]).then(result => {
+      ]).option({ skipTenantFilter: true }).then(result => {
         const stats = result.length > 0 ? result[0] : {
           totalSizeBytes: 0,
           documentsWithFiles: 0,

@@ -47,9 +47,22 @@ const fetchUserById = async (userId) => {
  */
 async function tenantContext(req, res, next) {
   try {
+    console.log(`\n🔍 [TENANT-CONTEXT] ========== START ==========`);
+    console.log(`🔍 [TENANT-CONTEXT] Processing: ${req.method} ${req.path}`);
+    console.log(`🔍 [TENANT-CONTEXT] Full URL: ${req.originalUrl}`);
+
     // Skip tenant resolution for routes that don't require it
-    // (e.g., health checks, public endpoints)
+    // (e.g., health checks, public endpoints, admin routes)
     if (req.path === '/health' || req.path === '/') {
+      console.log(`⏭️  [TENANT-CONTEXT] Skipping health/root`);
+      return next();
+    }
+
+    // Skip for super admin routes - they handle their own tenant context via query params
+    // req.path at this middleware level starts with /admin (since /api is stripped by router)
+    // IMPORTANT: Only skip routes that START with /admin/ (with trailing slash) or are exactly /admin
+    if (req.path === '/admin' || req.path.startsWith('/admin/')) {
+      console.log('✅ [TENANT-CONTEXT] Skipping super admin route:', req.path);
       return next();
     }
 
@@ -57,33 +70,69 @@ async function tenantContext(req, res, next) {
     if (!req.user || (!req.user.userId && !req.user.id)) {
       // If no authenticated user, skip tenant resolution
       // (authentication middleware will handle auth errors)
+      console.log('⚠️ [TENANT-CONTEXT] No authenticated user, skipping');
       return next();
     }
 
     const userId = req.user.userId || req.user.id;
+    console.log(`👤 [TENANT-CONTEXT] User ID: ${userId}`);
 
     // Check if this is a super admin user
-    // Super admins can bypass tenant context or switch tenants via header
+    // Super admins can bypass tenant context or switch tenants via query param
     const isSuperAdmin = req.user.is_super_admin || req.user.isSuperAdmin || false;
+    console.log(`🔐 [TENANT-CONTEXT] Is super admin: ${isSuperAdmin}`);
 
-    // SECURITY: Super admins MUST provide x-tenant-id header to access tenant data
-    // No bypass mechanism - all access must be scoped to a specific tenant
+    // Super admin handling
     if (isSuperAdmin) {
-      const impersonateTenantId = req.headers['x-tenant-id'] || req.query?.tenant_id;
+      const tenantIdParam = req.query?.tenant_id;
+      const isAdminRoute = req.path.startsWith('/admin/');
 
-      // SECURITY: Require explicit tenant ID even for super admin
-      if (!impersonateTenantId) {
-        return res.status(400).json({
-          success: false,
-          error: 'TENANT_ID_REQUIRED',
-          message: 'Super admin must provide x-tenant-id header or tenant_id query parameter to access tenant data'
-        });
+      // Super admin accessing admin routes without tenant_id = cross-tenant access (all data)
+      if (!tenantIdParam && isAdminRoute) {
+        console.log('✅ [TENANT-CONTEXT] Super admin accessing admin route without tenant filter - allowing cross-tenant access');
+        req.tenant = {
+          tenantId: null,
+          isSuperAdmin: true,
+          allowCrossTenant: true
+        };
+        return next();
       }
-      // Else: fall through to normal tenant resolution below using impersonated tenant
+
+      // Super admin with tenant_id query param = filter by that tenant
+      if (tenantIdParam) {
+        console.log('✅ [TENANT-CONTEXT] Super admin filtering by tenant:', tenantIdParam);
+        
+        // Validate tenant exists
+        const tenant = await Tenant.findById(tenantIdParam).populate('plan_id', 'plan_name description');
+        if (!tenant) {
+          return res.status(404).json({
+            success: false,
+            error: 'TENANT_NOT_FOUND',
+            message: 'Specified tenant not found'
+          });
+        }
+
+        // Set tenant context for this request
+        req.tenant = {
+          tenantId: tenantIdParam,
+          tenant: tenant,
+          isSuperAdmin: true,
+          allowCrossTenant: false
+        };
+        return next();
+      }
+
+      // Super admin without tenant on non-admin routes = require tenant
+      return res.status(400).json({
+        success: false,
+        error: 'TENANT_ID_REQUIRED',
+        message: 'Super admin must provide tenant_id query parameter for this endpoint'
+      });
     }
 
-    // Get user from database to retrieve tenant_id
+    // Get user from database to retrieve tenant_id for normal users
     const user = await fetchUserById(userId);
+    console.log(`📝 [TENANT-CONTEXT] User from DB:`, user ? `ID: ${user._id}, tenant_id: ${user.tenant_id}` : 'NOT FOUND');
 
     if (!user) {
       return res.status(404).json({
@@ -94,6 +143,7 @@ async function tenantContext(req, res, next) {
     }
 
     if (!user.tenant_id) {
+      console.log(`❌ [TENANT-CONTEXT] User ${user._id} has NO tenant_id!`);
       return res.status(403).json({
         success: false,
         error: 'NO_TENANT',
@@ -102,11 +152,9 @@ async function tenantContext(req, res, next) {
       });
     }
 
-    // Resolve target tenant id
+    // Resolve target tenant id for normal users
     let targetTenantId = user.tenant_id;
-    if (isSuperAdmin && (req.headers['x-tenant-id'] || req.query?.tenant_id)) {
-      targetTenantId = req.headers['x-tenant-id'] || req.query.tenant_id;
-    }
+    console.log(`✅ [TENANT-CONTEXT] Using tenant_id: ${targetTenantId}`);
 
     // Get tenant
     const tenant = await Tenant.findById(targetTenantId).populate('plan_id', 'plan_name description');
@@ -173,7 +221,7 @@ async function tenantContext(req, res, next) {
 
       // Admin flags
       isSuperAdmin: isSuperAdmin,
-      isImpersonating: isSuperAdmin && !!req.headers['x-tenant-id'],
+      isImpersonating: isSuperAdmin && !!req.query?.tenant_id,
       isOwner: organization?.owner_id && user._id.toString() === organization.owner_id.toString(),
 
       // Tenant/Organization status and limits
@@ -194,6 +242,7 @@ async function tenantContext(req, res, next) {
     // Also attach to res.locals for use in views/templates
     res.locals.tenant = req.tenant;
 
+    console.log(`🎉 [TENANT-CONTEXT] SUCCESS - Set tenant context for user ${user._id} with tenant ${tenant._id}`);
     next();
   } catch (error) {
     console.error('Tenant context middleware error:', error);

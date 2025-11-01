@@ -4,7 +4,7 @@
  */
 
 // Public routes that bypass authentication
-const PUBLIC_ROUTES = ['/auth', '/health', '/admin', '/dropdowns'];
+const PUBLIC_ROUTES = ['/auth', '/health', '/admin'];
 
 // Module mapping: URL path -> module name for permission checking
 const MODULE_MAP = {

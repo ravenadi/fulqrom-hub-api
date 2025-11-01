@@ -79,8 +79,15 @@ function tenantPlugin(schema, options = {}) {
       return next();
     }
 
+    // Check if this is a super admin cross-tenant query
+    const options = this.getOptions();
+    if (options.skipTenantFilter === true) {
+      console.log(`✅ [TENANT-PLUGIN] ${modelName} | Skipping tenant filter (super admin cross-tenant)`);
+      return next();
+    }
+
     // Get tenant from ALS context (or fallback to options for backward compatibility)
-    const tenantId = getTenant() || this.getOptions()._tenantId;
+    const tenantId = getTenant() || options._tenantId;
 
     if (!tenantId) {
       console.error(`❌ [TENANT-PLUGIN] ${modelName} | NO TENANT CONTEXT | ENV=${process.env.NODE_ENV}`);
@@ -124,8 +131,15 @@ function tenantPlugin(schema, options = {}) {
       return next();
     }
 
+    // Check if this is a super admin cross-tenant query
+    const options = this.getOptions();
+    if (options.skipTenantFilter === true) {
+      console.log(`✅ [TENANT-PLUGIN] ${modelName} UPDATE | Skipping tenant filter (super admin cross-tenant)`);
+      return next();
+    }
+
     // Get tenant from ALS
-    const tenantId = getTenant() || this.getOptions()._tenantId;
+    const tenantId = getTenant() || options._tenantId;
 
     if (!tenantId) {
       console.error(`❌ [TENANT-PLUGIN] ${modelName} UPDATE | NO TENANT CONTEXT`);
@@ -161,8 +175,15 @@ function tenantPlugin(schema, options = {}) {
       return next();
     }
 
+    // Check if this is a super admin cross-tenant query
+    const options = this.getOptions();
+    if (options.skipTenantFilter === true) {
+      console.log(`✅ [TENANT-PLUGIN] ${modelName} DELETE | Skipping tenant filter (super admin cross-tenant)`);
+      return next();
+    }
+
     // Get tenant from ALS
-    const tenantId = getTenant() || this.getOptions()._tenantId;
+    const tenantId = getTenant() || options._tenantId;
 
     if (!tenantId) {
       console.error(`❌ [TENANT-PLUGIN] ${modelName} DELETE | NO TENANT CONTEXT`);

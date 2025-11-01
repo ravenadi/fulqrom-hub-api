@@ -47,6 +47,13 @@ const checkSuperAdmin = async (req, res, next) => {
             can_view_audit_logs: true
           }
         };
+
+        // Set flag in req.user so tenantContext middleware can recognize super admin
+        if (!req.user) req.user = {};
+        req.user.is_super_admin = true;
+        req.user.isSuperAdmin = true;
+        req.user.id = payload.sub;
+
         return next();
       }
     }

@@ -47,9 +47,10 @@ const getAllPlans = async (req, res) => {
     ]);
 
     // Get tenant counts for each plan
+    // Super admin needs to bypass tenant filter to count across all customers
     const plansWithCounts = await Promise.all(
       plans.map(async (plan) => {
-        const tenantsCount = await Customer.countDocuments({ plan_id: plan._id });
+        const tenantsCount = await Customer.countDocuments({ plan_id: plan._id }).setOptions({ skipTenantFilter: true });
         return {
           id: plan._id,
           name: plan.name,
