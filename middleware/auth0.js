@@ -1,6 +1,5 @@
 const { auth } = require('express-oauth2-jwt-bearer');
 const User = require('../models/User');
-const { setBypassTenantFilter } = require('../utils/requestContext');
 
 /**
  * Auth0 JWT Validation Middleware
@@ -25,9 +24,8 @@ const checkJwt = auth({
  */
 const attachUser = async (req, res, next) => {
   try {
-    // Enable tenant filter bypass for authentication
-    // Required because we're looking up user by auth0_id, not tenant_id
-    setBypassTenantFilter(true);
+    // SECURITY: User model now has autoFilter: false, so no bypass needed
+    // Users can be looked up without tenant filtering during authentication
 
     // Debug: Log what we received from JWT validation (only in development)
     if (process.env.NODE_ENV === 'development') {
@@ -62,9 +60,8 @@ const attachUser = async (req, res, next) => {
       
       // Even super_admin users should have a database record for consistency
       // Try to find the user in MongoDB first
-      // Bypass tenant filter during auth (we're looking up by auth0_id, not tenant)
+      // User model has autoFilter: false, so no tenant filtering is applied
       const user = await User.findOne({ auth0_id: auth0UserId })
-        .setOptions({ _bypassTenantFilter: true })
         .populate('role_ids', 'name description permissions is_active');
 
       if (user) {
@@ -110,7 +107,7 @@ const attachUser = async (req, res, next) => {
     }
 
     // Find user in MongoDB by auth0_id
-    // Tenant filter already bypassed above via setBypassTenantFilter(true)
+    // User model has autoFilter: false, so tenant filtering is not applied
     const user = await User.findOne({ auth0_id: auth0UserId })
       .populate('role_ids', 'name description permissions is_active');
 

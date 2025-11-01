@@ -155,7 +155,10 @@ UserSchema.set('toJSON', { virtuals: true });
 UserSchema.set('toObject', { virtuals: true });
 
 // Apply tenant plugin for multi-tenancy support
-UserSchema.plugin(tenantPlugin);
+// SECURITY: Use autoFilter: false for User model
+// Users need to be looked up during authentication BEFORE we have tenant context
+// We'll manually apply tenant filtering where needed
+UserSchema.plugin(tenantPlugin, { autoFilter: false });
 
 const User = mongoose.model('User', UserSchema);
 

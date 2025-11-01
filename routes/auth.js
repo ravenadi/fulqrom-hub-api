@@ -19,7 +19,6 @@ const { generateCSRFToken } = require('../middleware/csrf');
 const { authenticateSession, optionalSession } = require('../middleware/sessionAuth');
 const { requireAuth } = require('../middleware/auth0');
 const { extractDeviceInfo } = require('../utils/deviceFingerprint');
-const { setBypassTenantFilter } = require('../utils/requestContext');
 
 const router = express.Router();
 
@@ -400,9 +399,7 @@ router.get('/me', authenticateSession, async (req, res) => {
  */
 router.post('/sync-user', async (req, res) => {
   try {
-    // Enable tenant filter bypass for authentication endpoint
-    // This is required because we don't know the user's tenant until AFTER we look them up
-    setBypassTenantFilter(true);
+    // SECURITY: User model has autoFilter: false, so no bypass needed
 
     const { auth0_id, email, full_name, phone, roles } = req.body;
 
@@ -473,12 +470,11 @@ router.post('/sync-user', async (req, res) => {
 
       // For super admin, create without tenant validation
       if (userIsSuperAdmin) {
-        // Temporarily make tenant_id optional for this operation
+        // User model has autoFilter: false, so tenant filtering is not applied
         // Create using create() with skip validation
         try {
-          user = await User.create([userData], { 
-            runValidators: false,
-            bypassTenantFilter: true 
+          user = await User.create([userData], {
+            runValidators: false
           });
           user = user[0]; // create() returns an array
           user = await User.findById(user._id)
@@ -610,8 +606,7 @@ router.get('/config', (req, res) => {
  */
 router.get('/user/:auth0Id', async (req, res) => {
   try {
-    // Enable tenant filter bypass for authentication endpoint
-    setBypassTenantFilter(true);
+    // SECURITY: User model has autoFilter: false, so no bypass needed
 
     const { auth0Id } = req.params;
     const user = await User.findOne({ auth0_id: auth0Id })

@@ -10,7 +10,6 @@
 
 const UserSession = require('../models/UserSession');
 const User = require('../models/User');
-const { setBypassTenantFilter } = require('../utils/requestContext');
 
 /**
  * Session authentication middleware
@@ -24,10 +23,8 @@ const { setBypassTenantFilter } = require('../utils/requestContext');
  */
 async function authenticateSession(req, res, next) {
   try {
-    // Enable tenant filter bypass for session authentication
-    // Required because we lookup sessions by session_id (not tenant_id)
-    // and populate user which may need bypass
-    setBypassTenantFilter(true);
+    // SECURITY: User model now has autoFilter: false, so no bypass needed
+    // UserSession also shouldn't need tenant filtering during auth
 
     // Get session ID from cookie
     const sessionId = req.cookies?.sid;
@@ -182,8 +179,7 @@ async function authenticateSession(req, res, next) {
  */
 async function optionalSession(req, res, next) {
   try {
-    // Enable tenant filter bypass for session lookups
-    setBypassTenantFilter(true);
+    // SECURITY: User model has autoFilter: false, so no bypass needed
 
     const sessionId = req.cookies?.sid;
 

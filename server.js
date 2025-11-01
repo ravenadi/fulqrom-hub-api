@@ -125,7 +125,27 @@ app.options('*', (req, res) => {
 // Wrap all requests in AsyncLocalStorage context for tenant isolation
 // CRITICAL: This must wrap the entire request-response cycle
 app.use((req, res, next) => {
+  // Create a new ALS context for each request and maintain it throughout the entire request-response cycle
   asyncLocalStorage.run({}, () => {
+    // Ensure the context persists until the response is finished
+    const originalEnd = res.end;
+    const originalSend = res.send;
+    const originalJson = res.json;
+
+    // Wrap response methods to ensure they execute within the ALS context
+    res.end = function(...args) {
+      return originalEnd.apply(this, args);
+    };
+
+    res.send = function(...args) {
+      return originalSend.apply(this, args);
+    };
+
+    res.json = function(...args) {
+      return originalJson.apply(this, args);
+    };
+
+    // Call next() to continue the middleware chain within this ALS context
     next();
   });
 });

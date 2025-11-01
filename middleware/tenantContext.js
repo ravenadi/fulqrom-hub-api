@@ -19,21 +19,20 @@ const User = require('../models/User');
 const Organization = require('../models/Organization');
 const Tenant = require('../models/Tenant');
 const mongoose = require('mongoose');
-const { setTenant, setBypassTenantFilter } = require('../utils/requestContext');
+const { setTenant } = require('../utils/requestContext');
 
 /**
  * Helper function to fetch user with proper ID handling
  * Handles both MongoDB ObjectId and Auth0 ID strings
  */
 const fetchUserById = async (userId) => {
-  // If userId is already a valid ObjectId, use it directly
-  // Bypass tenant filter during tenant context lookup (we need user to get tenant_id)
+  // User model has autoFilter: false, so no tenant filtering is applied
   if (mongoose.Types.ObjectId.isValid(userId)) {
-    return await User.findById(userId).setOptions({ _bypassTenantFilter: true });
+    return await User.findById(userId);
   }
-  
+
   // Otherwise, treat it as an auth0_id
-  return await User.findOne({ auth0_id: userId }).setOptions({ _bypassTenantFilter: true });
+  return await User.findOne({ auth0_id: userId });
 };
 
 /**
@@ -67,24 +66,18 @@ async function tenantContext(req, res, next) {
     // Super admins can bypass tenant context or switch tenants via header
     const isSuperAdmin = req.user.is_super_admin || req.user.isSuperAdmin || false;
 
-    // Super admins: allow impersonation via x-tenant-id or tenant_id, otherwise bypass tenant
+    // SECURITY: Super admins MUST provide x-tenant-id header to access tenant data
+    // No bypass mechanism - all access must be scoped to a specific tenant
     if (isSuperAdmin) {
       const impersonateTenantId = req.headers['x-tenant-id'] || req.query?.tenant_id;
 
-      // If no target tenant provided, bypass tenant context as before
+      // SECURITY: Require explicit tenant ID even for super admin
       if (!impersonateTenantId) {
-        setBypassTenantFilter(true);
-        req.tenant = {
-          tenantId: null,
-          organizationId: null,
-          tenantSlug: null,
-          tenantName: 'Super Admin',
-          organization: null,
-          tenant: null,
-          isSuperAdmin: true,
-          bypassTenant: true
-        };
-        return next();
+        return res.status(400).json({
+          success: false,
+          error: 'TENANT_ID_REQUIRED',
+          message: 'Super admin must provide x-tenant-id header or tenant_id query parameter to access tenant data'
+        });
       }
       // Else: fall through to normal tenant resolution below using impersonated tenant
     }
@@ -152,7 +145,14 @@ async function tenantContext(req, res, next) {
       .catch(() => null); // Don't fail if organization doesn't exist
 
     // Set tenant in ALS context for strict tenant isolation
+    const { getStore } = require('../utils/requestContext');
+    const storeBefore = getStore();
+    console.log(`🔍 [TENANT-CTX] Setting tenant ${tenant._id} | ALS store exists: ${!!storeBefore}`);
     setTenant(tenant._id);
+
+    const storeAfter = getStore();
+    console.log(`🔍 [TENANT-CTX] After setTenant | tenantId in store: ${storeAfter?.tenantId}`);
+
 
     // Attach tenant context to request
     req.tenant = {

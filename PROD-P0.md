@@ -99,5 +99,5 @@ fetch(url, { credentials: 'include' })
 ## Rollback
 - Flip `ALLOW_BEARER=true` to re-enable Bearer.
 - Disable `requireIfMatch` middleware if FE not ready yet.
-- Revert tenant plugin strictness by allowing `_bypassTenantFilter` for emergency queries (admin-only).
+- Note: Tenant isolation bypass mechanism has been permanently removed for security. Super admins must use `x-tenant-id` header.
 

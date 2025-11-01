@@ -1,10 +1,13 @@
 /**
  * Mongoose Tenant Scope Middleware
  *
- * This middleware automatically injects tenant_id into all Mongoose queries
- * based on the authenticated user's tenant context.
+ * @deprecated This file is obsolete and no longer used.
+ * Tenant isolation is now handled by the tenantPlugin.js plugin using AsyncLocalStorage.
  *
- * IMPORTANT: This middleware MUST be placed AFTER tenantContext middleware.
+ * This file is kept for historical reference only.
+ * DO NOT USE THIS MIDDLEWARE - it contains the removed bypass mechanism.
+ *
+ * See: plugins/tenantPlugin.js for current implementation
  */
 
 const mongoose = require('mongoose');

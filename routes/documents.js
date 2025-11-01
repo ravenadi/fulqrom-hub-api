@@ -49,7 +49,7 @@ const upload = multer({
 const router = express.Router();
 
 // Helper function to fetch entity names by IDs
-async function fetchEntityNames(documentData) {
+async function fetchEntityNames(documentData, currentTenantId) {
   const entityNames = {
     customer_name: 'Unknown Customer',
     site_name: null,
@@ -68,9 +68,9 @@ async function fetchEntityNames(documentData) {
     const tenantId = documentData.location?.tenant?.tenant_id || documentData.tenant_id;
     const vendorId = documentData.location?.vendor?.vendor_id || documentData.vendor_id;
 
-    // Fetch customer name
+    // Fetch customer name - WITH TENANT FILTERING
     if (customerId) {
-      const customer = await Customer.findById(customerId.toString());
+      const customer = await Customer.findById(customerId.toString()).setOptions({ _tenantId: currentTenantId });
       if (customer) {
         entityNames.customer_name = customer.organisation?.organisation_name ||
                                    customer.company_profile?.trading_name ||
@@ -79,33 +79,33 @@ async function fetchEntityNames(documentData) {
       }
     }
 
-    // Fetch site name
+    // Fetch site name - WITH TENANT FILTERING
     if (siteId) {
-      const site = await Site.findById(siteId.toString());
+      const site = await Site.findById(siteId.toString()).setOptions({ _tenantId: currentTenantId });
       if (site) {
         entityNames.site_name = site.site_name;
       }
     }
 
-    // Fetch building name
+    // Fetch building name - WITH TENANT FILTERING
     if (buildingId) {
-      const building = await Building.findById(buildingId.toString());
+      const building = await Building.findById(buildingId.toString()).setOptions({ _tenantId: currentTenantId });
       if (building) {
         entityNames.building_name = building.building_name;
       }
     }
 
-    // Fetch floor name
+    // Fetch floor name - WITH TENANT FILTERING
     if (floorId) {
-      const floor = await Floor.findById(floorId.toString());
+      const floor = await Floor.findById(floorId.toString()).setOptions({ _tenantId: currentTenantId });
       if (floor) {
         entityNames.floor_name = floor.floor_name;
       }
     }
 
-    // Fetch asset name (legacy single asset)
+    // Fetch asset name (legacy single asset) - WITH TENANT FILTERING
     if (assetId) {
-      const asset = await Asset.findById(assetId.toString());
+      const asset = await Asset.findById(assetId.toString()).setOptions({ _tenantId: currentTenantId });
       if (asset) {
         // Build asset name from available fields
         entityNames.asset_name = asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset';
@@ -116,11 +116,11 @@ async function fetchEntityNames(documentData) {
       }
     }
 
-    // Fetch multiple assets
-    const assetIds = documentData.location?.assets?.map(a => a.asset_id) || 
+    // Fetch multiple assets - WITH TENANT FILTERING
+    const assetIds = documentData.location?.assets?.map(a => a.asset_id) ||
                      (documentData.asset_ids && Array.isArray(documentData.asset_ids) ? documentData.asset_ids : []);
     if (assetIds.length > 0) {
-      const assets = await Asset.find({ _id: { $in: assetIds.map(id => id.toString()) } });
+      const assets = await Asset.find({ _id: { $in: assetIds.map(id => id.toString()) } }).setOptions({ _tenantId: currentTenantId });
       entityNames.assets = assets.map(asset => ({
         asset_id: asset._id.toString(),
         asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
@@ -128,17 +128,17 @@ async function fetchEntityNames(documentData) {
       }));
     }
 
-    // Fetch tenant name
+    // Fetch tenant name - WITH TENANT FILTERING
     if (tenantId) {
-      const tenant = await BuildingTenant.findById(tenantId.toString());
+      const tenant = await BuildingTenant.findById(tenantId.toString()).setOptions({ _tenantId: currentTenantId });
       if (tenant) {
         entityNames.tenant_name = tenant.tenant_name;
       }
     }
 
-    // Fetch vendor name
+    // Fetch vendor name - WITH TENANT FILTERING
     if (vendorId) {
-      const vendor = await Vendor.findById(vendorId.toString());
+      const vendor = await Vendor.findById(vendorId.toString()).setOptions({ _tenantId: currentTenantId });
       if (vendor) {
         entityNames.vendor_name = vendor.contractor_name;
       }
@@ -151,7 +151,7 @@ async function fetchEntityNames(documentData) {
 }
 
 // Batch fetch entity names for multiple documents to avoid N+1 query problem
-async function batchFetchEntityNames(documents) {
+async function batchFetchEntityNames(documents, tenantId) {
   if (!documents || documents.length === 0) {
     return [];
   }
@@ -189,15 +189,15 @@ async function batchFetchEntityNames(documents) {
     });
   });
 
-  // Step 2: Fetch ALL entities in parallel with batch queries
+  // Step 2: Fetch ALL entities in parallel with batch queries - WITH TENANT FILTERING
   const [customers, sites, buildings, floors, assets, tenants, vendors] = await Promise.all([
-    customerIds.size > 0 ? Customer.find({ _id: { $in: Array.from(customerIds) } }).lean().exec() : [],
-    siteIds.size > 0 ? Site.find({ _id: { $in: Array.from(siteIds) } }).lean().exec() : [],
-    buildingIds.size > 0 ? Building.find({ _id: { $in: Array.from(buildingIds) } }).lean().exec() : [],
-    floorIds.size > 0 ? Floor.find({ _id: { $in: Array.from(floorIds) } }).lean().exec() : [],
-    assetIds.size > 0 ? Asset.find({ _id: { $in: Array.from(assetIds) } }).lean().exec() : [],
-    tenantIds.size > 0 ? BuildingTenant.find({ _id: { $in: Array.from(tenantIds) } }).lean().exec() : [],
-    vendorIds.size > 0 ? Vendor.find({ _id: { $in: Array.from(vendorIds) } }).lean().exec() : []
+    customerIds.size > 0 ? Customer.find({ _id: { $in: Array.from(customerIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    siteIds.size > 0 ? Site.find({ _id: { $in: Array.from(siteIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    buildingIds.size > 0 ? Building.find({ _id: { $in: Array.from(buildingIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    floorIds.size > 0 ? Floor.find({ _id: { $in: Array.from(floorIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    assetIds.size > 0 ? Asset.find({ _id: { $in: Array.from(assetIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    tenantIds.size > 0 ? BuildingTenant.find({ _id: { $in: Array.from(tenantIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    vendorIds.size > 0 ? Vendor.find({ _id: { $in: Array.from(vendorIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : []
   ]);
 
   // Step 3: Create lookup maps for O(1) access
@@ -565,7 +565,7 @@ router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering(
     ]);
 
     // Batch populate entity names for all documents (optimized to avoid N+1 queries)
-    const documentsWithNames = await batchFetchEntityNames(documents);
+    const documentsWithNames = await batchFetchEntityNames(documents, req.tenant.tenantId);
 
     // Build category summary
     const documentsByCategory = {};
@@ -716,7 +716,7 @@ router.get('/:id', checkModulePermission('documents', 'view'), validateObjectId,
     }
 
     // Populate entity names dynamically
-    const names = await fetchEntityNames(document);
+    const names = await fetchEntityNames(document, req.tenant.tenantId);
     const documentWithNames = {
       ...document,
       customer: {
@@ -1104,7 +1104,7 @@ router.post('/', checkModulePermission('documents', 'create'), upload.single('fi
 
     // Populate entity names for response
     const documentLean = document.toObject();
-    const names = await fetchEntityNames(documentLean);
+    const names = await fetchEntityNames(documentLean, req.tenant.tenantId);
     const documentWithNames = {
       ...documentLean,
       customer: {
@@ -1240,7 +1240,7 @@ router.put('/bulk-update', requireIfMatch, async (req, res) => {
     }
 
     // Fetch entity names for the updates
-    const entityNames = await fetchEntityNames(updates);
+    const entityNames = await fetchEntityNames(updates, req.tenant.tenantId);
 
     // Build update object for all fields
     const updateObject = {};
@@ -1663,7 +1663,7 @@ router.put('/:id', checkModulePermission('documents', 'edit'), requireIfMatch, v
     const documentLean = result.toObject();
 
     // Populate entity names dynamically
-    const names = await fetchEntityNames(documentLean);
+    const names = await fetchEntityNames(documentLean, req.tenant.tenantId);
     const documentWithNames = {
       ...documentLean,
       customer: {

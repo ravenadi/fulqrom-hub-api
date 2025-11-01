@@ -73,26 +73,6 @@ function getUser() {
   return store?.user;
 }
 
-/**
- * Set bypass flag for super admin operations
- * @param {boolean} bypass - Whether to bypass tenant filtering
- */
-function setBypassTenantFilter(bypass) {
-  const store = asyncLocalStorage.getStore();
-  if (store) {
-    store.bypassTenantFilter = bypass;
-  }
-}
-
-/**
- * Check if tenant filter should be bypassed
- * @returns {boolean} True if bypass is enabled
- */
-function shouldBypassTenantFilter() {
-  const store = asyncLocalStorage.getStore();
-  return store?.bypassTenantFilter === true;
-}
-
 module.exports = {
   asyncLocalStorage, // Export the instance for direct middleware use
   runWithContext,
@@ -100,8 +80,6 @@ module.exports = {
   setTenant,
   getTenant,
   setUser,
-  getUser,
-  setBypassTenantFilter,
-  shouldBypassTenantFilter
+  getUser
 };
 

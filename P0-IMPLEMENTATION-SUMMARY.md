@@ -29,19 +29,18 @@
 - `utils/requestContext.js` (NEW): AsyncLocalStorage helpers
   - `runWithContext()`: Wrap request in ALS
   - `setTenant()` / `getTenant()`: Tenant context
-  - `setBypassTenantFilter()` / `shouldBypassTenantFilter()`: Super admin bypass
+  - `setUser()` / `getUser()`: User context
 
 **Files Modified:**
 - `plugins/tenantPlugin.js`: Rewritten to use ALS instead of `_tenantId` options
   - All pre-hooks (find/update/delete/count) now read tenant from ALS
-  - Production mode: throws error if tenant missing (strict enforcement)
-  - Development mode: warns but allows
+  - Strict enforcement: throws error if tenant missing in ALL environments
   - Pre-save hook: auto-sets `tenant_id` on new documents
-  - Bypass only allowed for super admins in production
-  
-- `middleware/tenantContext.js`: 
+  - User model uses `autoFilter: false` to allow auth lookups without tenant context
+
+- `middleware/tenantContext.js`:
   - Calls `setTenant(tenant._id)` to populate ALS context
-  - Calls `setBypassTenantFilter(true)` for super admins
+  - Super admins MUST provide `x-tenant-id` header to access tenant data (no bypass)
 
 - `server.js`:
   - Wraps all requests in `runWithContext({})` for ALS isolation
@@ -210,9 +209,10 @@ All other dependencies already present.
 - [ ] Concurrent PUTs → one succeeds, one gets 409
 
 ### Tenant Isolation
-- [ ] No warnings in dev mode for tenant queries
-- [ ] Production mode blocks queries without tenant (after strict mode enabled)
-- [ ] Super admin can bypass with `setBypassTenantFilter()`
+- [ ] Queries with tenant context succeed
+- [ ] Queries without tenant context fail with `TENANT_CONTEXT_MISSING` error
+- [ ] Super admin with `x-tenant-id` header can access specific tenant data
+- [ ] Super admin without `x-tenant-id` header gets 400 error
 - [ ] Cross-tenant queries fail
 
 ### Security
@@ -306,7 +306,7 @@ If issues occur after deployment:
 **Tenant isolation errors:**
 - Check ALS context is set in `tenantContext` middleware
 - Verify `runWithContext()` wraps requests in `server.js`
-- For super admin ops, call `setBypassTenantFilter(true)`
+- For super admin ops, provide `x-tenant-id` header to access specific tenant data
 
 ## Contact & Documentation
 

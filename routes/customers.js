@@ -156,7 +156,7 @@ router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => re
 });
 
 // Helper function to batch fetch entity names for documents (reused from documents route)
-async function batchFetchEntityNames(documents) {
+async function batchFetchEntityNames(documents, tenantId) {
   if (!documents || documents.length === 0) {
     return [];
   }
@@ -194,15 +194,15 @@ async function batchFetchEntityNames(documents) {
     });
   });
 
-  // Step 2: Fetch ALL entities in parallel with batch queries
+  // Step 2: Fetch ALL entities in parallel with batch queries - WITH TENANT FILTERING
   const [customers, sites, buildings, floors, assets, tenants, vendors] = await Promise.all([
-    customerIds.size > 0 ? Customer.find({ _id: { $in: Array.from(customerIds) } }).lean().exec() : [],
-    siteIds.size > 0 ? Site.find({ _id: { $in: Array.from(siteIds) } }).lean().exec() : [],
-    buildingIds.size > 0 ? Building.find({ _id: { $in: Array.from(buildingIds) } }).lean().exec() : [],
-    floorIds.size > 0 ? Floor.find({ _id: { $in: Array.from(floorIds) } }).lean().exec() : [],
-    assetIds.size > 0 ? Asset.find({ _id: { $in: Array.from(assetIds) } }).lean().exec() : [],
-    tenantIds.size > 0 ? BuildingTenant.find({ _id: { $in: Array.from(tenantIds) } }).lean().exec() : [],
-    vendorIds.size > 0 ? Vendor.find({ _id: { $in: Array.from(vendorIds) } }).lean().exec() : []
+    customerIds.size > 0 ? Customer.find({ _id: { $in: Array.from(customerIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    siteIds.size > 0 ? Site.find({ _id: { $in: Array.from(siteIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    buildingIds.size > 0 ? Building.find({ _id: { $in: Array.from(buildingIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    floorIds.size > 0 ? Floor.find({ _id: { $in: Array.from(floorIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    assetIds.size > 0 ? Asset.find({ _id: { $in: Array.from(assetIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    tenantIds.size > 0 ? BuildingTenant.find({ _id: { $in: Array.from(tenantIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    vendorIds.size > 0 ? Vendor.find({ _id: { $in: Array.from(vendorIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : []
   ]);
 
   // Step 3: Create lookup maps for O(1) access
@@ -340,7 +340,7 @@ router.get('/:id/documents', checkResourcePermission('customer', 'view', (req) =
       ]);
       
       // Batch populate entity names for all documents
-      const documentsWithNames = await batchFetchEntityNames(documents);
+      const documentsWithNames = await batchFetchEntityNames(documents, req.tenant.tenantId);
 
     // Build response with customer info (read-only) and documents
     const response = {
