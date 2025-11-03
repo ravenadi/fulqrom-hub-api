@@ -32,8 +32,7 @@ const RoleSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    trim: true,
-    enum: ['Admin', 'Property Manager', 'Building Manager', 'Contractor', 'Tenants']
+    trim: true
   },
   description: {
     type: String,

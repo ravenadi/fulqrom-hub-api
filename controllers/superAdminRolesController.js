@@ -1,7 +1,6 @@
 const Role = require('../models/v2/Role');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
-const AuditLog = require('../models/AuditLog');
 
 /**
  * Get all roles with permissions
@@ -118,18 +117,6 @@ const createRole = async (req, res) => {
     });
 
     await role.save();
-
-    // Log audit
-    await AuditLog.create({
-      action: 'create',
-      resource_type: 'role',
-      resource_id: role._id,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        role_name: name
-      }
-    });
 
     res.status(201).json({
       success: true,
@@ -277,16 +264,6 @@ const updateRole = async (req, res) => {
     // Get user count for this role
     const usersCount = await User.countDocuments({ role_ids: role });
 
-    // Log audit
-    await AuditLog.create({
-      action: 'update',
-      resource_type: 'role',
-      resource_id: role,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: updateData
-    });
-
     res.status(200).json({
       success: true,
       message: 'Role updated successfully',
@@ -342,18 +319,6 @@ const deleteRole = async (req, res) => {
     // Soft delete - set is_active to false
     roleData.is_active = false;
     await roleData.save();
-
-    // Log audit
-    await AuditLog.create({
-      action: 'delete',
-      resource_type: 'role',
-      resource_id: role,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        role_name: roleData.name
-      }
-    });
 
     res.status(200).json({
       success: true,
@@ -494,20 +459,6 @@ const assignRole = async (req, res) => {
     user.role_ids.push(role_id);
     await user.save();
 
-    // Log audit
-    await AuditLog.create({
-      action: 'assign_role',
-      resource_type: 'user',
-      resource_id: user_id,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        role_id: role_id,
-        role_name: role.name,
-        user_email: user.email
-      }
-    });
-
     res.status(200).json({
       success: true,
       message: 'Role assigned successfully',
@@ -583,20 +534,6 @@ const removeRole = async (req, res) => {
     // Remove role from user
     user.role_ids = user.role_ids.filter(id => id.toString() !== role_id);
     await user.save();
-
-    // Log audit
-    await AuditLog.create({
-      action: 'remove_role',
-      resource_type: 'user',
-      resource_id: user_id,
-      user_id: req.superAdmin?.id,
-      user_email: req.superAdmin?.email,
-      details: {
-        role_id: role_id,
-        role_name: role.name,
-        user_email: user.email
-      }
-    });
 
     res.status(200).json({
       success: true,
