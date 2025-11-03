@@ -5,7 +5,7 @@ const PermissionSchema = new mongoose.Schema({
   entity: {
     type: String,
     required: true,
-    enum: [ 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'analytics', 'organisations'],
+    enum: [ 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'organisations', 'notifications'],
     trim: true
   },
   view: {

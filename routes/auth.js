@@ -112,11 +112,7 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
     });
 
     // Set cookies
-    // IMPORTANT: For cross-subdomain cookies (hub.ravenlabs.biz <-> api.hub.ravenlabs.biz):
-    // - Use sameSite='none' to allow cookies across subdomains
-    // - Requires secure=true (HTTPS only)
-    // - domain must be set to .ravenlabs.biz (with leading dot)
-    // For local development (HTTP), use sameSite='lax' instead (sameSite='none' requires HTTPS)
+// api url is https://hub.ravenlabs.biz/api
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
@@ -452,7 +448,8 @@ router.post('/sync-user', async (req, res) => {
 
     // Find or create user (tenant filter already bypassed above)
     let user = await User.findOne({ auth0_id })
-      .populate('role_ids tenant_id');
+      .populate('role_ids', 'name description permissions')
+      .populate('tenant_id');
 
     // Check if existing user is super admin
     let existingIsSuperAdmin = false;
@@ -508,21 +505,24 @@ router.post('/sync-user', async (req, res) => {
           });
           user = user[0]; // create() returns an array
           user = await User.findById(user._id)
-            .populate('role_ids tenant_id');
+            .populate('role_ids', 'name description permissions')
+            .populate('tenant_id');
         } catch (createError) {
           // Fallback: use direct collection operation if create fails
           console.warn('User.create failed for super admin, using collection insert:', createError.message);
           const UserCollection = User.collection;
           const result = await UserCollection.insertOne(userData);
           user = await User.findById(result.insertedId)
-            .populate('role_ids tenant_id');
+            .populate('role_ids', 'name description permissions')
+            .populate('tenant_id');
         }
       } else {
         // Normal user creation with validation
         user = new User(userData);
         await user.save();
         user = await User.findById(user._id)
-          .populate('role_ids tenant_id');
+          .populate('role_ids', 'name description permissions')
+          .populate('tenant_id');
       }
     } else {
       // Update existing user
@@ -547,14 +547,16 @@ router.post('/sync-user', async (req, res) => {
             setDefaultsOnInsert: false
           }
         )
-          .populate('role_ids tenant_id');
+          .populate('role_ids', 'name description permissions')
+          .populate('tenant_id');
       } else {
         // Normal user update
         user.full_name = updateData.full_name;
         user.phone = updateData.phone;
         await user.save();
         user = await User.findById(user._id)
-          .populate('role_ids tenant_id');
+          .populate('role_ids', 'name description permissions')
+          .populate('tenant_id');
       }
     }
 
@@ -640,7 +642,8 @@ router.get('/user/:auth0Id', async (req, res) => {
 
     const { auth0Id } = req.params;
     const user = await User.findOne({ auth0_id: auth0Id })
-      .populate('role_ids tenant_id');
+      .populate('role_ids', 'name description permissions')
+      .populate('tenant_id');
 
     if (!user) {
       return res.status(404).json({

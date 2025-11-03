@@ -214,21 +214,21 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
       filterQuery.tenant_id = tenantId;
     }
 
-    // Fetch only coordinates and essential fields for map display
+    // Fetch ALL buildings with address data for map display (no limit)
+    // NOTE: Removed latitude/longitude from select to force address-based geocoding on frontend
     const buildings = await Building.find(filterQuery)
-      .select('_id building_name latitude longitude address site_id customer_id')
+      .select('_id building_name address site_id customer_id')
       .populate('site_id', 'site_name')
       .populate('customer_id', 'organisation_name')
       .lean();
 
-    // Transform to lightweight format for map
+    // Transform to lightweight format for map - returns ALL buildings with address data
+    // Frontend will handle geocoding from address fields
     const coordinates = buildings
-      .filter(building => building.latitude && building.longitude) // Only buildings with coordinates
       .map(building => ({
         id: building._id.toString(),
         building_name: building.building_name,
-        latitude: building.latitude,
-        longitude: building.longitude,
+        // NOTE: latitude/longitude intentionally excluded to force address-based geocoding
         address: building.address,
         site_id: building.site_id ? {
           _id: building.site_id._id,
