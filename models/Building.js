@@ -31,7 +31,7 @@ const BuildingAddressSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
-// Metadata schema for additional building information
+// Metadata schema for additional building information (DEPRECATED - use tags instead)
 const BuildingMetadataSchema = new mongoose.Schema({
   key: {
     type: String,
@@ -201,8 +201,20 @@ const BuildingSchema = new mongoose.Schema({
   },
 
 
-  // Additional Information (renamed from metadata as per requirements)
+  // Additional Information (DEPRECATED - use tags instead)
   metadata: [BuildingMetadataSchema],
+
+  // Building Tags - Simple array of strings for categorization and search
+  tags: [{
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return v.length >= 2 && v.length <= 30 && /^[a-zA-Z0-9\s\-_]+$/.test(v);
+      },
+      message: 'Tag must be 2-30 characters and contain only letters, numbers, spaces, hyphens, and underscores'
+    }
+  }],
 
   // System fields
   is_active: {

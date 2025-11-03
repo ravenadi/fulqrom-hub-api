@@ -22,6 +22,7 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
       building_type,
       operational_status,
       status,
+      tags,
       sort_by = 'createdAt',
       sort_order = 'desc',
       is_active
@@ -51,7 +52,8 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
         { 'address.street': new RegExp(search, 'i') },
         { 'address.suburb': new RegExp(search, 'i') },
         { 'address.state': new RegExp(search, 'i') },
-        { 'address.postcode': new RegExp(search, 'i') }
+        { 'address.postcode': new RegExp(search, 'i') },
+        { tags: new RegExp(search, 'i') } // Search in tags array
       ];
     }
 
@@ -99,6 +101,15 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
         ? building_type.split(',').map(t => t.trim())
         : building_type;
       filterQuery.building_type = Array.isArray(types) ? { $in: types } : types;
+    }
+
+    // Filter by tags (multi-select support)
+    if (tags) {
+      const tagsList = tags.includes(',')
+        ? tags.split(',').map(t => t.trim())
+        : [tags];
+      // Match buildings that have ANY of the selected tags
+      filterQuery.tags = { $in: tagsList };
     }
 
     // Filter by status (support both operational_status and status) (multi-select support)
@@ -381,6 +392,27 @@ router.post('/', checkModulePermission('buildings', 'create'), async (req, res) 
       errors.push('Parking spaces must be 0 or greater');
     }
 
+    // Tags validation - Optional array of strings
+    if (req.body.tags) {
+      if (!Array.isArray(req.body.tags)) {
+        errors.push('Tags must be an array');
+      } else {
+        // Validate each tag
+        const invalidTags = req.body.tags.filter(tag =>
+          typeof tag !== 'string' ||
+          tag.trim().length < 2 ||
+          tag.trim().length > 30 ||
+          !/^[a-zA-Z0-9\s\-_]+$/.test(tag.trim())
+        );
+        if (invalidTags.length > 0) {
+          errors.push('Tags must be 2-30 characters and contain only letters, numbers, spaces, hyphens, and underscores');
+        }
+        if (req.body.tags.length > 20) {
+          errors.push('Maximum 20 tags allowed per building');
+        }
+      }
+    }
+
     // Address validation
     if (req.body.address) {
       // Validate postcode format if provided
@@ -461,6 +493,27 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       errors.push('Parking spaces must be 0 or greater');
     }
 
+    // Tags validation - Optional array of strings
+    if (req.body.tags) {
+      if (!Array.isArray(req.body.tags)) {
+        errors.push('Tags must be an array');
+      } else {
+        // Validate each tag
+        const invalidTags = req.body.tags.filter(tag =>
+          typeof tag !== 'string' ||
+          tag.trim().length < 2 ||
+          tag.trim().length > 30 ||
+          !/^[a-zA-Z0-9\s\-_]+$/.test(tag.trim())
+        );
+        if (invalidTags.length > 0) {
+          errors.push('Tags must be 2-30 characters and contain only letters, numbers, spaces, hyphens, and underscores');
+        }
+        if (req.body.tags.length > 20) {
+          errors.push('Maximum 20 tags allowed per building');
+        }
+      }
+    }
+
     // Address validation
     if (req.body.address) {
       // Validate postcode format if provided
@@ -534,7 +587,7 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       'building_type', 'operational_status', 'status', 'is_active', 'address', 'coordinates',
       'total_floors', 'total_area', 'year_built', 'contact_info', 'number_of_floors',
       'nabers_rating', 'primary_use', 'last_inspection_date', 'accessibility_features',
-      'parking_spaces', 'latitude', 'longitude', 'manager', 'metadata'];
+      'parking_spaces', 'latitude', 'longitude', 'manager', 'metadata', 'tags'];
     const atomicUpdate = {};
     Object.keys(updateData).forEach(key => {
       if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {

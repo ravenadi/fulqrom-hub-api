@@ -5,7 +5,7 @@ const PermissionSchema = new mongoose.Schema({
   entity: {
     type: String,
     required: true,
-    enum: [ 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'organisations', 'notifications'],
+    enum: [ 'sites', 'buildings', 'floors', 'tenants', 'documents', 'assets', 'vendors', 'customers', 'users', 'organisations', 'notifications', 'analytics', 'audit_logs'],
     trim: true
   },
   view: {
@@ -98,7 +98,8 @@ RoleSchema.statics.getPredefinedRoles = function() {
         { entity: 'vendors', view: true, create: true, edit: true, delete: true },
         { entity: 'customers', view: true, create: true, edit: true, delete: true },
         { entity: 'users', view: true, create: true, edit: true, delete: true },
-        { entity: 'analytics', view: true, create: true, edit: true, delete: true }
+        { entity: 'analytics', view: true, create: true, edit: true, delete: true },
+        { entity: 'audit_logs', view: true, create: false, edit: false, delete: false }
       ]
     },
     {
@@ -114,7 +115,8 @@ RoleSchema.statics.getPredefinedRoles = function() {
         { entity: 'vendors', view: true, create: true, edit: true, delete: true },
         { entity: 'customers', view: true, create: true, edit: true, delete: true },
         { entity: 'users', view: true, create: true, edit: true, delete: true },
-        { entity: 'analytics', view: true, create: true, edit: true, delete: true }
+        { entity: 'analytics', view: true, create: true, edit: true, delete: true },
+        { entity: 'audit_logs', view: true, create: false, edit: false, delete: false }
       ]
     },
     {
@@ -130,7 +132,8 @@ RoleSchema.statics.getPredefinedRoles = function() {
         { entity: 'vendors', view: true, create: true, edit: true, delete: true },
         { entity: 'customers', view: false, create: false, edit: false, delete: false },
         { entity: 'users', view: true, create: true, edit: true, delete: true },
-        { entity: 'analytics', view: true, create: true, edit: false, delete: false }
+        { entity: 'analytics', view: true, create: true, edit: false, delete: false },
+        { entity: 'audit_logs', view: false, create: false, edit: false, delete: false }
       ]
     },
     {
@@ -146,7 +149,8 @@ RoleSchema.statics.getPredefinedRoles = function() {
         { entity: 'vendors', view: false, create: false, edit: false, delete: false },
         { entity: 'customers', view: false, create: false, edit: false, delete: false },
         { entity: 'users', view: false, create: false, edit: false, delete: false },
-        { entity: 'analytics', view: false, create: false, edit: false, delete: false }
+        { entity: 'analytics', view: false, create: false, edit: false, delete: false },
+        { entity: 'audit_logs', view: false, create: false, edit: false, delete: false }
       ]
     },
     {
@@ -162,7 +166,8 @@ RoleSchema.statics.getPredefinedRoles = function() {
         { entity: 'vendors', view: false, create: false, edit: false, delete: false },
         { entity: 'customers', view: false, create: false, edit: false, delete: false },
         { entity: 'users', view: false, create: false, edit: false, delete: false },
-        { entity: 'analytics', view: true, create: false, edit: false, delete: false }
+        { entity: 'analytics', view: true, create: false, edit: false, delete: false },
+        { entity: 'audit_logs', view: false, create: false, edit: false, delete: false }
       ]
     }
   ];

@@ -6,6 +6,10 @@
 // Public routes that bypass authentication
 const PUBLIC_ROUTES = ['/auth', '/health', '/admin'];
 
+// Routes accessible to all authenticated users (no specific permission required)
+// These routes require authentication but bypass role/permission checks
+const AUTHENTICATED_ONLY_ROUTES = ['dropdowns', 'notifications'];
+
 // Module mapping: URL path -> module name for permission checking
 const MODULE_MAP = {
   'customers': 'customers',
@@ -19,11 +23,8 @@ const MODULE_MAP = {
   'vendors': 'vendors',
   'users': 'users',
   'roles': 'users', // roles are managed by users with user permissions
-  'notifications': 'users', // notifications are user-related
   'analytics': 'analytics',
-  'hierarchy': 'customers', // hierarchy is customer-related
-  'dropdowns': 'tenants', // dropdowns are tenant-related (view permission)
-  'audit-logs': 'users' // audit logs are user-related (typically requires admin/view permissions)
+  'hierarchy': 'customers' // hierarchy is customer-related
 };
 
 // HTTP method to permission mapping
@@ -43,6 +44,17 @@ const METHOD_PERMISSION_MAP = {
  */
 const isPublicRoute = (path) => {
   return PUBLIC_ROUTES.some(publicRoute => path.startsWith(publicRoute));
+};
+
+/**
+ * Check if a route is authenticated-only (requires authentication but no specific permission)
+ * @param {string} path - Request path
+ * @returns {boolean}
+ */
+const isAuthenticatedOnlyRoute = (path) => {
+  const pathSegments = path.split('/').filter(segment => segment);
+  const moduleName = pathSegments[0];
+  return AUTHENTICATED_ONLY_ROUTES.includes(moduleName);
 };
 
 /**
@@ -67,9 +79,11 @@ const getPermissionFromMethod = (method) => {
 
 module.exports = {
   PUBLIC_ROUTES,
+  AUTHENTICATED_ONLY_ROUTES,
   MODULE_MAP,
   METHOD_PERMISSION_MAP,
   isPublicRoute,
+  isAuthenticatedOnlyRoute,
   getModuleFromPath,
   getPermissionFromMethod
 };

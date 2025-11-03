@@ -12,6 +12,7 @@
 const { checkModulePermission } = require('./checkPermission');
 const {
   isPublicRoute,
+  isAuthenticatedOnlyRoute,
   getModuleFromPath,
   getPermissionFromMethod
 } = require('../config/middleware.config');
@@ -35,6 +36,14 @@ const authorize = (req, res, next) => {
       message: 'Authentication required. Please log in.',
       code: 'UNAUTHORIZED'
     });
+  }
+
+  // Allow authenticated-only routes (dropdowns, notifications, audit-logs) without permission checks
+  if (isAuthenticatedOnlyRoute(req.path)) {
+    if (process.env.DEBUG_LOGS === 'true' && process.env.NODE_ENV === 'development') {
+      console.log(`✅ Authenticated-only route allowed: ${req.method} ${req.path}`);
+    }
+    return next();
   }
 
   // Get module name from path
