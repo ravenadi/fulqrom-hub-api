@@ -98,29 +98,16 @@ router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => re
     }
 
     // Get counts - also scoped by tenant
-    // Use snapshot read concern for consistent statistics (prevents dirty reads)
-    const mongoose = require('mongoose');
-    const session = await mongoose.startSession();
-    
     try {
-      // Use read concern snapshot for consistent statistics
       const [siteCount, buildingCount, assetCount, documentCount] = await Promise.all([
         Site.countDocuments({ customer_id: customerId })
-          .setOptions({ _tenantId: req.tenant.tenantId })
-          .session(session)
-          .readConcern('snapshot'),
+          .setOptions({ _tenantId: req.tenant.tenantId }),
         Building.countDocuments({ customer_id: customerId })
-          .setOptions({ _tenantId: req.tenant.tenantId })
-          .session(session)
-          .readConcern('snapshot'),
+          .setOptions({ _tenantId: req.tenant.tenantId }),
         Asset.countDocuments({ customer_id: customerId })
-          .setOptions({ _tenantId: req.tenant.tenantId })
-          .session(session)
-          .readConcern('snapshot'),
+          .setOptions({ _tenantId: req.tenant.tenantId }),
         Document.countDocuments({ 'customer.customer_id': customerId })
           .setOptions({ _tenantId: req.tenant.tenantId })
-          .session(session)
-          .readConcern('snapshot')
       ]);
       
       const stats = {
@@ -139,7 +126,7 @@ router.get('/:id/stats', checkResourcePermission('customer', 'view', (req) => re
         }
       });
     } catch (error) {
-      await session.endSession();
+
       res.status(500).json({
         success: false,
         message: 'Error fetching customer statistics',
@@ -318,26 +305,62 @@ router.get('/:id/documents', checkResourcePermission('customer', 'view', (req) =
     const sortObj = buildSort(sort, order);
 
     // Execute queries in parallel with snapshot isolation for consistent reads
+    // Fall back to regular queries if MongoDB is not configured as a replica set
     const mongoose = require('mongoose');
-    const session = await mongoose.startSession();
+    
+    let documents, totalDocuments;
+    let session = null;
     
     try {
-      const [documents, totalDocuments] = await Promise.all([
-        Document.find(filterQuery)
-          .setOptions({ _tenantId: req.tenant.tenantId })
-          .session(session)
-          .readConcern('snapshot')
-          .sort(sortObj)
-          .skip(pagination.skip)
-          .limit(pagination.limitNum)
-          .lean()
-          .exec(),
-        Document.countDocuments(filterQuery)
-          .setOptions({ _tenantId: req.tenant.tenantId })
-          .session(session)
-          .readConcern('snapshot')
-          .exec()
-      ]);
+      // Try using read concern snapshot for consistent statistics (requires replica set)
+      session = await mongoose.startSession();
+      
+      try {
+        [documents, totalDocuments] = await Promise.all([
+          Document.find(filterQuery)
+            .setOptions({ _tenantId: req.tenant.tenantId })
+            .session(session)
+            .readConcern('snapshot')
+            .sort(sortObj)
+            .skip(pagination.skip)
+            .limit(pagination.limitNum)
+            .lean()
+            .exec(),
+          Document.countDocuments(filterQuery)
+            .setOptions({ _tenantId: req.tenant.tenantId })
+            .session(session)
+            .readConcern('snapshot')
+            .exec()
+        ]);
+        
+        // Successfully used snapshot - end session
+        await session.endSession();
+        session = null;
+      } catch (snapshotError) {
+        // End session before retrying without it
+        await session.endSession();
+        session = null;
+        
+        // If snapshot read concern fails (e.g., not a replica set), fall back to regular queries
+        if (snapshotError.message && snapshotError.message.includes('replica set')) {
+          // Retry without readConcern and without session
+          [documents, totalDocuments] = await Promise.all([
+            Document.find(filterQuery)
+              .setOptions({ _tenantId: req.tenant.tenantId })
+              .sort(sortObj)
+              .skip(pagination.skip)
+              .limit(pagination.limitNum)
+              .lean()
+              .exec(),
+            Document.countDocuments(filterQuery)
+              .setOptions({ _tenantId: req.tenant.tenantId })
+              .exec()
+          ]);
+        } else {
+          // If it's a different error, rethrow it
+          throw snapshotError;
+        }
+      }
       
       // Batch populate entity names for all documents
       const documentsWithNames = await batchFetchEntityNames(documents, req.tenant.tenantId);
@@ -365,7 +388,14 @@ router.get('/:id/documents', checkResourcePermission('customer', 'view', (req) =
 
       res.status(200).json(response);
     } catch (error) {
-      await session.endSession();
+      // Ensure session is ended in case of any error
+      if (session) {
+        try {
+          await session.endSession();
+        } catch (sessionError) {
+          // Ignore session cleanup errors
+        }
+      }
       handleError(error, res, 'fetching customer documents');
     }
   } catch (error) {

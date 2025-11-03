@@ -116,12 +116,13 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
     // - Use sameSite='none' to allow cookies across subdomains
     // - Requires secure=true (HTTPS only)
     // - domain must be set to .ravenlabs.biz (with leading dot)
+    // For local development (HTTP), use sameSite='lax' instead (sameSite='none' requires HTTPS)
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: 'none', // Required for cross-subdomain cookies
+      sameSite: COOKIE_SECURE ? 'none' : 'lax', // 'none' for production (HTTPS), 'lax' for development (HTTP)
       maxAge: ttl * 1000,
-      domain: COOKIE_DOMAIN,
+      ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }), // Only set domain if explicitly configured
       path: '/'
     };
 
@@ -172,26 +173,35 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
  */
 router.post('/refresh', authenticateSession, async (req, res) => {
   try {
-    const currentSession = req.session;
+    const sessionId = req.user.session_id;
 
-    // Extend session expiry
+    // Extend session expiry using atomic update to avoid parallel save conflicts
     const ttl = SESSION_TTL;
-    currentSession.expires_at = new Date(Date.now() + ttl * 1000);
-    currentSession.last_activity = new Date();
-    await currentSession.save();
+    const expiresAt = new Date(Date.now() + ttl * 1000);
+
+    await UserSession.findOneAndUpdate(
+      { session_id: sessionId },
+      {
+        $set: {
+          expires_at: expiresAt,
+          last_activity: new Date()
+        }
+      },
+      { new: false } // Don't return the updated document
+    );
 
     // Refresh cookies (same session ID, same CSRF for simplicity)
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: 'none', // Required for cross-subdomain cookies
+      sameSite: COOKIE_SECURE ? 'none' : 'lax', // 'none' for production (HTTPS), 'lax' for development (HTTP)
       maxAge: ttl * 1000,
-      domain: COOKIE_DOMAIN,
+      ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }), // Only set domain if explicitly configured
       path: '/'
     };
 
-    res.cookie('sid', currentSession.session_id, cookieOptions);
-    res.cookie('csrf', currentSession.csrf_token, {
+    res.cookie('sid', sessionId, cookieOptions);
+    res.cookie('csrf', req.session.csrf_token, {
       ...cookieOptions,
       httpOnly: false
     });
@@ -202,7 +212,7 @@ router.post('/refresh', authenticateSession, async (req, res) => {
       success: true,
       message: 'Session refreshed',
       data: {
-        expires_at: currentSession.expires_at
+        expires_at: expiresAt
       }
     });
 
@@ -224,26 +234,35 @@ router.post('/refresh', authenticateSession, async (req, res) => {
  */
 router.get('/refresh-session', authenticateSession, async (req, res) => {
   try {
-    const currentSession = req.session;
+    const sessionId = req.user.session_id;
 
-    // Extend session expiry
+    // Extend session expiry using atomic update to avoid parallel save conflicts
     const ttl = SESSION_TTL;
-    currentSession.expires_at = new Date(Date.now() + ttl * 1000);
-    currentSession.last_activity = new Date();
-    await currentSession.save();
+    const expiresAt = new Date(Date.now() + ttl * 1000);
+
+    await UserSession.findOneAndUpdate(
+      { session_id: sessionId },
+      {
+        $set: {
+          expires_at: expiresAt,
+          last_activity: new Date()
+        }
+      },
+      { new: false } // Don't return the updated document
+    );
 
     // Refresh cookies
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: 'none', // Required for cross-subdomain cookies
+      sameSite: COOKIE_SECURE ? 'none' : 'lax', // 'none' for production (HTTPS), 'lax' for development (HTTP)
       maxAge: ttl * 1000,
-      domain: COOKIE_DOMAIN,
+      ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }), // Only set domain if explicitly configured
       path: '/'
     };
 
-    res.cookie('sid', currentSession.session_id, cookieOptions);
-    res.cookie('csrf', currentSession.csrf_token, {
+    res.cookie('sid', sessionId, cookieOptions);
+    res.cookie('csrf', req.session.csrf_token, {
       ...cookieOptions,
       httpOnly: false
     });
@@ -270,7 +289,7 @@ router.get('/refresh-session', authenticateSession, async (req, res) => {
         engineering_disciplines: user.engineering_disciplines
       } : null,
       data: {
-        expires_at: currentSession.expires_at
+        expires_at: expiresAt
       }
     });
 
@@ -312,8 +331,8 @@ router.post('/logout', async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: COOKIE_SECURE,
-      sameSite: 'none', // Must match the sameSite used when setting cookies
-      domain: COOKIE_DOMAIN,
+      sameSite: COOKIE_SECURE ? 'none' : 'lax', // Must match the sameSite used when setting cookies
+      ...(COOKIE_DOMAIN && { domain: COOKIE_DOMAIN }), // Only set domain if explicitly configured
       path: '/'
     };
 
