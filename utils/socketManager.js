@@ -8,6 +8,8 @@
  */
 
 const { Server: SocketIOServer } = require('socket.io');
+const { auth } = require('express-oauth2-jwt-bearer');
+const User = require('../models/User');
 
 let io = null;
 
@@ -51,33 +53,93 @@ function initializeSocketIO(httpServer) {
           }
         }
       },
-      credentials: true,
       methods: ['GET', 'POST']
     },
     transports: ['websocket'],
     allowEIO3: true // Allow Engine.IO v3 clients
   });
 
+  // Authenticate Socket.IO connections using Bearer tokens
+  io.use(async (socket, next) => {
+    try {
+      const token = socket.handshake.auth.token;
+      
+      if (!token) {
+        console.warn(`⚠️ Socket authentication failed: No token provided for ${socket.id}`);
+        return next(new Error('Authentication error: No token provided'));
+      }
+
+      // Validate JWT token using express-oauth2-jwt-bearer
+      const jwtCheck = auth({
+        audience: process.env.AUTH0_AUDIENCE || process.env.AUTH0_CLIENT_ID,
+        issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
+        tokenSigningAlg: 'RS256',
+        strictAudience: false,
+        credentialsRequired: true
+      });
+
+      // Create a mock request object for the JWT check
+      const mockReq = {
+        get: (header) => {
+          if (header.toLowerCase() === 'authorization') {
+            return `Bearer ${token}`;
+          }
+          return undefined;
+        },
+        auth: {}
+      };
+      const mockRes = {
+        status: (code) => ({
+          json: (data) => {
+            if (code === 401) {
+              throw new Error(data.message || 'Authentication failed');
+            }
+          }
+        })
+      };
+
+      // Validate JWT
+      await new Promise((resolve, reject) => {
+        jwtCheck(mockReq, mockRes, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      // Extract user info from token
+      const payload = mockReq.auth?.payload || mockReq.auth;
+      const auth0UserId = payload.sub;
+
+      // Find user in database
+      const user = await User.findOne({ auth0_id: auth0UserId })
+        .populate('role_ids', 'name description permissions');
+
+      if (!user) {
+        console.warn(`⚠️ Socket authentication failed: User not found for ${auth0UserId}`);
+        return next(new Error('Authentication error: User not found'));
+      }
+
+      // Attach user info to socket
+      socket.userId = user._id.toString();
+      socket.user = {
+        id: user._id.toString(),
+        email: user.email,
+        full_name: user.full_name
+      };
+
+      console.log(`✅ Socket authenticated: ${socket.id} for user ${user.email} (${user._id})`);
+      next();
+    } catch (error) {
+      console.error(`❌ Socket authentication error for ${socket.id}:`, error.message);
+      next(new Error('Authentication error'));
+    }
+  });
+
   // Connection handler
   io.on('connection', (socket) => {
-    console.log(`🔌 Socket.IO client connected: ${socket.id}`);
-
-    // Handle session authentication
-    socket.on('authenticate', (data) => {
-      const { sessionId, userId } = data;
-
-      if (sessionId && userId) {
-        // Join room for this user
-        socket.join(`user:${userId}`);
-        console.log(`✅ Socket authenticated: ${socket.id} for user ${userId} (session: ${sessionId})`);
-
-        // Store session info on socket
-        socket.sessionId = sessionId;
-        socket.userId = userId;
-      } else {
-        console.warn(`⚠️  Socket authentication failed: ${socket.id}`);
-      }
-    });
+    // Join room for this user
+    socket.join(`user:${socket.userId}`);
+    console.log(`🔌 Socket.IO client connected: ${socket.id} for user ${socket.user.email}`);
 
     // Handle disconnection
     socket.on('disconnect', (reason) => {
@@ -107,10 +169,9 @@ function getIO() {
 /**
  * Emit session invalidation event to user
  * @param {String} userId - MongoDB ObjectId as string
- * @param {String} currentSessionId - Current valid session ID (to preserve)
  * @param {String} reason - Invalidation reason
  */
-function emitSessionInvalidation(userId, currentSessionId, reason = 'new_session') {
+function emitSessionInvalidation(userId, reason = 'new_session') {
   if (!io) {
     console.warn('⚠️  Socket.IO not initialized, skipping real-time notification');
     return;
@@ -128,29 +189,23 @@ function emitSessionInvalidation(userId, currentSessionId, reason = 'new_session
 
   let invalidatedCount = 0;
 
-  // Emit to sockets with DIFFERENT session IDs
+  // Emit to all sockets for this user
   socketsInRoom.forEach((socketId) => {
     const socket = io.sockets.sockets.get(socketId);
 
     if (socket) {
-      // Only invalidate sockets with different session IDs
-      // This preserves all tabs/windows with the same session cookie
-      if (!currentSessionId || socket.sessionId !== currentSessionId) {
-        socket.emit('session:invalidated', {
-          reason,
-          message: reason === 'new_session'
-            ? 'You have been logged out because a new login was detected from another device.'
-            : 'Your session has been invalidated.'
-        });
-        invalidatedCount++;
-        console.log(`📡 Invalidated socket ${socketId} (session: ${socket.sessionId})`);
-      } else {
-        console.log(`✅ Preserved socket ${socketId} (same session: ${socket.sessionId})`);
-      }
+      socket.emit('session:invalidated', {
+        reason,
+        message: reason === 'new_session'
+          ? 'You have been logged out because a new login was detected from another device.'
+          : 'Your session has been invalidated.'
+      });
+      invalidatedCount++;
+      console.log(`📡 Invalidated socket ${socketId} for user ${userId}`);
     }
   });
 
-  console.log(`📡 Emitted session invalidation to ${invalidatedCount} socket(s) in room ${roomName} (preserved session: ${currentSessionId})`);
+  console.log(`📡 Emitted session invalidation to ${invalidatedCount} socket(s) in room ${roomName}`);
 }
 
 /**

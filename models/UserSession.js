@@ -193,7 +193,7 @@ UserSessionSchema.statics.invalidateAllForUser = async function(userId, reason =
   // Emit Socket.IO event to notify all user sessions about invalidation
   if (result.modifiedCount > 0) {
     try {
-      emitSessionInvalidation(userId.toString(), null, reason);
+      emitSessionInvalidation(userId.toString(), reason);
     } catch (socketError) {
       console.warn('⚠️  Failed to emit session invalidation via Socket.IO:', socketError.message);
       // Don't fail if Socket.IO fails
@@ -261,7 +261,7 @@ UserSessionSchema.statics.createSession = async function(userData, options = {})
       
       // Emit Socket.IO event to notify all user sessions about invalidation
       try {
-        emitSessionInvalidation(userData.user_id.toString(), sessionId, 'new_session');
+        emitSessionInvalidation(userData.user_id.toString(), 'new_session');
       } catch (socketError) {
         console.warn('⚠️  Failed to emit session invalidation via Socket.IO:', socketError.message);
         // Don't fail session creation if Socket.IO fails
