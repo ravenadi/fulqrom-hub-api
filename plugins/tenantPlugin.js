@@ -68,21 +68,15 @@ function tenantPlugin(schema, options = {}) {
    */
   const preFindMiddleware = function(next) {
     const query = this.getQuery();
-    const modelName = this.model?.modelName;
-
-    // DEBUG: Log every query attempt
-    console.log(`🔍 [TENANT-PLUGIN] ${modelName} query | getTenant()=${getTenant()} | options._tenantId=${this.getOptions()._tenantId}`);
 
     // Skip if tenant_id is already explicitly in the query
     if (query.tenant_id) {
-      console.log(`✅ [TENANT-PLUGIN] ${modelName} | tenant_id already in query: ${query.tenant_id}`);
       return next();
     }
 
     // Check if this is a super admin cross-tenant query
     const options = this.getOptions();
     if (options.skipTenantFilter === true) {
-      console.log(`✅ [TENANT-PLUGIN] ${modelName} | Skipping tenant filter (super admin cross-tenant)`);
       return next();
     }
 
@@ -90,20 +84,13 @@ function tenantPlugin(schema, options = {}) {
     const tenantId = getTenant() || options._tenantId;
 
     if (!tenantId) {
-      console.error(`❌ [TENANT-PLUGIN] ${modelName} | NO TENANT CONTEXT | ENV=${process.env.NODE_ENV}`);
       // SECURITY: Enforce tenant filtering in ALL environments
-      const error = new Error(`Tenant context required for ${modelName} queries. This is a security requirement.`);
+      const error = new Error('Tenant context required for database queries. This is a security requirement.');
       error.code = 'TENANT_CONTEXT_MISSING';
-      console.error('❌ SECURITY: Query without tenant context blocked', {
-        operation: 'find',
-        model: modelName,
-        query: query
-      });
       return next(error);
     }
 
     // Add tenant_id to the query
-    console.log(`✅ [TENANT-PLUGIN] ${modelName} | Adding tenant filter: ${tenantId}`);
     this.where({ tenant_id: tenantId });
     next();
   };
@@ -121,20 +108,15 @@ function tenantPlugin(schema, options = {}) {
    */
   const preUpdateMiddleware = function(next) {
     const query = this.getQuery();
-    const modelName = this.model?.modelName;
-
-    console.log(`🔍 [TENANT-PLUGIN] ${modelName} UPDATE | getTenant()=${getTenant()} | options._tenantId=${this.getOptions()._tenantId}`);
 
     // Skip if tenant_id already in query
     if (query.tenant_id) {
-      console.log(`✅ [TENANT-PLUGIN] ${modelName} UPDATE | tenant_id already in query: ${query.tenant_id}`);
       return next();
     }
 
     // Check if this is a super admin cross-tenant query
     const options = this.getOptions();
     if (options.skipTenantFilter === true) {
-      console.log(`✅ [TENANT-PLUGIN] ${modelName} UPDATE | Skipping tenant filter (super admin cross-tenant)`);
       return next();
     }
 
@@ -142,15 +124,13 @@ function tenantPlugin(schema, options = {}) {
     const tenantId = getTenant() || options._tenantId;
 
     if (!tenantId) {
-      console.error(`❌ [TENANT-PLUGIN] ${modelName} UPDATE | NO TENANT CONTEXT`);
       // SECURITY: Enforce tenant filtering in all environments
-      const error = new Error(`Tenant context required for ${modelName} updates. This is a security requirement.`);
+      const error = new Error('Tenant context required for database updates. This is a security requirement.');
       error.code = 'TENANT_CONTEXT_MISSING';
       return next(error);
     }
 
     // Add tenant_id to the update filter
-    console.log(`✅ [TENANT-PLUGIN] ${modelName} UPDATE | Adding tenant filter: ${tenantId}`);
     this.where({ tenant_id: tenantId });
     next();
   };
@@ -165,20 +145,15 @@ function tenantPlugin(schema, options = {}) {
    */
   const preDeleteMiddleware = function(next) {
     const query = this.getQuery();
-    const modelName = this.model?.modelName;
-
-    console.log(`🔍 [TENANT-PLUGIN] ${modelName} DELETE | getTenant()=${getTenant()} | options._tenantId=${this.getOptions()._tenantId}`);
 
     // Skip if tenant_id already in query
     if (query.tenant_id) {
-      console.log(`✅ [TENANT-PLUGIN] ${modelName} DELETE | tenant_id already in query: ${query.tenant_id}`);
       return next();
     }
 
     // Check if this is a super admin cross-tenant query
     const options = this.getOptions();
     if (options.skipTenantFilter === true) {
-      console.log(`✅ [TENANT-PLUGIN] ${modelName} DELETE | Skipping tenant filter (super admin cross-tenant)`);
       return next();
     }
 
@@ -186,15 +161,13 @@ function tenantPlugin(schema, options = {}) {
     const tenantId = getTenant() || options._tenantId;
 
     if (!tenantId) {
-      console.error(`❌ [TENANT-PLUGIN] ${modelName} DELETE | NO TENANT CONTEXT`);
       // SECURITY: Enforce tenant filtering in all environments
-      const error = new Error(`Tenant context required for ${modelName} deletes. This is a security requirement.`);
+      const error = new Error('Tenant context required for database deletes. This is a security requirement.');
       error.code = 'TENANT_CONTEXT_MISSING';
       return next(error);
     }
 
     // Add tenant_id to the delete filter
-    console.log(`✅ [TENANT-PLUGIN] ${modelName} DELETE | Adding tenant filter: ${tenantId}`);
     this.where({ tenant_id: tenantId });
     next();
   };
@@ -222,10 +195,6 @@ function tenantPlugin(schema, options = {}) {
         if (process.env.NODE_ENV === 'production' && required) {
           const error = new Error('Tenant context missing for save. Cannot create document without tenant.');
           error.code = 'TENANT_CONTEXT_MISSING';
-          console.error('❌ SECURITY: Save without tenant context blocked', {
-            operation: 'save',
-            model: this.constructor.modelName
-          });
           return next(error);
         }
         

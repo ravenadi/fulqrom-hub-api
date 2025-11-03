@@ -434,7 +434,6 @@
 - Settings update race conditions
 - User update version checks
 - Notification bulk updates
-- Statistics snapshot isolation
 
 **2.2 Code Duplication Cleanup**
 

@@ -47,14 +47,9 @@ const fetchUserById = async (userId) => {
  */
 async function tenantContext(req, res, next) {
   try {
-    console.log(`\n🔍 [TENANT-CONTEXT] ========== START ==========`);
-    console.log(`🔍 [TENANT-CONTEXT] Processing: ${req.method} ${req.path}`);
-    console.log(`🔍 [TENANT-CONTEXT] Full URL: ${req.originalUrl}`);
-
     // Skip tenant resolution for routes that don't require it
     // (e.g., health checks, public endpoints, admin routes)
     if (req.path === '/health' || req.path === '/') {
-      console.log(`⏭️  [TENANT-CONTEXT] Skipping health/root`);
       return next();
     }
 
@@ -62,7 +57,6 @@ async function tenantContext(req, res, next) {
     // req.path at this middleware level starts with /admin (since /api is stripped by router)
     // IMPORTANT: Only skip routes that START with /admin/ (with trailing slash) or are exactly /admin
     if (req.path === '/admin' || req.path.startsWith('/admin/')) {
-      console.log('✅ [TENANT-CONTEXT] Skipping super admin route:', req.path);
       return next();
     }
 
@@ -70,17 +64,14 @@ async function tenantContext(req, res, next) {
     if (!req.user || (!req.user.userId && !req.user.id)) {
       // If no authenticated user, skip tenant resolution
       // (authentication middleware will handle auth errors)
-      console.log('⚠️ [TENANT-CONTEXT] No authenticated user, skipping');
       return next();
     }
 
     const userId = req.user.userId || req.user.id;
-    console.log(`👤 [TENANT-CONTEXT] User ID: ${userId}`);
 
     // Check if this is a super admin user
     // Super admins can bypass tenant context or switch tenants via query param
     const isSuperAdmin = req.user.is_super_admin || req.user.isSuperAdmin || false;
-    console.log(`🔐 [TENANT-CONTEXT] Is super admin: ${isSuperAdmin}`);
 
     // Super admin handling
     if (isSuperAdmin) {
@@ -89,7 +80,6 @@ async function tenantContext(req, res, next) {
 
       // Super admin accessing admin routes without tenant_id = cross-tenant access (all data)
       if (!tenantIdParam && isAdminRoute) {
-        console.log('✅ [TENANT-CONTEXT] Super admin accessing admin route without tenant filter - allowing cross-tenant access');
         req.tenant = {
           tenantId: null,
           isSuperAdmin: true,
@@ -100,8 +90,6 @@ async function tenantContext(req, res, next) {
 
       // Super admin with tenant_id query param = filter by that tenant
       if (tenantIdParam) {
-        console.log('✅ [TENANT-CONTEXT] Super admin filtering by tenant:', tenantIdParam);
-        
         // Validate tenant exists
         const tenant = await Tenant.findById(tenantIdParam).populate('plan_id', 'plan_name description');
         if (!tenant) {
@@ -132,7 +120,6 @@ async function tenantContext(req, res, next) {
 
     // Get user from database to retrieve tenant_id for normal users
     const user = await fetchUserById(userId);
-    console.log(`📝 [TENANT-CONTEXT] User from DB:`, user ? `ID: ${user._id}, tenant_id: ${user.tenant_id}` : 'NOT FOUND');
 
     if (!user) {
       return res.status(404).json({
@@ -143,7 +130,6 @@ async function tenantContext(req, res, next) {
     }
 
     if (!user.tenant_id) {
-      console.log(`❌ [TENANT-CONTEXT] User ${user._id} has NO tenant_id!`);
       return res.status(403).json({
         success: false,
         error: 'NO_TENANT',
@@ -154,7 +140,6 @@ async function tenantContext(req, res, next) {
 
     // Resolve target tenant id for normal users
     let targetTenantId = user.tenant_id;
-    console.log(`✅ [TENANT-CONTEXT] Using tenant_id: ${targetTenantId}`);
 
     // Get tenant
     const tenant = await Tenant.findById(targetTenantId).populate('plan_id', 'plan_name description');
@@ -193,13 +178,7 @@ async function tenantContext(req, res, next) {
       .catch(() => null); // Don't fail if organization doesn't exist
 
     // Set tenant in ALS context for strict tenant isolation
-    const { getStore } = require('../utils/requestContext');
-    const storeBefore = getStore();
-    console.log(`🔍 [TENANT-CTX] Setting tenant ${tenant._id} | ALS store exists: ${!!storeBefore}`);
     setTenant(tenant._id);
-
-    const storeAfter = getStore();
-    console.log(`🔍 [TENANT-CTX] After setTenant | tenantId in store: ${storeAfter?.tenantId}`);
 
 
     // Attach tenant context to request

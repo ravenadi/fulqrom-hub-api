@@ -8,7 +8,6 @@
  */
 
 const { Server: SocketIOServer } = require('socket.io');
-const { auth } = require('express-oauth2-jwt-bearer');
 const User = require('../models/User');
 
 let io = null;
@@ -69,16 +68,10 @@ function initializeSocketIO(httpServer) {
         return next(new Error('Authentication error: No token provided'));
       }
 
-      // Validate JWT token using express-oauth2-jwt-bearer
-      const jwtCheck = auth({
-        audience: process.env.AUTH0_AUDIENCE || process.env.AUTH0_CLIENT_ID,
-        issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
-        tokenSigningAlg: 'RS256',
-        strictAudience: false,
-        credentialsRequired: true
-      });
-
-      // Create a mock request object for the JWT check
+      // Use the same requireAuth middleware used for HTTP requests
+      const { requireAuth } = require('../middleware/auth0');
+      
+      // Create a proper Express-like request object
       const mockReq = {
         get: (header) => {
           if (header.toLowerCase() === 'authorization') {
@@ -86,25 +79,30 @@ function initializeSocketIO(httpServer) {
           }
           return undefined;
         },
-        auth: {}
+        auth: {},
+        headers: {
+          'authorization': `Bearer ${token}`
+        },
+        is: (type) => false  // Mock req.is() for express-oauth2-jwt-bearer
       };
       const mockRes = {
         status: (code) => ({
           json: (data) => {
-            if (code === 401) {
-              throw new Error(data.message || 'Authentication failed');
+            if (code === 401 || code === 403) {
+              const err = new Error(data.message || 'Authentication failed');
+              err.status = code;
+              throw err;
             }
           }
         })
       };
+      const mockNext = (err) => {
+        if (err) throw err;
+      };
 
-      // Validate JWT
-      await new Promise((resolve, reject) => {
-        jwtCheck(mockReq, mockRes, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      // Validate JWT using requireAuth middleware
+      await requireAuth[0](mockReq, mockRes, mockNext);
+      await requireAuth[1](mockReq, mockRes, mockNext);
 
       // Extract user info from token
       const payload = mockReq.auth?.payload || mockReq.auth;
