@@ -126,6 +126,16 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
       path: '/'
     };
 
+    // Debug: Log cookie options
+    console.log('🍪 Setting cookies with options:', {
+      httpOnly: cookieOptions.httpOnly,
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      domain: cookieOptions.domain,
+      maxAge: cookieOptions.maxAge,
+      path: cookieOptions.path
+    });
+
     res.cookie('sid', sessionId, cookieOptions);
     res.cookie('csrf', csrfToken, {
       ...cookieOptions,
@@ -134,6 +144,7 @@ router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
 
     // Log successful login
     console.log(`🔐 User logged in: ${user.email} (session: ${sessionId.substring(0, 8)}...)`);
+    console.log(`🍪 Cookies set: sid=${sessionId.substring(0, 8)}..., csrf=${csrfToken.substring(0, 8)}...`);
 
     // Return user info
     res.status(200).json({
