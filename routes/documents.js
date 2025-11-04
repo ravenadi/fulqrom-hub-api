@@ -46,6 +46,37 @@ const upload = multer({
   }
 });
 
+/**
+ * Wrapper to preserve AsyncLocalStorage context through multer middleware
+ * Multer v2.x breaks ALS context, causing tenant context to be lost
+ * This wrapper captures the ALS store before multer and restores it after
+ *
+ * @param {Function} multerMiddleware - The multer middleware (e.g., upload.single('file'))
+ * @returns {Function} Wrapped middleware that preserves ALS context
+ */
+function preserveALSContext(multerMiddleware) {
+  const { asyncLocalStorage } = require('../utils/requestContext');
+
+  return (req, res, next) => {
+    // Capture the current ALS store before multer processes the request
+    const store = asyncLocalStorage.getStore();
+
+    // Run multer middleware
+    multerMiddleware(req, res, (err) => {
+      if (err) {
+        return next(err);
+      }
+
+      // Restore the ALS context after multer finishes
+      if (store) {
+        asyncLocalStorage.enterWith(store);
+      }
+
+      next();
+    });
+  };
+}
+
 const router = express.Router();
 
 // Helper function to fetch entity names by IDs
@@ -870,7 +901,7 @@ router.get('/:id/preview', validateObjectId, async (req, res) => {
 });
 
 // POST /api/documents - Create new document with file upload
-router.post('/', checkModulePermission('documents', 'create'), upload.single('file'), validateCreateDocument, async (req, res) => {
+router.post('/', checkModulePermission('documents', 'create'), preserveALSContext(upload.single('file')), validateCreateDocument, async (req, res) => {
   try {
     // Verify tenant context exists
     if (!req.tenant || !req.tenant.tenantId) {
@@ -3258,7 +3289,7 @@ function calculateNextVersion(currentVersion) {
 }
 
 // POST /api/documents/:id/versions - Upload new version of document
-router.post('/:id/versions', upload.single('file'), validateObjectId, async (req, res) => {
+router.post('/:id/versions', preserveALSContext(upload.single('file')), validateObjectId, async (req, res) => {
   try {
     const { id } = req.params;
 
