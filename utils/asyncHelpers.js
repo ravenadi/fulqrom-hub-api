@@ -23,9 +23,12 @@ function fireAndForget(asyncCallback, operationName = 'async_operation') {
   return new Promise((resolve) => {
     setImmediate(async () => {
       try {
+        console.log(`🚀 Starting fire-and-forget operation: ${operationName}`);
         await asyncCallback();
+        console.log(`✅ Completed fire-and-forget operation: ${operationName}`);
       } catch (error) {
-        console.error(`Error in fire-and-forget operation "${operationName}":`, error);
+        console.error(`❌ Error in fire-and-forget operation "${operationName}":`, error.message);
+        console.error(`Stack trace:`, error.stack);
         // Don't throw - this is fire and forget
       }
     });

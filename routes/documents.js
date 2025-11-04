@@ -1741,8 +1741,30 @@ router.put('/:id', checkModulePermission('documents', 'edit'), requireIfMatch, v
         const userId = req.user?.userId || req.user?.sub || 'unknown';
         const userName = req.user?.name || req.user?.email || 'Unknown User';
 
-        // Check if status changed
-        if (oldDocument && document.status && oldDocument.status !== document.status) {
+        // Check if main document status changed
+        const mainStatusChanged = oldDocument && document.status && oldDocument.status !== document.status;
+
+        // Check if approval status changed
+        const approvalStatusChanged = oldDocument?.approval_config?.status !== document?.approval_config?.status;
+
+        console.log('🔍 Status change detection:', {
+          mainStatus: { old: oldDocument?.status, new: document.status, changed: mainStatusChanged },
+          approvalStatus: { old: oldDocument?.approval_config?.status, new: document?.approval_config?.status, changed: approvalStatusChanged }
+        });
+
+        // Send notification if either status changed
+        if (mainStatusChanged || approvalStatusChanged) {
+          const oldStatus = mainStatusChanged ? oldDocument.status : oldDocument?.approval_config?.status;
+          const newStatus = mainStatusChanged ? document.status : document?.approval_config?.status;
+          const statusType = mainStatusChanged ? 'main status' : 'approval status';
+
+          console.log(`📝 Document ${statusType} changed:`, {
+            oldStatus,
+            newStatus,
+            documentId: document._id,
+            tenantId: document.tenant_id
+          });
+
           const recipients = [];
 
           // Add document creator
@@ -1770,40 +1792,52 @@ router.put('/:id', checkModulePermission('documents', 'edit'), requireIfMatch, v
             index === self.findIndex(r => r.user_email === recipient.user_email)
           );
 
+          console.log('📬 Status change notification recipients:', {
+            count: uniqueRecipients.length,
+            emails: uniqueRecipients.map(r => r.user_email)
+          });
+
           if (uniqueRecipients.length > 0) {
+            console.log(`✅ Sending ${statusType} change notification to ${uniqueRecipients.length} recipients...`);
             // Non-blocking: Send notifications after response
             sendNotificationAsync(
               () => notificationService.notifyDocumentStatusChanged(
                 document,
-                oldDocument.status,
-                document.status,
+                oldStatus,
+                newStatus,
                 uniqueRecipients,
                 {
                   user_id: userId,
                   user_name: userName,
                   user_email: req.user?.email || userId
-                }
+                },
+                document.tenant_id  // ✅ ADD tenant_id for multi-tenancy
               ),
               'document_status_changed'
             );
+          } else {
+            console.log(`ℹ️  No recipients for ${statusType} change notification`);
           }
+        } else {
+          console.log('ℹ️  No status changes detected');
         }
 
-        // Check if approvers changed
-        const oldApprovers = oldDocument?.approval_config?.approvers || [];
-        const newApprovers = document?.approval_config?.approvers || [];
+        // Send notification to ALL approvers (not just new ones)
+        const allApprovers = document?.approval_config?.approvers || [];
 
-        // Find new approvers (those in new but not in old)
-        const addedApprovers = newApprovers.filter(newApprover =>
-          !oldApprovers.some(oldApprover => oldApprover.user_email === newApprover.user_email)
-        );
+        console.log('📋 Notifying all approvers:', {
+          approversCount: allApprovers.length,
+          emails: allApprovers.map(a => a.user_email),
+          tenantId: document.tenant_id
+        });
 
-        if (addedApprovers.length > 0) {
+        if (allApprovers.length > 0) {
+          console.log('✅ Sending notification to all approvers...');
           // Non-blocking: Send notifications after response
           sendNotificationAsync(
             () => notificationService.notifyDocumentApproversAssigned(
               document,
-              addedApprovers.map(approver => ({
+              allApprovers.map(approver => ({
                 user_id: approver.user_id,
                 user_email: approver.user_email
               })),
@@ -1811,13 +1845,17 @@ router.put('/:id', checkModulePermission('documents', 'edit'), requireIfMatch, v
                 user_id: userId,
                 user_name: userName,
                 user_email: req.user?.email || userId
-              }
+              },
+              document.tenant_id  // ✅ ADD tenant_id for multi-tenancy
             ),
             'document_approvers_assigned'
           );
+        } else {
+          console.log('ℹ️  No approvers to notify');
         }
       } catch (notifError) {
-        console.error('Failed to send document update notifications:', notifError);
+        console.error('❌ Failed to send document update notifications:', notifError);
+        console.error('Error details:', notifError.stack);
       }
     });
 
@@ -2753,7 +2791,8 @@ router.put('/:id/approve', validateObjectId, validateApprove, requireIfMatch, as
                 user_id: approved_by,
                 user_name: approved_by_name || approved_by,
                 user_email: approved_by_name || approved_by
-              }
+              },
+              result.tenant_id  // ✅ ADD tenant_id for multi-tenancy
             ),
             'document_approved'
           );
@@ -2982,7 +3021,8 @@ router.put('/:id/reject', validateObjectId, validateReject, requireIfMatch, asyn
                 user_id: rejected_by,
                 user_name: rejected_by_name || rejected_by,
                 user_email: rejected_by_name || rejected_by
-              }
+              },
+              result.tenant_id  // ✅ ADD tenant_id for multi-tenancy
             ),
             'document_rejected'
           );
@@ -3620,7 +3660,8 @@ router.post('/:id/versions', preserveALSContext(upload.single('file')), validate
               user_id: uploadedBy.user_id,
               user_name: uploadedBy.user_name || uploadedBy.email || 'Unknown',
               user_email: uploadedBy.email
-            }
+            },
+            currentDocument.tenant_id  // ✅ ADD tenant_id for multi-tenancy
           ),
           'document_version_uploaded'
         );
@@ -4381,9 +4422,7 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
       comment,
       user_id,
       user_name,
-      user_email,
-      send_notification,
-      notify_recipients
+      user_email
     } = req.body;
 
     // Validation
@@ -4417,6 +4456,7 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
     // Create comment
     const documentComment = new DocumentComment({
       document_id: id,
+      tenant_id: document.tenant_id,
       user_id: user_id || 'unknown',
       user_name: user_name || user_email,
       user_email: user_email.toLowerCase().trim(),
@@ -4496,51 +4536,62 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
         });
       }
 
-      // Send email notifications only if enabled and recipients are selected
-      if (send_notification && notify_recipients && Array.isArray(notify_recipients) && notify_recipients.length > 0) {
-        // Send email to all specified recipients
-        for (const recipientEmail of notify_recipients) {
-          try {
-            // Find recipient name from approvers list or created_by
-            let recipientName = recipientEmail;
+      // Build email recipient list: document owner + ALL approvers (excluding reviewer)
+      const emailRecipients = [];
 
-            if (document.approval_config?.approvers) {
-              const approver = document.approval_config.approvers.find(a => a.user_email === recipientEmail);
-              if (approver && approver.user_name) {
-                recipientName = approver.user_name;
-              }
+      // Add document owner if exists and not the reviewer
+      if (document.created_by?.email && document.created_by.email.toLowerCase() !== user_email.toLowerCase()) {
+        emailRecipients.push({
+          email: document.created_by.email.toLowerCase(),
+          name: document.created_by.user_name || document.created_by.email
+        });
+      }
+
+      // Add ALL approvers (excluding the reviewer)
+      if (document.approval_config?.approvers) {
+        for (const approver of document.approval_config.approvers) {
+          if (approver.user_email.toLowerCase() !== user_email.toLowerCase()) {
+            // Avoid duplicates
+            if (!emailRecipients.find(r => r.email === approver.user_email.toLowerCase())) {
+              emailRecipients.push({
+                email: approver.user_email.toLowerCase(),
+                name: approver.user_name || approver.user_email
+              });
             }
-
-            // Check if it's the document creator
-            if (document.created_by?.email === recipientEmail && document.created_by?.user_name) {
-              recipientName = document.created_by.user_name;
-            }
-
-            // Non-blocking: Send email after response
-            sendEmailAsync(
-              () => emailService.sendDocumentUpdate({
-                to: recipientEmail,
-                documentId: id,
-                creatorName: recipientName,
-                documentDetails,
-                statusUpdate
-              }),
-              `document_update_email_${recipientEmail}`
-            );
-          } catch (emailError) {
-            console.error('Failed to send email notification:', emailError);
-            // Email notification failed - continue
           }
         }
+      }
 
-        // Add email recipients to in-app notification list (avoid duplicates)
-        for (const recipientEmail of notify_recipients) {
-          if (!inAppRecipients.find(r => r.user_email === recipientEmail)) {
-            inAppRecipients.push({
-              user_id: recipientEmail,
-              user_email: recipientEmail
-            });
-          }
+      console.log('📧 Sending review notification emails to:', {
+        count: emailRecipients.length,
+        recipients: emailRecipients.map(r => r.email)
+      });
+
+      // Send email to all recipients
+      for (const recipient of emailRecipients) {
+        try {
+          // Non-blocking: Send email after response
+          sendEmailAsync(
+            () => emailService.sendDocumentUpdate({
+              to: recipient.email,
+              documentId: id,
+              creatorName: recipient.name,
+              documentDetails,
+              statusUpdate
+            }),
+            `document_update_email_${recipient.email}`
+          );
+        } catch (emailError) {
+          console.error('Failed to send email notification:', emailError);
+          // Email notification failed - continue
+        }
+
+        // Add to in-app notification list (avoid duplicates)
+        if (!inAppRecipients.find(r => r.user_email === recipient.email)) {
+          inAppRecipients.push({
+            user_id: recipient.email,
+            user_email: recipient.email
+          });
         }
       }
 
@@ -4558,7 +4609,8 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
                 user_id: user_id || 'unknown',
                 user_name: user_name || user_email,
                 user_email: user_email
-              }
+              },
+              document.tenant_id  // ✅ ADD tenant_id for multi-tenancy
             ),
             'document_status_changed_comment'
           );
@@ -4573,7 +4625,8 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
                 user_email: user_email,
                 comment: comment
               },
-              inAppRecipients
+              inAppRecipients,
+              document.tenant_id  // ✅ ADD tenant_id for multi-tenancy
             ),
             'document_comment_added'
           );

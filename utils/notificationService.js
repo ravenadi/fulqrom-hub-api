@@ -55,6 +55,14 @@ class NotificationService {
     tenantId = null
   }) {
     try {
+      console.log('📧 NotificationService.sendNotification called:', {
+        userId,
+        userEmail,
+        title,
+        type,
+        tenantId
+      });
+
       // Create in-app notification
       const notificationData = {
         user_id: userId,
@@ -77,9 +85,14 @@ class NotificationService {
       // Add tenant_id if provided (required for multi-tenancy)
       if (tenantId) {
         notificationData.tenant_id = tenantId;
+        console.log('✅ tenant_id added to notification:', tenantId);
+      } else {
+        console.warn('⚠️  No tenant_id provided for notification');
       }
 
+      console.log('💾 Creating notification in database...');
       const notification = await Notification.create(notificationData);
+      console.log('✅ Notification created successfully:', notification._id);
 
       // Emit Socket.IO notification to user in real-time
       try {
@@ -142,7 +155,14 @@ class NotificationService {
 
       return notification;
     } catch (error) {
-      console.error('Failed to create notification:', error);
+      console.error('❌ Failed to create notification:', error.message);
+      console.error('Error stack:', error.stack);
+      console.error('Notification data that failed:', {
+        userId,
+        userEmail,
+        type,
+        tenantId
+      });
       throw error;
     }
   }
@@ -207,9 +227,10 @@ class NotificationService {
    * @param {Object} document - Document object
    * @param {Array} approvers - Array of approver objects
    * @param {Object} actor - User who assigned the approvers
+   * @param {String} tenantId - Tenant ID for multi-tenancy
    * @returns {Promise<Array>} Array of created notifications
    */
-  async notifyDocumentApproversAssigned(document, approvers, actor) {
+  async notifyDocumentApproversAssigned(document, approvers, actor, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
     const actionUrl = `/hub/document/${documentId}/review`;
@@ -257,7 +278,8 @@ class NotificationService {
           action_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}`
         },
         userId: approverId,
-        userEmail: approverEmail
+        userEmail: approverEmail,
+        tenantId: tenantId || document.tenant_id  // ✅ ADD tenant_id
       };
 
       try {
@@ -278,9 +300,10 @@ class NotificationService {
    * @param {Object} newStatus - New status value
    * @param {Array} recipients - Array of user objects to notify
    * @param {Object} actor - User who changed the status
+   * @param {String} tenantId - Tenant ID for multi-tenancy
    * @returns {Promise<Array>} Array of created notifications
    */
-  async notifyDocumentStatusChanged(document, oldStatus, newStatus, recipients, actor) {
+  async notifyDocumentStatusChanged(document, oldStatus, newStatus, recipients, actor, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
     const actionUrl = `/hub/document/${documentId}/review`;
@@ -318,7 +341,8 @@ class NotificationService {
         review_date_formatted: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         comment: `Status changed from "${oldStatus}" to "${newStatus}"`,
         document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}`
-      }
+      },
+      tenantId: tenantId || document.tenant_id  // ✅ ADD tenant_id
     };
 
     return this.sendBulkNotifications(recipients, notificationData);
@@ -330,9 +354,10 @@ class NotificationService {
    * @param {string} approvalStatus - New approval status
    * @param {Array} recipients - Array of user objects to notify
    * @param {Object} actor - User who changed the approval status
+   * @param {String} tenantId - Tenant ID for multi-tenancy
    * @returns {Promise<Array>} Array of created notifications
    */
-  async notifyDocumentApprovalStatusChanged(document, approvalStatus, recipients, actor) {
+  async notifyDocumentApprovalStatusChanged(document, approvalStatus, recipients, actor, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
     const actionUrl = `/hub/document/${documentId}/review`;
@@ -370,7 +395,8 @@ class NotificationService {
         review_date_formatted: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         comment: `Document ${approvalStatus.toLowerCase()} by ${actor.userName || actor.user_name}`,
         document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}`
-      }
+      },
+      tenantId: tenantId || document.tenant_id  // ✅ ADD tenant_id
     };
 
     return this.sendBulkNotifications(recipients, notificationData);
@@ -381,9 +407,10 @@ class NotificationService {
    * @param {Object} document - Document object
    * @param {Object} comment - Comment object
    * @param {Array} recipients - Array of user objects to notify
+   * @param {String} tenantId - Tenant ID for multi-tenancy
    * @returns {Promise<Array>} Array of created notifications
    */
-  async notifyDocumentCommentAdded(document, comment, recipients) {
+  async notifyDocumentCommentAdded(document, comment, recipients, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
     const commentId = comment._id || comment.id;
@@ -420,7 +447,8 @@ class NotificationService {
         review_date_formatted: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         comment: comment.comment,
         document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}`
-      }
+      },
+      tenantId: tenantId || document.tenant_id  // ✅ ADD tenant_id
     };
 
     return this.sendBulkNotifications(recipients, notificationData);
@@ -432,9 +460,10 @@ class NotificationService {
    * @param {string} newVersion - New version number
    * @param {Array} recipients - Array of user objects to notify
    * @param {Object} actor - User who uploaded the new version
+   * @param {String} tenantId - Tenant ID for multi-tenancy
    * @returns {Promise<Array>} Array of created notifications
    */
-  async notifyDocumentVersionUploaded(document, newVersion, recipients, actor) {
+  async notifyDocumentVersionUploaded(document, newVersion, recipients, actor, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
     const actionUrl = `/hub/document/${documentId}/review`;
@@ -469,7 +498,8 @@ class NotificationService {
         review_date_formatted: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         comment: `New version ${newVersion} uploaded`,
         document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}`
-      }
+      },
+      tenantId: tenantId || document.tenant_id  // ✅ ADD tenant_id
     };
 
     return this.sendBulkNotifications(recipients, notificationData);
