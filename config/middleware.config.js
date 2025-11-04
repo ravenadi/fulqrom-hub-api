@@ -23,6 +23,7 @@ const MODULE_MAP = {
   'vendors': 'vendors',
   'users': 'users',
   'roles': 'users', // roles are managed by users with user permissions
+  'audit-logs': 'users', // audit logs require user management permissions
   'analytics': 'analytics',
   'hierarchy': 'customers' // hierarchy is customer-related
 };
