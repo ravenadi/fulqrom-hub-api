@@ -1433,7 +1433,7 @@ const getTenantUsers = async (req, res) => {
 const createTenantUser = async (req, res) => {
   try {
     const { tenant } = req.params;
-    const { name, email, phone, roleIds, password, is_active } = req.body;
+    const { name, email, phone, roleIds, password, is_active, send_invite_email } = req.body;
 
     // Validate tenant ID
     if (!tenant.match(/^[0-9a-fA-F]{24}$/)) {
@@ -1530,6 +1530,31 @@ const createTenantUser = async (req, res) => {
 
       console.log(`✅ Auth0 user created successfully: ${auth0User.user_id}`);
 
+      // Send welcome email if requested
+      let inviteSent = false;
+      let inviteError = null;
+
+      if (send_invite_email) {
+        try {
+          console.log(`📧 Sending welcome email to ${email.trim()}...`);
+          const emailService = require('../utils/emailService');
+
+          await emailService.sendUserInvite({
+            to: email.trim(),
+            userName: name.trim(),
+            userEmail: email.trim(),
+            password: password
+          });
+
+          inviteSent = true;
+          console.log(`✅ Welcome email sent successfully to ${email.trim()}`);
+        } catch (emailError) {
+          console.error('⚠️  Failed to send welcome email:', emailError);
+          inviteError = emailError.message;
+          // Don't fail the user creation if email fails
+        }
+      }
+
       // Log audit
       // await AuditLog.create({
       //   action: 'create',
@@ -1543,7 +1568,8 @@ const createTenantUser = async (req, res) => {
       //     user_name: name.trim(),
       //     roles: roleIds,
       //     auth0_created: true,
-      //     auth0_id: auth0User.user_id
+      //     auth0_id: auth0User.user_id,
+      //     invite_sent: inviteSent
       //   }
       // });
 
@@ -1560,7 +1586,9 @@ const createTenantUser = async (req, res) => {
           created_at: newUser.created_at,
           updated_at: newUser.updated_at,
           auth0_id: newUser.auth0_id
-        }
+        },
+        invite_sent: inviteSent,
+        invite_error: inviteError
       });
 
     } catch (error) {
