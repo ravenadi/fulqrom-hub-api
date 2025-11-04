@@ -98,6 +98,7 @@ RoleSchema.statics.getPredefinedRoles = function() {
         { entity: 'vendors', view: true, create: true, edit: true, delete: true },
         { entity: 'customers', view: true, create: true, edit: true, delete: true },
         { entity: 'users', view: true, create: true, edit: true, delete: true },
+        { entity: 'organisations', view: true, create: true, edit: true, delete: true },
         { entity: 'analytics', view: true, create: true, edit: true, delete: true },
         { entity: 'audit_logs', view: true, create: false, edit: false, delete: false }
       ]
@@ -115,6 +116,7 @@ RoleSchema.statics.getPredefinedRoles = function() {
         { entity: 'vendors', view: true, create: true, edit: true, delete: true },
         { entity: 'customers', view: true, create: true, edit: true, delete: true },
         { entity: 'users', view: true, create: true, edit: true, delete: true },
+        { entity: 'organisations', view: true, create: true, edit: true, delete: false },
         { entity: 'analytics', view: true, create: true, edit: true, delete: true },
         { entity: 'audit_logs', view: true, create: false, edit: false, delete: false }
       ]

@@ -453,7 +453,8 @@ router.get('/current', tenantContext, async (req, res) => {
             description: organization.plan_id.description,
             features: organization.plan_id.features
           } : null,
-          created_at: organization.created_at
+          created_at: organization.created_at,
+          __v: organization.__v // Include version for optimistic concurrency control
         }
       });
     }
@@ -645,9 +646,12 @@ router.put('/:id', requireIfMatch, tenantContext, async (req, res) => {
         slug: updatedOrganization.slug,
         email: updatedOrganization.email,
         phone: updatedOrganization.phone,
+        abn: updatedOrganization.abn,
+        acn: updatedOrganization.acn,
         address: updatedOrganization.address,
         branding: updatedOrganization.branding,
-        settings: updatedOrganization.settings
+        settings: updatedOrganization.settings,
+        __v: updatedOrganization.__v // Include updated version for optimistic concurrency control
       }
     });
 
