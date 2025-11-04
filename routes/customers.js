@@ -425,7 +425,16 @@ router.get('/:id/contacts/primary', checkResourcePermission('customer', 'view', 
     }
 
     // Find the primary contact in the contact_methods array
-    const primaryContact = customer.contact_methods?.find(contact => contact.is_primary === true);
+    // First, try to find a contact marked as primary at the contact level
+    let primaryContact = customer.contact_methods?.find(contact => contact.is_primary === true);
+
+    // If no contact-level primary is found, look for a contact with a primary method
+    // This handles cases where is_primary is only set on nested contact_methods
+    if (!primaryContact && customer.contact_methods?.length > 0) {
+      primaryContact = customer.contact_methods.find(contact =>
+        contact.contact_methods?.some(method => method.is_primary === true)
+      );
+    }
 
     if (!primaryContact) {
       return res.status(404).json({
@@ -577,8 +586,7 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
     // Only update fields that are explicitly provided (preserve existing data)
     const allowedFields = [
       'organisation', 'company_profile', 'business_address', 'postal_address',
-      'contact_methods', 'metadata', 'is_active', 'plan_id', 'plan_start_date',
-      'plan_end_date', 'is_trial', 'trial_start_date', 'trial_end_date'
+      'contact_methods', 'metadata', 'is_active'
     ];
     
     // Filter out undefined/null fields and non-allowed fields to preserve existing data

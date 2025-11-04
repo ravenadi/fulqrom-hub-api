@@ -190,33 +190,6 @@ const CustomerSchema = new mongoose.Schema({
   is_active: {
     type: Boolean,
     default: true
-  },
-
-  // Subscription/Plan fields (like Laravel DR Tenant model)
-  plan_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Plan',
-    default: null
-  },
-  plan_start_date: {
-    type: Date,
-    default: null
-  },
-  plan_end_date: {
-    type: Date,
-    default: null
-  },
-  is_trial: {
-    type: Boolean,
-    default: true
-  },
-  trial_start_date: {
-    type: Date,
-    default: null
-  },
-  trial_end_date: {
-    type: Date,
-    default: null
   }
 }, {
   timestamps: true
@@ -230,13 +203,6 @@ CustomerSchema.index({ 'is_active': 1 });
 CustomerSchema.index({ 'business_address.state': 1, 'business_address.postcode': 1 });
 CustomerSchema.index({ 'organisation.email_domain': 1 });
 CustomerSchema.index({ 'company_profile.industry_type': 1 });
-// Subscription/Plan indexes
-CustomerSchema.index({ 'plan_id': 1 });
-CustomerSchema.index({ 'plan_start_date': 1 });
-CustomerSchema.index({ 'plan_end_date': 1 });
-CustomerSchema.index({ 'is_trial': 1 });
-CustomerSchema.index({ 'trial_start_date': 1 });
-CustomerSchema.index({ 'trial_end_date': 1 });
 
 // Virtual for full business address
 CustomerSchema.virtual('full_business_address').get(function() {
@@ -267,17 +233,9 @@ CustomerSchema.virtual('abn_display').get(function() {
   return this.company_profile?.business_number || '';
 });
 
-// Virtual for subscription status (like Laravel DR Tenant model)
+// Virtual for active status
 CustomerSchema.virtual('is_active_label').get(function() {
   return this.is_active ? 'Active' : 'Inactive';
-});
-
-CustomerSchema.virtual('is_trial_label').get(function() {
-  return this.is_trial ? 'Trial' : 'Paid';
-});
-
-CustomerSchema.virtual('has_plan').get(function() {
-  return this.plan_id !== null;
 });
 
 // Ensure virtual fields are serialized
