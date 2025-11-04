@@ -341,3 +341,4 @@ erDiagram
 5. **Flexible Associations**: Documents use embedded location objects for polymorphic relationships
 6. **Fine-grained Permissions**: Users have `resource_access` array for granular control
 
+

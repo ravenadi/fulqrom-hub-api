@@ -220,6 +220,11 @@ const BuildingSchema = new mongoose.Schema({
   is_active: {
     type: Boolean,
     default: true
+  },
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: true
@@ -296,6 +301,7 @@ BuildingSchema.index({ 'address.suburb': 1 });
 BuildingSchema.index({ customer_id: 1, site_id: 1 });
 BuildingSchema.index({ site_id: 1, status: 1 });
 BuildingSchema.index({ building_type: 1, status: 1 });
+BuildingSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Ensure virtual fields are serialized and preserve unpopulated IDs
 BuildingSchema.set('toJSON', {

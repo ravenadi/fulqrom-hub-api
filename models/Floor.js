@@ -127,6 +127,13 @@ const FloorSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
+  },
+
+  // System fields
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: true

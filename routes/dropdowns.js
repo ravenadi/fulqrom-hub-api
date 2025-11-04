@@ -512,6 +512,51 @@ router.get('/entities/vendors', async (req, res) => {
   }
 });
 
+// GET /api/dropdowns/entities/users - Get all users for dropdown
+router.get('/entities/users', async (req, res) => {
+  try {
+    const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant ID is required'
+      });
+    }
+
+    const User = require('../models/User');
+    const mongoose = require('mongoose');
+    const filter = {
+      is_active: true,
+      tenant_id: new mongoose.Types.ObjectId(tenantId)
+    };
+
+    const users = await User.find(filter)
+      .select('_id full_name email first_name last_name')
+      .sort({ full_name: 1 })
+      .lean();
+
+    const formattedUsers = users.map(user => ({
+      id: user._id,
+      label: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'Unnamed User',
+      value: user._id,
+      email: user.email
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formattedUsers.length,
+      data: formattedUsers
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching users dropdown',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/dropdowns/document-tags - Get all unique document tags
 router.get('/document-tags', async (req, res) => {
   try {

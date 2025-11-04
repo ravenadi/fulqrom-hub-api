@@ -56,7 +56,8 @@ router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
 
     // Build filter query with mandatory tenant filter
     let filterQuery = {
-      tenant_id: req.tenant.tenantId
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }  // Exclude soft-deleted records
     };
 
     if (customer_id) {
@@ -414,8 +415,11 @@ router.get('/:id', checkResourcePermission('asset', 'view', (req) => req.params.
       });
     }
 
-    const asset = await Asset.findById(req.params.id)
-      .setOptions({ _tenantId: req.tenant.tenantId })
+    const asset = await Asset.findOne({
+      _id: req.params.id,
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }  // Exclude soft-deleted records
+    })
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address')
       .populate('building_id', 'building_name building_code')
@@ -797,14 +801,19 @@ router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.pa
       });
     }
 
-    // Log audit for asset deletion (before deletion)
-    await logDelete({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id, resource: asset.toObject() });
+    // Check if already deleted
+    if (asset.is_delete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Asset already deleted'
+      });
+    }
 
-    // Delete the asset
-    await Asset.findOneAndDelete({
-      _id: req.params.id,
-      tenant_id: tenantId  // Ensure user owns this resource
-    });
+    // Soft delete asset (no cascade needed for assets)
+    await Asset.findByIdAndUpdate(req.params.id, { is_delete: true });
+
+    // Log audit for asset deletion
+    await logDelete({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id, resource: asset.toObject() });
 
     // Store asset info for response
     const deletedAssetInfo = {

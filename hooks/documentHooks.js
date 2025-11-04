@@ -16,7 +16,7 @@ add_action('document.after_save', 'audit_log', async (data) => {
   
   if (!userId || !tenantId) return;
 
-  const resourceName = doc.document_name || doc.original_filename || 'New Document';
+  const resourceName = doc.name || doc.file?.file_meta?.file_name || doc.original_filename || 'New Document';
   
   const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || 'unknown';
   const agent = req.get('user-agent') || 'unknown';
@@ -46,7 +46,7 @@ add_action('document.status_changed', 'audit_log', async (data) => {
   
   if (!userId || !tenantId) return;
 
-  const resourceName = doc.document_name || doc.original_filename || 'Document';
+  const resourceName = doc.name || doc.file?.file_meta?.file_name || doc.original_filename || 'Document';
   
   const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || 'unknown';
   const agent = req.get('user-agent') || 'unknown';

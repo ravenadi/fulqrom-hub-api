@@ -184,6 +184,11 @@ const AssetSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
 
   // Timestamps
   createdAt: {
@@ -249,6 +254,7 @@ AssetSchema.index({ category: 1, status: 1 });
 
 // Unique constraint: One asset_no per customer_id (sparse index - only applies when asset_no exists)
 AssetSchema.index({ customer_id: 1, asset_no: 1 }, { unique: true, sparse: true });
+AssetSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Ensure virtual fields are serialized (similar to Vendor model)
 AssetSchema.set('toJSON', { virtuals: true });

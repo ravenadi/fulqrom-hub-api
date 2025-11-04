@@ -34,8 +34,10 @@ router.get('/', checkModulePermission('customers', 'view'), async (req, res) => 
 
     const { search, limit } = req.query;
 
-    // Build filter query
-    let filterQuery = {};
+    // Build filter query - exclude soft-deleted records
+    let filterQuery = {
+      is_delete: { $ne: true }
+    };
 
     // Simple search across key fields
     if (search) {
@@ -468,8 +470,11 @@ router.get('/:id', checkResourcePermission('customer', 'view', (req) => req.para
       });
     }
 
-    // Find customer within tenant scope only
-    const customer = await Customer.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId });
+    // Find customer within tenant scope only - exclude soft-deleted
+    const customer = await Customer.findOne({
+      _id: req.params.id,
+      is_delete: { $ne: true }
+    }).setOptions({ _tenantId: req.tenant.tenantId });
 
     if (!customer) {
       return res.status(404).json({
@@ -671,7 +676,7 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
   }
 });
 
-// DELETE /api/customers/:id - Delete customer with cascading deletions (requires delete permission for this customer)
+// DELETE /api/customers/:id - Soft delete customer with cascading deletions
 router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req.params.id), async (req, res) => {
   try {
     // Get tenant_id from authenticated user's context
@@ -684,14 +689,6 @@ router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req
     }
 
     const customerId = req.params.id;
-    const {
-      delete_s3 = 'true',
-      immediate_s3_delete = 'false'
-    } = req.query;
-
-    // Convert query params to booleans
-    const shouldDeleteS3 = delete_s3 === 'true';
-    const isImmediateS3Delete = immediate_s3_delete === 'true';
 
     // Verify customer exists and belongs to tenant
     const customer = await Customer.findOne({ _id: customerId, tenant_id: tenantId });
@@ -702,47 +699,37 @@ router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req
       });
     }
 
-    // Use comprehensive deletion service
-    const CustomerDeletionService = require('../services/customerDeletionService');
-    const deletionService = new CustomerDeletionService();
+    // Check if already deleted
+    if (customer.is_delete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer already deleted'
+      });
+    }
 
-    console.log(`🗑️  Starting customer deletion: ${customerId}`);
-    console.log(`   S3 Strategy: ${isImmediateS3Delete ? 'IMMEDIATE DELETE' : 'TAG FOR EXPIRY (90 days)'}`);
+    console.log(`🗑️  Starting soft delete for customer: ${customerId}`);
 
-    // Log audit for customer deletion (before deletion completes)
+    // Soft delete customer
+    await Customer.findByIdAndUpdate(customerId, { is_delete: true });
+
+    // Cascade soft delete to all children
+    const { cascadeCustomerDelete } = require('../utils/softDeleteCascade');
+    await cascadeCustomerDelete(customerId, tenantId);
+
+    // Log audit for customer deletion
     const customerName = customer.organisation?.organisation_name || customer.company_profile?.trading_name || 'Customer';
     await logDelete({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
 
-    const result = await deletionService.deleteCustomerCompletely(customerId, tenantId, {
-      deleteS3Files: shouldDeleteS3 && isImmediateS3Delete,
-      setS3Expiry: shouldDeleteS3 && !isImmediateS3Delete,
-      deleteDatabase: true,
-      adminUserId: req.user?.id,
-      adminEmail: req.user?.email
-    });
+    console.log(`✓ Customer soft-deleted successfully: ${customerId}`);
 
-    if (result.success) {
-      return res.status(200).json({
-        success: true,
-        message: result.message,
-        data: {
-          customer_id: result.customer_id,
-          customer_name: result.customer_name,
-          deletion_type: result.deletion_type,
-          records_deleted: result.counts,
-          s3_deletion_type: isImmediateS3Delete ? 'immediate' : 'tagged_for_expiry',
-          deletion_log: result.deletion_log,
-          errors: result.errors
-        }
-      });
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: result.message,
-        error: result.errors,
-        deletion_log: result.deletion_log
-      });
-    }
+    return res.status(200).json({
+      success: true,
+      message: 'Customer deleted successfully',
+      data: {
+        customer_id: customerId,
+        customer_name: customerName
+      }
+    });
   } catch (error) {
     console.error('Error deleting customer:', error);
     res.status(500).json({

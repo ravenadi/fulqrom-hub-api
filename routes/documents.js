@@ -351,7 +351,9 @@ router.get('/', checkModulePermission('documents', 'view'), applyScopeFiltering(
     } = sanitizedQuery;
 
     // Build filter query
-    let filterQuery = {};
+    let filterQuery = {
+      is_delete: { $ne: true }  // Exclude soft-deleted records
+    };
 
     // Entity filters (multi-select support)
     if (customer_id) {
@@ -737,7 +739,11 @@ router.get('/:id', checkModulePermission('documents', 'view'), validateObjectId,
       });
     }
 
-    const document = await Document.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId }).lean();
+    const document = await Document.findOne({
+      _id: req.params.id,
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }  // Exclude soft-deleted records
+    }).lean();
 
     if (!document) {
       return res.status(404).json({
@@ -1981,8 +1987,8 @@ router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, 
       });
     }
 
-    // Delete ONLY if belongs to user's tenant
-    const document = await Document.findOneAndDelete({
+    // Find document ONLY if belongs to user's tenant
+    const document = await Document.findOne({
       _id: req.params.id,
       tenant_id: tenantId  // Ensure user owns this resource
     });
@@ -1994,13 +2000,23 @@ router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, 
       });
     }
 
-    // Delete file from S3 if exists
-    if (document.file && document.file.file_meta && document.file.file_meta.file_key) {
-      const deleteResult = await deleteFileFromS3(document.file.file_meta.file_key);
-      if (!deleteResult.success) {
-
-      }
+    // Check if already deleted
+    if (document.is_delete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Document already deleted'
+      });
     }
+
+    // Soft delete document (S3 files kept for now, will be purged later)
+    await Document.findByIdAndUpdate(req.params.id, { is_delete: true });
+
+    // TODO: archieve all s3 files for this document
+
+    // write code here...
+
+    // Log audit for document deletion
+    await logDelete({ module: 'document', resourceName: document.name || 'Document', req, moduleId: document._id, resource: document.toObject() });
 
     res.status(200).json({
       success: true,

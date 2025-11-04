@@ -148,7 +148,9 @@ router.get('/', checkModulePermission('tenants', 'view'), async (req, res) => {
     } = req.query;
 
     // Build filter query
-    let filterQuery = {};
+    let filterQuery = {
+      is_delete: { $ne: true }  // Exclude soft-deleted records
+    };
 
     if (customer_id) {
       filterQuery.customer_id = customer_id;
@@ -245,7 +247,10 @@ router.get('/', checkModulePermission('tenants', 'view'), async (req, res) => {
 // GET /api/tenants/:id - Get single tenant
 router.get('/:id', checkResourcePermission('tenant', 'view', (req) => req.params.id), async (req, res) => {
   try {
-    const tenant = await BuildingTenant.findById(req.params.id)
+    const tenant = await BuildingTenant.findOne({
+      _id: req.params.id,
+      is_delete: { $ne: true }  // Exclude soft-deleted records
+    })
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address status')
       .populate('building_id', 'building_name building_code category')
@@ -558,9 +563,20 @@ router.delete('/:id', checkResourcePermission('tenant', 'delete', (req) => req.p
       });
     }
 
-    // Set audit context before deletion
-    tenant.$setAuditContext(req, 'delete');
-    await tenant.remove(); // Use remove() to trigger post-remove hook
+    // Check if already deleted
+    if (tenant.is_delete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Building tenant already deleted'
+      });
+    }
+
+    // Soft delete building tenant (no cascade needed)
+    await BuildingTenant.findByIdAndUpdate(req.params.id, { is_delete: true });
+
+    // Log audit for tenant deletion
+    const tenantName = tenant.tenant_trading_name || tenant.tenant_legal_name || 'Building Tenant';
+    await logDelete({ module: 'building_tenant', resourceName: tenantName, req, moduleId: tenant._id, resource: tenant.toObject() });
 
     res.status(200).json({
       success: true,

@@ -390,3 +390,4 @@ All tenant-scoped entities use the `tenantPlugin` which adds:
 
 6. **Version Management**: Documents support versioning via `document_group_id`, `version_number`, `is_current_version`, and `version_history[]`.
 
+

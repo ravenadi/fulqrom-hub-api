@@ -28,7 +28,9 @@ router.get('/', checkModulePermission('sites', 'view'), tenantContext, async (re
     } = req.query;
 
     // Build filter query with tenant isolation
-    let filterQuery = {};
+    let filterQuery = {
+      is_delete: { $ne: true }  // Exclude soft-deleted records
+    };
 
     // Apply tenant filtering
     if (req.tenant) {
@@ -683,14 +685,23 @@ router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.par
       });
     }
 
-    // Log audit for site deletion (before deletion)
-    await logDelete({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
+    // Check if already deleted
+    if (site.is_delete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Site already deleted'
+      });
+    }
 
-    // Soft delete
-    await Site.findOneAndUpdate(
-      { _id: req.params.id, tenant_id: tenantId },
-      { is_active: false }
-    );
+    // Soft delete site
+    await Site.findByIdAndUpdate(req.params.id, { is_delete: true });
+
+    // Cascade soft delete to all children (buildings, floors, assets)
+    const { cascadeSiteDelete } = require('../utils/softDeleteCascade');
+    await cascadeSiteDelete(req.params.id, tenantId);
+
+    // Log audit for site deletion
+    await logDelete({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
 
     res.status(200).json({
       success: true,

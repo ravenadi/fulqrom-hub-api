@@ -467,6 +467,13 @@ const DocumentSchema = new mongoose.Schema({
   updated_at: {
     type: String,
     default: () => new Date().toISOString()
+  },
+
+  // System fields
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: false
@@ -555,6 +562,7 @@ DocumentSchema.index({ category: 1, 'drawing_info.drawing_status': 1 });
 // Version Management indexes
 DocumentSchema.index({ document_group_id: 1, version_sequence: -1 });
 DocumentSchema.index({ document_group_id: 1, is_current_version: 1 });
+DocumentSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Text index for search
 DocumentSchema.index({

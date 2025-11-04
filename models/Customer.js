@@ -190,6 +190,11 @@ const CustomerSchema = new mongoose.Schema({
   is_active: {
     type: Boolean,
     default: true
+  },
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: true
@@ -203,6 +208,7 @@ CustomerSchema.index({ 'is_active': 1 });
 CustomerSchema.index({ 'business_address.state': 1, 'business_address.postcode': 1 });
 CustomerSchema.index({ 'organisation.email_domain': 1 });
 CustomerSchema.index({ 'company_profile.industry_type': 1 });
+CustomerSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Virtual for full business address
 CustomerSchema.virtual('full_business_address').get(function() {

@@ -60,7 +60,8 @@ class EmailService {
       const templateFileMap = {
         'document_assignment': 'documentAssignment',
         'document_update': 'documentUpdate',
-        'user_invite': 'userInvite'
+        'user_invite': 'userInvite',
+        'password_changed': 'passwordChanged'
       };
 
       const fileName = templateFileMap[templateName] || templateName;
@@ -80,7 +81,9 @@ class EmailService {
           ? `Document Status Update: ${variables.new_status} - ${variables.document_name}`
           : `New comment on the document - ${variables.document_name}`,
         user_invite: `Welcome to Fulqrom Hub - Your Account is Ready`,
-        userInvite: `Welcome to Fulqrom Hub - Your Account is Ready`
+        userInvite: `Welcome to Fulqrom Hub - Your Account is Ready`,
+        password_changed: `Password Changed - Fulqrom Hub`,
+        passwordChanged: `Password Changed - Fulqrom Hub`
       };
 
       const subject = subjects[templateName] || 'Fulqrom Hub Notification';
@@ -368,6 +371,40 @@ class EmailService {
 
     return this.sendEmail({
       template: 'user_invite',
+      to,
+      variables
+    });
+  }
+
+  /**
+   * Send password change confirmation email
+   * @param {Object} params - Confirmation parameters
+   * @param {string} params.to - User email address
+   * @param {string} params.userName - User's full name
+   * @returns {Promise<Object>}
+   */
+  async sendPasswordChangeConfirmation(params) {
+    const {
+      to,
+      userName
+    } = params;
+
+    // Get current Australian date/time
+    const now = new Date();
+    const changeDate = formatAustralianDate(now);
+    const changeTime = formatAustralianDateTime(now).split(' ').pop(); // Extract time portion
+
+    const variables = {
+      user_name: userName || 'there',
+      user_email: to,
+      change_date: changeDate,
+      change_time: changeTime,
+      login_url: `${this.appBaseUrl}/login`,
+      app_url: this.appBaseUrl
+    };
+
+    return this.sendEmail({
+      template: 'password_changed',
       to,
       variables
     });

@@ -153,3 +153,4 @@ If you don't see the Cookie header, the frontend is NOT configured to send crede
 - `middleware/sessionAuth.js` - Session validation
 - `server.js` - CORS configuration (already has `credentials: true`)
 
+

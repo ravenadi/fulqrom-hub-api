@@ -209,7 +209,10 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
     }
 
     // Build filter query based on tenant context
-    let filterQuery = {};
+    // IMPORTANT: Exclude soft-deleted buildings
+    let filterQuery = {
+      is_delete: { $ne: true }
+    };
     if (tenantId) {
       filterQuery.tenant_id = tenantId;
     }
@@ -218,13 +221,26 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
     // NOTE: Removed latitude/longitude from select to force address-based geocoding on frontend
     const buildings = await Building.find(filterQuery)
       .select('_id building_name address site_id customer_id')
-      .populate('site_id', 'site_name')
-      .populate('customer_id', 'organisation_name')
+      .populate({
+        path: 'site_id',
+        select: 'site_name is_delete',
+        match: { is_delete: { $ne: true } }
+      })
+      .populate({
+        path: 'customer_id',
+        select: 'organisation_name is_delete',
+        match: { is_delete: { $ne: true } }
+      })
       .lean();
 
     // Transform to lightweight format for map - returns ALL buildings with address data
     // Frontend will handle geocoding from address fields
+    // IMPORTANT: Filter out buildings whose customer or site was deleted (will be null after populate match)
     const coordinates = buildings
+      .filter(building => {
+        // Exclude buildings with deleted customer or site (populated as null)
+        return building.customer_id !== null && building.site_id !== null;
+      })
       .map(building => ({
         id: building._id.toString(),
         building_name: building.building_name,

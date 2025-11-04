@@ -326,6 +326,11 @@ const BuildingTenantSchema = new mongoose.Schema({
   is_active: {
     type: Boolean,
     default: true
+  },
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: true
@@ -421,6 +426,7 @@ BuildingTenantSchema.index({ special_requirements: 1 });
 BuildingTenantSchema.index({ building_id: 1, floor_id: 1 });
 BuildingTenantSchema.index({ customer_id: 1, building_id: 1 });
 BuildingTenantSchema.index({ site_id: 1, building_id: 1 });
+BuildingTenantSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Ensure virtual fields are serialized and preserve unpopulated IDs
 BuildingTenantSchema.set('toJSON', {

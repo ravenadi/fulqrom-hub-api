@@ -40,7 +40,8 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
 
     // Build filter query with mandatory tenant filter
     let filterQuery = {
-      tenant_id: tenantId
+      tenant_id: tenantId,
+      is_delete: { $ne: true }  // Exclude soft-deleted records
     };
 
     // Search functionality
@@ -333,7 +334,8 @@ router.get('/:id', checkResourcePermission('building', 'view', (req) => req.para
     // Find building ONLY if it belongs to the user's tenant
     const building = await Building.findOne({
       _id: req.params.id,
-      tenant_id: tenantId  // Ensure user owns this building
+      tenant_id: tenantId,  // Ensure user owns this building
+      is_delete: { $ne: true }  // Exclude soft-deleted records
     })
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address status');
@@ -655,8 +657,8 @@ router.delete('/:id', checkResourcePermission('building', 'delete', (req) => req
       });
     }
 
-    // Delete building ONLY if it belongs to the user's tenant
-    const building = await Building.findOneAndDelete({
+    // Find building (soft delete check)
+    const building = await Building.findOne({
       _id: req.params.id,
       tenant_id: tenantId  // Ensure user owns this building
     });
@@ -668,7 +670,22 @@ router.delete('/:id', checkResourcePermission('building', 'delete', (req) => req
       });
     }
 
-    // Log audit for building deletion (before deletion)
+    // Check if already deleted
+    if (building.is_delete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Building already deleted'
+      });
+    }
+
+    // Soft delete building
+    await Building.findByIdAndUpdate(req.params.id, { is_delete: true });
+
+    // Cascade soft delete to all children (floors, assets, building tenants)
+    const { cascadeBuildingDelete } = require('../utils/softDeleteCascade');
+    await cascadeBuildingDelete(req.params.id, tenantId);
+
+    // Log audit for building deletion
     await logDelete({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
 
     res.status(200).json({

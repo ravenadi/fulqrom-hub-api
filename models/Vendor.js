@@ -427,6 +427,11 @@ const VendorSchema = new mongoose.Schema({
   is_active: {
     type: Boolean,
     default: true
+  },
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: true
@@ -450,6 +455,7 @@ VendorSchema.index({ annual_review_date: 1 });
 // Backward compatibility indexes
 VendorSchema.index({ category: 1 });
 VendorSchema.index({ rating: -1 });
+VendorSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Text index for search functionality
 VendorSchema.index({

@@ -32,7 +32,8 @@ router.get('/', checkModulePermission('floors', 'view'), async (req, res) => {
 
     // Build filter query with mandatory tenant filter
     let filterQuery = {
-      tenant_id: req.tenant.tenantId
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }  // Exclude soft-deleted records
     };
 
     // Search functionality
@@ -145,7 +146,8 @@ router.get('/:id', checkResourcePermission('floor', 'view', (req) => req.params.
     // Find floor ONLY if it belongs to the user's tenant
     const floor = await Floor.findOne({
       _id: req.params.id,
-      tenant_id: req.tenant.tenantId
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }  // Exclude soft-deleted records
     })
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
       .populate('site_id', 'site_name address status')
@@ -471,14 +473,23 @@ router.delete('/:id', checkResourcePermission('floor', 'delete', (req) => req.pa
       });
     }
 
-    // Log audit for floor deletion (before deletion)
-    await logDelete({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
+    // Check if already deleted
+    if (floor.is_delete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Floor already deleted'
+      });
+    }
 
-    // Delete the floor
-    await Floor.findOneAndDelete({
-      _id: req.params.id,
-      tenant_id: tenantId  // Ensure user owns this resource
-    });
+    // Soft delete floor
+    await Floor.findByIdAndUpdate(req.params.id, { is_delete: true });
+
+    // Cascade soft delete to all assets on this floor
+    const { cascadeFloorDelete } = require('../utils/softDeleteCascade');
+    await cascadeFloorDelete(req.params.id, tenantId);
+
+    // Log audit for floor deletion
+    await logDelete({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
 
     res.status(200).json({
       success: true,

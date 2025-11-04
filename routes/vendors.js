@@ -36,7 +36,8 @@ router.get('/', checkModulePermission('vendors', 'view'), async (req, res) => {
 
     // Build filter query with mandatory tenant filter
     let filterQuery = {
-      tenant_id: tenantId
+      tenant_id: tenantId,
+      is_delete: { $ne: true }  // Exclude soft-deleted records
     };
 
     // Search across name, ABN, and email (case-insensitive)
@@ -283,7 +284,8 @@ router.get('/:id', checkResourcePermission('vendor', 'view', (req) => req.params
     // Find vendor ONLY if it belongs to the user's tenant
     const vendor = await Vendor.findOne({
       _id: req.params.id,
-      tenant_id: tenantId  // Ensure user owns this vendor
+      tenant_id: tenantId,  // Ensure user owns this vendor
+      is_delete: { $ne: true }  // Exclude soft-deleted records
     });
 
     if (!vendor) {
@@ -576,15 +578,20 @@ router.delete('/:id', checkResourcePermission('vendor', 'delete', (req) => req.p
       });
     }
 
-    // Store vendor data before deletion
+    // Check if already deleted
+    if (vendor.is_delete) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vendor already deleted'
+      });
+    }
+
+    // Store vendor data
     const vendorName = vendor.contractor_name || vendor.trading_name || 'Vendor';
     const vendorData = vendor.toObject();
 
-    // Delete vendor
-    await Vendor.findOneAndDelete({
-      _id: vendorId,
-      tenant_id: tenantId
-    });
+    // Soft delete vendor (no cascade needed for vendors)
+    await Vendor.findByIdAndUpdate(vendorId, { is_delete: true });
 
     // Log audit for vendor deletion
     await logDelete({

@@ -249,6 +249,11 @@ const SiteSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
 
   created_date: {
     type: Date,
@@ -306,6 +311,7 @@ SiteSchema.index({ 'address.state': 1 });
 SiteSchema.index({ 'address.postcode': 1 });
 SiteSchema.index({ type: 1 });
 SiteSchema.index({ 'manager.name': 1 });
+SiteSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Ensure virtual fields are serialized and preserve unpopulated IDs
 SiteSchema.set('toJSON', {
