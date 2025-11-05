@@ -9,6 +9,8 @@ const Asset = require('../models/Asset');
 const BuildingTenant = require('../models/BuildingTenant');
 const Vendor = require('../models/Vendor');
 const Document = require('../models/Document');
+const User = require('../models/User');
+const { filterByUserScope } = require('../middleware/authorizationRules');
 
 const router = express.Router();
 

@@ -1131,14 +1131,17 @@ router.post('/', checkModulePermission('documents', 'create'), preserveALSContex
       };
     }
 
-    // Create document and set audit context
+    // Create document
     const document = new Document(documentPayload);
 
     // Set document_group_id to the document's own ID (generated when instance is created)
     document.document_group_id = document._id.toString();
 
-    document.$setAuditContext(req, 'create');
     await document.save();
+
+    // Log audit for document creation
+    const documentName = document.name || document.file?.file_meta?.file_name || 'New Document';
+    logCreate({ module: 'document', resourceName: documentName, req, moduleId: document._id, resource: document.toObject() });
 
     // Populate entity names for response
     const documentLean = document.toObject();
@@ -4162,9 +4165,12 @@ router.post('/:id/restore-version', validateObjectId, async (req, res) => {
     // Update timestamps
     document.updated_at = new Date();
 
-    // Set audit context and save the document
-    document.$setAuditContext(req, 'update');
+    // Save the document
     await document.save();
+
+    // Log audit for version restore
+    const documentName = document.name || document.file?.file_meta?.file_name || 'Document';
+    logUpdate({ module: 'document', resourceName: `${documentName} - restored version ${versionToRestore.version_number}`, req, moduleId: document._id, resource: document.toObject() });
 
     res.status(200).json({
       success: true,
@@ -4251,9 +4257,12 @@ router.delete('/:id/delete-version', validateObjectId, async (req, res) => {
     // Update timestamps
     document.updated_at = new Date();
 
-    // Set audit context and save the document
-    document.$setAuditContext(req, 'update');
+    // Save the document
     await document.save();
+
+    // Log audit for version deletion
+    const documentName = document.name || document.file?.file_meta?.file_name || 'Document';
+    logUpdate({ module: 'document', resourceName: `${documentName} - deleted version ${versionToDelete.version_number}`, req, moduleId: document._id, resource: document.toObject() });
 
     res.status(200).json({
       success: true,
@@ -4381,8 +4390,11 @@ router.post('/versions/:versionId/restore', validateObjectId, async (req, res) =
     };
 
     const restoredDocument = new Document(restoredVersionData);
-    restoredDocument.$setAuditContext(req, 'create');
     await restoredDocument.save();
+
+    // Log audit for version restore as new document
+    const documentName = restoredDocument.name || restoredDocument.file?.file_meta?.file_name || 'Document';
+    logCreate({ module: 'document', resourceName: `${documentName} - restored from version ${versionToRestore.version_number}`, req, moduleId: restoredDocument._id, resource: restoredDocument.toObject() });
 
     res.status(200).json({
       success: true,
@@ -4514,8 +4526,11 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
       });
 
       document.updated_at = new Date().toISOString();
-      document.$setAuditContext(req, 'update');
       await document.save();
+
+      // Log audit for document review
+      const documentName = document.name || document.file?.file_meta?.file_name || 'Document';
+      logUpdate({ module: 'document', resourceName: `${documentName} - reviewed (${status})`, req, moduleId: document._id, resource: document.toObject() });
     }
 
     // Always send in-app notification to document creator (async, don't block response)
