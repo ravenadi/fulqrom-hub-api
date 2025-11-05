@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
+const { logUpdate, logDelete } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -408,8 +409,9 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
       });
     }
 
-    // Set audit context on result
-    result.$setAuditContext(req, 'update');
+    // Log audit for tenant update (manual logging since findOneAndUpdate bypasses hooks)
+    const tenantName = result.tenant_trading_name || result.tenant_legal_name || 'Building Tenant';
+    logUpdate({ module: 'tenant', resourceName: tenantName, req, moduleId: result._id, resource: result.toObject() });
 
     // Populate tenant before returning
     await result.populate('customer_id', 'organisation.organisation_name');
@@ -576,7 +578,7 @@ router.delete('/:id', checkResourcePermission('tenant', 'delete', (req) => req.p
 
     // Log audit for tenant deletion
     const tenantName = tenant.tenant_trading_name || tenant.tenant_legal_name || 'Building Tenant';
-    await logDelete({ module: 'building_tenant', resourceName: tenantName, req, moduleId: tenant._id, resource: tenant.toObject() });
+    logDelete({ module: 'building_tenant', resourceName: tenantName, req, moduleId: tenant._id, resource: tenant.toObject() });
 
     res.status(200).json({
       success: true,

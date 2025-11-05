@@ -212,7 +212,7 @@ const SiteSchema = new mongoose.Schema({
   // Status - loaded from GET /api/dropdowns (site_site_statuses)
   status: {
     type: String,
-    default: 'active'
+    default: 'Active'
   },
 
   // Counts - these would typically be calculated from related data

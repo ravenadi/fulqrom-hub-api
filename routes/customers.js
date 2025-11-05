@@ -518,7 +518,7 @@ router.post('/', checkModulePermission('customers', 'create'), async (req, res) 
 
     // Log audit for customer creation
     const customerName = customer.organisation?.organisation_name || customer.company_profile?.trading_name || 'New Customer';
-    await logCreate({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
+    logCreate({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
 
     res.status(201).json({
       success: true,
@@ -638,7 +638,7 @@ router.put('/:id', checkResourcePermission('customer', 'edit', (req) => req.para
 
     // Log audit for customer update
     const customerName = customer.organisation?.organisation_name || customer.company_profile?.trading_name || 'Customer';
-    await logUpdate({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
+    logUpdate({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
     
     // Emit socket notification for real-time updates
     const socketManager = require('../utils/socketManager');
@@ -718,7 +718,7 @@ router.delete('/:id', checkResourcePermission('customer', 'delete', (req) => req
 
     // Log audit for customer deletion
     const customerName = customer.organisation?.organisation_name || customer.company_profile?.trading_name || 'Customer';
-    await logDelete({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
+    logDelete({ module: 'customer', resourceName: customerName, req, moduleId: customer._id, resource: customer.toObject() });
 
     console.log(`✓ Customer soft-deleted successfully: ${customerId}`);
 

@@ -525,7 +525,7 @@ router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset,
     await asset.populate('floor_id', 'floor_name floor_level');
 
     // Log audit for asset creation
-    await logCreate({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id, resource: asset.toObject() });
+    logCreate({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id, resource: asset.toObject() });
 
     // Convert to plain object and add backward compatibility fields
     const assetObj = asset.toObject();
@@ -719,7 +719,7 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
     const assetPlain = result.toObject();
 
     // Log audit for asset update
-    await logUpdate({ module: 'asset', resourceName: result.asset_no || result.category, req, moduleId: result._id.toString(), resource: assetPlain });
+    logUpdate({ module: 'asset', resourceName: result.asset_no || result.category, req, moduleId: result._id.toString(), resource: assetPlain });
     
     // Emit socket notification for real-time updates
     const socketManager = require('../utils/socketManager');
@@ -813,7 +813,7 @@ router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.pa
     await Asset.findByIdAndUpdate(req.params.id, { is_delete: true });
 
     // Log audit for asset deletion
-    await logDelete({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id, resource: asset.toObject() });
+    logDelete({ module: 'asset', resourceName: asset.asset_no || asset.category, req, moduleId: asset._id, resource: asset.toObject() });
 
     // Store asset info for response
     const deletedAssetInfo = {

@@ -37,6 +37,7 @@ const notificationService = require('../utils/notificationService');
 const { sendNotificationAsync, sendEmailAsync } = require('../utils/asyncHelpers');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
+const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -1132,11 +1133,11 @@ router.post('/', checkModulePermission('documents', 'create'), preserveALSContex
 
     // Create document and set audit context
     const document = new Document(documentPayload);
-    document.$setAuditContext(req, 'create');
-    await document.save();
 
-    // Set document_group_id to the document's own ID after creation
+    // Set document_group_id to the document's own ID (generated when instance is created)
     document.document_group_id = document._id.toString();
+
+    document.$setAuditContext(req, 'create');
     await document.save();
 
     // Populate entity names for response
@@ -1865,6 +1866,15 @@ router.put('/:id', checkModulePermission('documents', 'edit'), requireIfMatch, v
       }
     });
 
+    // Log audit for document update
+    logUpdate({
+      module: 'document',
+      resourceName: result.name || result.file?.file_meta?.file_name || 'Document',
+      req,
+      moduleId: result._id,
+      resource: result.toObject()
+    });
+
     res.status(200).json({
       success: true,
       message: 'Document updated successfully',
@@ -2016,7 +2026,7 @@ router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, 
     // write code here...
 
     // Log audit for document deletion
-    await logDelete({ module: 'document', resourceName: document.name || 'Document', req, moduleId: document._id, resource: document.toObject() });
+    logDelete({ module: 'document', resourceName: document.name || 'Document', req, moduleId: document._id, resource: document.toObject() });
 
     res.status(200).json({
       success: true,
@@ -4152,7 +4162,8 @@ router.post('/:id/restore-version', validateObjectId, async (req, res) => {
     // Update timestamps
     document.updated_at = new Date();
 
-    // Save the document
+    // Set audit context and save the document
+    document.$setAuditContext(req, 'update');
     await document.save();
 
     res.status(200).json({
@@ -4240,7 +4251,8 @@ router.delete('/:id/delete-version', validateObjectId, async (req, res) => {
     // Update timestamps
     document.updated_at = new Date();
 
-    // Save the document
+    // Set audit context and save the document
+    document.$setAuditContext(req, 'update');
     await document.save();
 
     res.status(200).json({
@@ -4369,6 +4381,7 @@ router.post('/versions/:versionId/restore', validateObjectId, async (req, res) =
     };
 
     const restoredDocument = new Document(restoredVersionData);
+    restoredDocument.$setAuditContext(req, 'create');
     await restoredDocument.save();
 
     res.status(200).json({
@@ -4501,6 +4514,7 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
       });
 
       document.updated_at = new Date().toISOString();
+      document.$setAuditContext(req, 'update');
       await document.save();
     }
 

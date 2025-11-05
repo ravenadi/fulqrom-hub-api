@@ -254,7 +254,7 @@ router.post('/', checkModulePermission('floors', 'create'), async (req, res) => 
     await floor.populate('building_id', 'building_name building_code');
 
     // Log audit for floor creation
-    await logCreate({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
+    logCreate({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
 
     res.status(201).json({
       success: true,
@@ -422,7 +422,7 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
     await result.populate('customer_id', 'organisation.organisation_name');
 
     // Log audit for floor update
-    await logUpdate({ module: 'floor', resourceName: result.floor_name, req, moduleId: result._id, resource: result.toObject() });
+    logUpdate({ module: 'floor', resourceName: result.floor_name, req, moduleId: result._id, resource: result.toObject() });
 
     res.status(200).json({
       success: true,
@@ -489,7 +489,7 @@ router.delete('/:id', checkResourcePermission('floor', 'delete', (req) => req.pa
     await cascadeFloorDelete(req.params.id, tenantId);
 
     // Log audit for floor deletion
-    await logDelete({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
+    logDelete({ module: 'floor', resourceName: floor.floor_name, req, moduleId: floor._id, resource: floor.toObject() });
 
     res.status(200).json({
       success: true,

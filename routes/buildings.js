@@ -455,7 +455,7 @@ router.post('/', checkModulePermission('buildings', 'create'), async (req, res) 
     await building.populate('customer_id', 'organisation.organisation_name');
 
     // Log audit for building creation
-    await logCreate({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
+    logCreate({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
 
     res.status(201).json({
       success: true,
@@ -624,7 +624,7 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
     }
 
     // Log audit for building update
-    await logUpdate({ module: 'building', resourceName: result.building_name, req, moduleId: result._id, resource: result.toObject() });
+    logUpdate({ module: 'building', resourceName: result.building_name, req, moduleId: result._id, resource: result.toObject() });
 
     // Add raw IDs to the response for convenience
     const responseData = result.toObject();
@@ -686,7 +686,7 @@ router.delete('/:id', checkResourcePermission('building', 'delete', (req) => req
     await cascadeBuildingDelete(req.params.id, tenantId);
 
     // Log audit for building deletion
-    await logDelete({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
+    logDelete({ module: 'building', resourceName: building.building_name, req, moduleId: building._id, resource: building.toObject() });
 
     res.status(200).json({
       success: true,

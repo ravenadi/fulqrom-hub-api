@@ -106,8 +106,13 @@ function setupAuditHooks(Model, config) {
   // Post-save hook that triggers action
   Model.schema.post('save', async function(doc) {
     try {
+      console.log(`🔔 Post-save hook triggered for ${module}:`, { docId: doc._id, hasAuditContext: !!doc.$__?.auditContext });
+
       const context = doc.$__?.auditContext;
-      if (!context) return;
+      if (!context) {
+        console.log(`⚠️ No audit context found for ${module} save`);
+        return;
+      }
 
       // Use context action if available, otherwise determine from wasNew flag
       const actionType = context.action || (doc.wasNew ? 'create' : 'update');
@@ -117,9 +122,11 @@ function setupAuditHooks(Model, config) {
         context
       };
 
+      console.log(`🚀 Triggering action ${module}.after_save with action: ${actionType}`);
+
       // Trigger actions using do_action() - all registered callbacks will run
       await do_action(`${module}.after_save`, data);
-      
+
       // Also trigger specific actions
       if (actionType === 'create') {
         await do_action(`${module}.after_create`, data);

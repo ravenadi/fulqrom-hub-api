@@ -516,7 +516,7 @@ router.post('/', checkModulePermission('sites', 'create'), tenantContext, async 
       .populate('customer_id', 'organisation.organisation_name');
 
     // Log audit for site creation
-    await logCreate({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
+    logCreate({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
 
     res.status(201).json({
       success: true,
@@ -634,7 +634,7 @@ router.put('/:id', checkResourcePermission('site', 'edit', (req) => req.params.i
     await result.populate('customer_id', 'organisation.organisation_name');
 
     // Log audit for site update
-    await logUpdate({ module: 'site', resourceName: result.site_name, req, moduleId: result._id, resource: result.toObject() });
+    logUpdate({ module: 'site', resourceName: result.site_name, req, moduleId: result._id, resource: result.toObject() });
 
     res.status(200).json({
       success: true,
@@ -701,7 +701,7 @@ router.delete('/:id', checkResourcePermission('site', 'delete', (req) => req.par
     await cascadeSiteDelete(req.params.id, tenantId);
 
     // Log audit for site deletion
-    await logDelete({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
+    logDelete({ module: 'site', resourceName: site.site_name, req, moduleId: site._id, resource: site.toObject() });
 
     res.status(200).json({
       success: true,
