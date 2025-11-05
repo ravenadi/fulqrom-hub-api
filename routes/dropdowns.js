@@ -9,8 +9,6 @@ const Asset = require('../models/Asset');
 const BuildingTenant = require('../models/BuildingTenant');
 const Vendor = require('../models/Vendor');
 const Document = require('../models/Document');
-const User = require('../models/User');
-const { filterByUserScope } = require('../middleware/authorizationRules');
 
 const router = express.Router();
 
@@ -66,6 +64,7 @@ function unflattenDropdowns(flattened) {
 // ===== Entity Dropdown Endpoints (must be before parameterized routes) =====
 
 // GET /api/dropdowns/entities/customers - Get all customers for dropdown
+// NO RESTRICTIONS - Returns all customers for the tenant regardless of user's resource access
 router.get('/entities/customers', async (req, res) => {
   try {
     // Get tenant ID from request context, allow fallback to header or query
@@ -79,16 +78,24 @@ router.get('/entities/customers', async (req, res) => {
     }
 
     const mongoose = require('mongoose');
+    // Handle missing is_delete field (for documents created before the field was added)
     const query = {
       is_active: true,
-      is_delete: false,
+      $or: [
+        { is_delete: false },
+        { is_delete: { $exists: false } }
+      ],
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
+
+    console.log('🔍 [CUSTOMER DROPDOWN] Query:', JSON.stringify(query));
 
     const customers = await Customer.find(query)
       .select('_id organisation.organisation_name')
       .sort({ 'organisation.organisation_name': 1 })
       .lean();
+
+    console.log('🔍 [CUSTOMER DROPDOWN] Found customers:', customers.length);
 
     const formattedCustomers = customers.map(customer => ({
       id: customer._id,
@@ -102,6 +109,7 @@ router.get('/entities/customers', async (req, res) => {
       data: formattedCustomers
     });
   } catch (error) {
+    console.error('❌ [CUSTOMER DROPDOWN] Error:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching customers dropdown',
@@ -111,16 +119,9 @@ router.get('/entities/customers', async (req, res) => {
 });
 
 // GET /api/dropdowns/entities/sites - Get all sites for dropdown (with optional customer filter)
+// NO RESTRICTIONS - Returns all sites for the tenant regardless of user's resource access
 router.get('/entities/sites', async (req, res) => {
   try {
-
-    console.log(`🔍 [DROPDOWNS] req.body here ... ${JSON.stringify(req.body)}`);
-
-    console.log('🔍 [DROPDOWNS] /entities/sites request received');
-    console.log('🔍 [DROPDOWNS] req.tenant:', req.tenant);
-    console.log('🔍 [DROPDOWNS] req.tenant?.tenantId:', req.tenant?.tenantId);
-    console.log('🔍 [DROPDOWNS] x-tenant-id header:', req.headers['x-tenant-id']);
-
     const { customer_id } = req.query;
     // Allow fallback to header or query when no tenant context
     const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
@@ -128,7 +129,7 @@ router.get('/entities/sites', async (req, res) => {
     console.log('🔍 [DROPDOWNS] Resolved tenantId:', tenantId);
 
     if (!tenantId) {
-      console.log('❌ [DROPDOWNS] No tenant ID found!');
+      console.log('❌ [SITES DROPDOWN] No tenant ID found!');
       return res.status(400).json({
         success: false,
         message: 'Tenant ID is required'
@@ -138,7 +139,10 @@ router.get('/entities/sites', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
-      is_delete: false,
+      $or: [
+        { is_delete: false },
+        { is_delete: { $exists: false } }
+      ],
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -155,6 +159,54 @@ router.get('/entities/sites', async (req, res) => {
       .sort({ site_name: 1 })
       .lean();
 
+    console.log('🔍 [SITES DROPDOWN] Found sites:', sites.length);
+    if (sites.length === 0) {
+      console.log('⚠️ [SITES DROPDOWN] No sites found - running diagnostic queries...');
+
+      // Check all sites in tenant
+      const allSitesCount = await Site.countDocuments({ tenant_id: new mongoose.Types.ObjectId(tenantId), is_delete: false });
+      console.log('🔍 [SITES DROPDOWN] Total sites in tenant (ignoring is_active):', allSitesCount);
+
+      // Check active sites in tenant
+      const activeSitesCount = await Site.countDocuments({
+        tenant_id: new mongoose.Types.ObjectId(tenantId),
+        is_delete: false,
+        is_active: true
+      });
+      console.log('🔍 [SITES DROPDOWN] Active sites in tenant:', activeSitesCount);
+
+      if (customer_id) {
+        // Check all sites for customer
+        const sitesForCustomer = await Site.countDocuments({
+          tenant_id: new mongoose.Types.ObjectId(tenantId),
+          customer_id: customer_id,
+          is_delete: false
+        });
+        console.log(`🔍 [SITES DROPDOWN] Sites for customer ${customer_id} (ignoring is_active):`, sitesForCustomer);
+
+        // Check active sites for customer
+        const activeSitesForCustomer = await Site.countDocuments({
+          tenant_id: new mongoose.Types.ObjectId(tenantId),
+          customer_id: customer_id,
+          is_delete: false,
+          is_active: true
+        });
+        console.log(`🔍 [SITES DROPDOWN] Active sites for customer ${customer_id}:`, activeSitesForCustomer);
+
+        // Get a sample site to see what's in the database
+        const sampleSite = await Site.findOne({
+          tenant_id: new mongoose.Types.ObjectId(tenantId),
+          customer_id: customer_id
+        }).select('_id site_name customer_id tenant_id is_active is_delete').lean();
+
+        if (sampleSite) {
+          console.log('🔍 [SITES DROPDOWN] Sample site found:', JSON.stringify(sampleSite));
+        } else {
+          console.log('❌ [SITES DROPDOWN] No sites exist for this customer at all');
+        }
+      }
+    }
+
     const formattedSites = sites.map(site => ({
       id: site._id,
       label: site.site_name || 'Unnamed Site',
@@ -168,6 +220,7 @@ router.get('/entities/sites', async (req, res) => {
       data: formattedSites
     });
   } catch (error) {
+    console.error('❌ [SITES DROPDOWN] Error:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching sites dropdown',
@@ -190,9 +243,13 @@ router.get('/entities/buildings', async (req, res) => {
     }
 
     const mongoose = require('mongoose');
+    // Handle missing is_delete field (for documents created before the field was added)
     const filter = {
       is_active: true,
-      is_delete: false,
+      $or: [
+        { is_delete: false },
+        { is_delete: { $exists: false } }
+      ],
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -252,8 +309,12 @@ router.get('/entities/floors', async (req, res) => {
     }
 
     const mongoose = require('mongoose');
+    // Handle missing is_delete field (for documents created before the field was added)
     const filter = {
-      is_delete: false,
+      $or: [
+        { is_delete: false },
+        { is_delete: { $exists: false } }
+      ],
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -321,9 +382,13 @@ router.get('/entities/assets', async (req, res) => {
     }
 
     const mongoose = require('mongoose');
+    // Handle missing is_delete field (for documents created before the field was added)
     const filter = {
       is_active: true,
-      is_delete: false,
+      $or: [
+        { is_delete: false },
+        { is_delete: { $exists: false } }
+      ],
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -405,9 +470,13 @@ router.get('/entities/tenants', async (req, res) => {
     }
 
     const mongoose = require('mongoose');
+    // Handle missing is_delete field (for documents created before the field was added)
     const filter = {
       is_active: true,
-      is_delete: false,
+      $or: [
+        { is_delete: false },
+        { is_delete: { $exists: false } }
+      ],
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -484,9 +553,13 @@ router.get('/entities/vendors', async (req, res) => {
     }
 
     const mongoose = require('mongoose');
+    // Handle missing is_delete field (for documents created before the field was added)
     const filter = {
       is_active: true,
-      is_delete: false,
+      $or: [
+        { is_delete: false },
+        { is_delete: { $exists: false } }
+      ],
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -535,9 +608,13 @@ router.get('/entities/users', async (req, res) => {
 
     const User = require('../models/User');
     const mongoose = require('mongoose');
+    // Handle missing is_delete field (for documents created before the field was added)
     const filter = {
       is_active: true,
-      is_delete: false,
+      $or: [
+        { is_delete: false },
+        { is_delete: { $exists: false } }
+      ],
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
