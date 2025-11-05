@@ -2,10 +2,12 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Asset = require('../models/Asset');
 const Document = require('../models/Document');
+const Customer = require('../models/Customer');
 const { validateCreateAsset, validateUpdateAsset } = require('../middleware/assetValidation');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
+const { resolveHierarchy } = require('../utils/hierarchyLookup');
 
 const router = express.Router();
 
@@ -474,12 +476,44 @@ router.post('/', checkModulePermission('assets', 'create'), validateCreateAsset,
       });
     }
 
-    const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
+    let { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
 
-    if (!customer_id) {
+    // Auto-populate parent entity IDs from child entities (hierarchy resolution)
+    const hierarchyData = await resolveHierarchy({
+      customer_id,
+      site_id,
+      building_id,
+      floor_id
+    });
+
+    // Extract resolved IDs
+    customer_id = hierarchyData.customer_id;
+    site_id = hierarchyData.site_id;
+    building_id = hierarchyData.building_id;
+    floor_id = hierarchyData.floor_id;
+
+    // Validate customer_id was populated (either provided or resolved)
+    if (!customer_id || customer_id === '') {
       return res.status(400).json({
         success: false,
-        message: 'customer_id is required'
+        message: 'The selected building is not properly configured. Please contact your administrator to assign a customer to this building.',
+        errors: [{
+          field: 'building_id',
+          message: 'Building does not have a valid customer assignment'
+        }]
+      });
+    }
+
+    // Validate customer exists
+    const customer = await Customer.findById(customer_id);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found',
+        errors: [{
+          field: 'customer_id',
+          message: 'The specified customer does not exist'
+        }]
       });
     }
 
@@ -612,7 +646,48 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
       });
     }
 
-    const { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
+    let { customer_id, site_id, building_id, floor_id, ...otherFields } = req.body;
+
+    // Auto-populate parent entity IDs from child entities (hierarchy resolution)
+    const hierarchyData = await resolveHierarchy({
+      customer_id,
+      site_id,
+      building_id,
+      floor_id
+    });
+
+    // Extract resolved IDs
+    customer_id = hierarchyData.customer_id;
+    site_id = hierarchyData.site_id;
+    building_id = hierarchyData.building_id;
+    floor_id = hierarchyData.floor_id;
+
+    // Validate customer_id was populated (either provided or resolved)
+    if (customer_id !== undefined && (!customer_id || customer_id === '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected building is not properly configured. Please contact your administrator to assign a customer to this building.',
+        errors: [{
+          field: 'building_id',
+          message: 'Building does not have a valid customer assignment'
+        }]
+      });
+    }
+
+    // Validate customer exists if customer_id is being updated
+    if (customer_id && customer_id !== '') {
+      const customer = await Customer.findById(customer_id);
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Customer not found',
+          errors: [{
+            field: 'customer_id',
+            message: 'The specified customer does not exist'
+          }]
+        });
+      }
+    }
 
     // Prevent tenant_id from being changed
     delete otherFields.tenant_id;

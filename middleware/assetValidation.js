@@ -13,16 +13,13 @@ const currencySchema = Joi.number().min(0).precision(2).allow(null).optional();
 
 // Create Asset Schema
 const createAssetSchema = Joi.object({
-  // Required fields
-  customer_id: Joi.string().required().messages({
-    'string.empty': 'customer_id is required',
-    'any.required': 'customer_id is required'
-  }),
+  // Optional - will be resolved from building_id if not provided
+  customer_id: Joi.string().allow('', null).optional(),
 
   // Optional reference fields
-  site_id: Joi.string().allow(null).optional(),
-  building_id: Joi.string().allow(null).optional(),
-  floor_id: Joi.string().allow(null).optional(),
+  site_id: Joi.string().allow('', null).optional(),
+  building_id: Joi.string().allow('', null).optional(),
+  floor_id: Joi.string().allow('', null).optional(),
 
   // Primary Information
   asset_id: Joi.string().trim().allow('', null).optional(),
@@ -76,6 +73,16 @@ const createAssetSchema = Joi.object({
 
   // System fields
   is_active: Joi.boolean().optional()
+}).custom((value, helpers) => {
+  // Require either customer_id OR building_id
+  const hasCustomerId = value.customer_id && value.customer_id !== '';
+  const hasBuildingId = value.building_id && value.building_id !== '';
+
+  if (!hasCustomerId && !hasBuildingId) {
+    return helpers.message('Either customer_id or building_id must be provided');
+  }
+
+  return value;
 }).options({
   stripUnknown: false, // Keep unknown fields for flexibility
   abortEarly: false
@@ -84,10 +91,10 @@ const createAssetSchema = Joi.object({
 // Update Asset Schema (all fields optional except when modifying references)
 const updateAssetSchema = Joi.object({
   // Optional reference fields
-  customer_id: Joi.string().allow(null).optional(),
-  site_id: Joi.string().allow(null).optional(),
-  building_id: Joi.string().allow(null).optional(),
-  floor_id: Joi.string().allow(null).optional(),
+  customer_id: Joi.string().allow('', null).optional(),
+  site_id: Joi.string().allow('', null).optional(),
+  building_id: Joi.string().allow('', null).optional(),
+  floor_id: Joi.string().allow('', null).optional(),
 
   // Primary Information
   asset_id: Joi.string().trim().allow('', null).optional(),
