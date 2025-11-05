@@ -79,6 +79,7 @@ router.get('/entities/customers', async (req, res) => {
     const mongoose = require('mongoose');
     const query = {
       is_active: true,
+      is_delete: false,
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -135,6 +136,7 @@ router.get('/entities/sites', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
+      is_delete: false,
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -188,6 +190,7 @@ router.get('/entities/buildings', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
+      is_delete: false,
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -248,6 +251,7 @@ router.get('/entities/floors', async (req, res) => {
 
     const mongoose = require('mongoose');
     const filter = {
+      is_delete: false,
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -317,6 +321,7 @@ router.get('/entities/assets', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
+      is_delete: false,
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -400,6 +405,7 @@ router.get('/entities/tenants', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
+      is_delete: false,
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -478,6 +484,7 @@ router.get('/entities/vendors', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
+      is_delete: false,
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
@@ -528,6 +535,7 @@ router.get('/entities/users', async (req, res) => {
     const mongoose = require('mongoose');
     const filter = {
       is_active: true,
+      is_delete: false,
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 

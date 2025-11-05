@@ -80,6 +80,11 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  is_delete: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
 
   // Roles (many-to-many using array of role IDs)
   role_ids: [{
@@ -144,6 +149,7 @@ UserSchema.index({ role_ids: 1 });
 UserSchema.index({ created_at: -1 });
 UserSchema.index({ 'resource_access.resource_type': 1 });
 UserSchema.index({ 'resource_access.resource_id': 1 });
+UserSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Virtual for display name
 UserSchema.virtual('display_name').get(function() {
