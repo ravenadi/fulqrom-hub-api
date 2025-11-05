@@ -61,18 +61,27 @@ function initializeSocketIO(httpServer) {
   // Authenticate Socket.IO connections using Bearer tokens
   io.use(async (socket, next) => {
     try {
+      console.log(`🔍 Socket authentication attempt for ${socket.id}`);
+      console.log(`🔍 Handshake auth:`, socket.handshake.auth);
+
       const token = socket.handshake.auth.token;
-      
+
       if (!token) {
         console.warn(`⚠️ Socket authentication failed: No token provided for ${socket.id}`);
+        console.warn(`⚠️ Available auth keys:`, Object.keys(socket.handshake.auth));
         return next(new Error('Authentication error: No token provided'));
       }
+
+      console.log(`✓ Token received, length: ${token.length}, preview: ${token.substring(0, 20)}...`);
 
       // Use the same requireAuth middleware used for HTTP requests
       const { requireAuth } = require('../middleware/auth0');
       
       // Create a proper Express-like request object
       const mockReq = {
+        method: 'GET', // Required by express-oauth2-jwt-bearer
+        url: '/socket.io/', // Mock URL
+        path: '/socket.io/', // Mock path
         get: (header) => {
           if (header.toLowerCase() === 'authorization') {
             return `Bearer ${token}`;
@@ -101,14 +110,18 @@ function initializeSocketIO(httpServer) {
       };
 
       // Validate JWT using requireAuth middleware
+      console.log(`🔍 Validating JWT token...`);
       await requireAuth[0](mockReq, mockRes, mockNext);
       await requireAuth[1](mockReq, mockRes, mockNext);
+      console.log(`✓ JWT validation passed`);
 
       // Extract user info from token
       const payload = mockReq.auth?.payload || mockReq.auth;
       const auth0UserId = payload.sub;
+      console.log(`🔍 Auth0 user ID from token: ${auth0UserId}`);
 
       // Find user in database
+      console.log(`🔍 Looking up user with auth0_id: ${auth0UserId}`);
       const user = await User.findOne({ auth0_id: auth0UserId })
         .populate('role_ids', 'name description permissions');
 
@@ -116,6 +129,8 @@ function initializeSocketIO(httpServer) {
         console.warn(`⚠️ Socket authentication failed: User not found for ${auth0UserId}`);
         return next(new Error('Authentication error: User not found'));
       }
+
+      console.log(`✓ User found: ${user.email} (${user._id})`);
 
       // Attach user info to socket
       socket.userId = user._id.toString();
@@ -129,6 +144,7 @@ function initializeSocketIO(httpServer) {
       next();
     } catch (error) {
       console.error(`❌ Socket authentication error for ${socket.id}:`, error.message);
+      console.error(`❌ Error stack:`, error.stack);
       next(new Error('Authentication error'));
     }
   });
