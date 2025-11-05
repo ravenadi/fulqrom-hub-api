@@ -38,6 +38,7 @@ const { sendNotificationAsync, sendEmailAsync } = require('../utils/asyncHelpers
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
+const { resolveHierarchy } = require('../utils/hierarchyLookup');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -927,7 +928,25 @@ router.post('/', checkModulePermission('documents', 'create'), preserveALSContex
     }
 
     // Use validated data from middleware
-    const documentData = req.validatedData;
+    let documentData = req.validatedData;
+
+    // Auto-populate parent entity IDs from child selections (for users with limited permissions)
+    // E.g., Building Manager selects building → auto-fills customer_id and site_id
+    documentData = await resolveHierarchy(documentData);
+
+    // Validate that customer_id was populated (either provided or resolved from hierarchy)
+    if (!documentData.customer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected building is not properly configured. Please contact your administrator to assign a customer to this building.',
+        errors: [
+          {
+            field: 'building_id',
+            message: 'Building does not have a valid customer assignment'
+          }
+        ]
+      });
+    }
 
     // Get logged-in user data using helper function
     const { getCurrentUser } = require('../utils/authHelper');
@@ -1211,6 +1230,21 @@ router.post('/', checkModulePermission('documents', 'create'), preserveALSContex
           );
         }
       });
+
+      // Send in-app notifications to all approvers asynchronously
+      sendNotificationAsync(
+        () => notificationService.notifyDocumentApproversAssigned(
+          document,
+          documentData.approval_config.approvers,
+          {
+            userId: documentData.created_by?.user_id || req.user?.id,
+            userName: documentData.created_by?.user_name || req.user?.firstName + ' ' + req.user?.lastName,
+            userEmail: documentData.created_by?.email || req.user?.email
+          },
+          req.tenant?.tenantId
+        ),
+        `document_approver_notification_${document._id}`
+      );
     }
 
     res.status(201).json({
@@ -1549,7 +1583,26 @@ router.put('/:id', checkModulePermission('documents', 'edit'), requireIfMatch, v
     // Get old document to compare changes - scoped to tenant
     const oldDocument = await Document.findById(req.params.id).setOptions({ _tenantId: req.tenant.tenantId }).lean();
 
-    const updateData = { ...req.body };
+    let updateData = { ...req.body };
+
+    // Auto-populate parent entity IDs from child selections (for users with limited permissions)
+    // E.g., Building Manager edits document with building → preserves/updates customer_id and site_id
+    updateData = await resolveHierarchy(updateData);
+
+    // Validate that customer_id is present (either provided or resolved from hierarchy)
+    if (!updateData.customer_id && !oldDocument.customer?.customer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected building is not properly configured. Please contact your administrator to assign a customer to this building.',
+        errors: [
+          {
+            field: 'building_id',
+            message: 'Building does not have a valid customer assignment'
+          }
+        ]
+      });
+    }
+
     updateData.updated_at = new Date().toISOString();
 
     // Prevent tenant_id from being changed

@@ -61,10 +61,66 @@ function unflattenDropdowns(flattened) {
   return nested;
 }
 
+/**
+ * Filter entities based on user's resource_access array
+ * Admin users bypass all filtering
+ *
+ * @param {Array} entities - Array of entity objects with _id field
+ * @param {string} resourceType - Type of resource ('customer', 'site', 'building', 'floor', 'asset', 'tenant', 'vendor')
+ * @param {Object} user - User object from req.user
+ * @returns {Array} Filtered entities array
+ */
+function filterByResourceAccess(entities, resourceType, user) {
+  // No user provided - return empty
+  if (!user) {
+    return [];
+  }
+
+  // Admin bypass - see everything
+  // Check role_ids array for Admin role
+  if (user.role_ids && Array.isArray(user.role_ids)) {
+    const hasAdminRole = user.role_ids.some(role =>
+      role && (role.name === 'Admin' || role.name === 'admin' || role.name === 'ADMIN')
+    );
+    if (hasAdminRole) {
+      console.log(`✅ [FILTER] Admin bypass for ${user.email} - showing all ${resourceType}s`);
+      return entities;
+    }
+  }
+
+  // If user has no resource_access array, show all (permissive default)
+  // Role-based module permissions are already checked at authorization layer
+  if (!user.resource_access || !Array.isArray(user.resource_access)) {
+    return entities;
+  }
+
+  // If resource_access array is empty, show all
+  if (user.resource_access.length === 0) {
+    return entities;
+  }
+
+  // Get allowed resource IDs for this resource type
+  const allowedResourceIds = user.resource_access
+    .filter(ra => ra.resource_type === resourceType)
+    .map(ra => ra.resource_id?.toString())
+    .filter(id => id); // Remove nulls/undefined
+
+  // If no specific access defined for this resource type, show all (permissive default)
+  // This means the user's role has access to the module, but no specific resource restrictions
+  if (allowedResourceIds.length === 0) {
+    return entities;
+  }
+
+  // Filter entities to only those in allowed list
+  return entities.filter(entity =>
+    allowedResourceIds.includes(entity._id.toString())
+  );
+}
+
 // ===== Entity Dropdown Endpoints (must be before parameterized routes) =====
 
 // GET /api/dropdowns/entities/customers - Get all customers for dropdown
-// NO RESTRICTIONS - Returns all customers for the tenant regardless of user's resource access
+// FILTERED by user's resource_access (Admin sees all)
 router.get('/entities/customers', async (req, res) => {
   try {
     // Get tenant ID from request context, allow fallback to header or query
@@ -90,12 +146,15 @@ router.get('/entities/customers', async (req, res) => {
 
     console.log('🔍 [CUSTOMER DROPDOWN] Query:', JSON.stringify(query));
 
-    const customers = await Customer.find(query)
+    let customers = await Customer.find(query)
       .select('_id organisation.organisation_name')
       .sort({ 'organisation.organisation_name': 1 })
       .lean();
 
     console.log('🔍 [CUSTOMER DROPDOWN] Found customers:', customers.length);
+
+    // Apply resource access filtering
+    customers = filterByResourceAccess(customers, 'customer', req.user);
 
     const formattedCustomers = customers.map(customer => ({
       id: customer._id,
@@ -119,7 +178,7 @@ router.get('/entities/customers', async (req, res) => {
 });
 
 // GET /api/dropdowns/entities/sites - Get all sites for dropdown (with optional customer filter)
-// NO RESTRICTIONS - Returns all sites for the tenant regardless of user's resource access
+// FILTERED by user's resource_access (Admin sees all)
 router.get('/entities/sites', async (req, res) => {
   try {
     const { customer_id } = req.query;
@@ -154,12 +213,15 @@ router.get('/entities/sites', async (req, res) => {
       filter.customer_id = Array.isArray(customerIds) ? { $in: customerIds } : customerIds;
     }
 
-    const sites = await Site.find(filter)
+    let sites = await Site.find(filter)
       .select('_id site_name customer_id')
       .sort({ site_name: 1 })
       .lean();
 
     console.log('🔍 [SITES DROPDOWN] Found sites:', sites.length);
+
+    // Apply resource access filtering
+    sites = filterByResourceAccess(sites, 'site', req.user);
     if (sites.length === 0) {
       console.log('⚠️ [SITES DROPDOWN] No sites found - running diagnostic queries...');
 
@@ -230,6 +292,7 @@ router.get('/entities/sites', async (req, res) => {
 });
 
 // GET /api/dropdowns/entities/buildings - Get all buildings for dropdown (with optional site and customer filter)
+// FILTERED by user's resource_access (Admin sees all)
 router.get('/entities/buildings', async (req, res) => {
   try {
     const { site_id, customer_id } = req.query;
@@ -268,10 +331,13 @@ router.get('/entities/buildings', async (req, res) => {
       filter.site_id = Array.isArray(siteIds) ? { $in: siteIds } : siteIds;
     }
 
-    const buildings = await Building.find(filter)
+    let buildings = await Building.find(filter)
       .select('_id building_name site_id customer_id')
       .sort({ building_name: 1 })
       .lean();
+
+    // Apply resource access filtering
+    buildings = filterByResourceAccess(buildings, 'building', req.user);
 
     const formattedBuildings = buildings.map(building => ({
       id: building._id,
@@ -296,6 +362,7 @@ router.get('/entities/buildings', async (req, res) => {
 });
 
 // GET /api/dropdowns/entities/floors - Get all floors for dropdown (with optional building, site and customer filter)
+// FILTERED by user's resource_access (Admin sees all)
 router.get('/entities/floors', async (req, res) => {
   try {
     const { building_id, site_id, customer_id } = req.query;
@@ -340,10 +407,13 @@ router.get('/entities/floors', async (req, res) => {
       filter.building_id = Array.isArray(buildingIds) ? { $in: buildingIds } : buildingIds;
     }
 
-    const floors = await Floor.find(filter)
+    let floors = await Floor.find(filter)
       .select('_id floor_name floor_number building_id site_id customer_id')
       .sort({ floor_number: 1 })
       .lean();
+
+    // Apply resource access filtering
+    floors = filterByResourceAccess(floors, 'floor', req.user);
 
     const formattedFloors = floors.map(floor => ({
       id: floor._id,
@@ -369,6 +439,7 @@ router.get('/entities/floors', async (req, res) => {
 });
 
 // GET /api/dropdowns/entities/assets - Get all assets for dropdown (with optional filters)
+// FILTERED by user's resource_access (Admin sees all)
 router.get('/entities/assets', async (req, res) => {
   try {
     const { floor_id, building_id, site_id, customer_id, category, status, condition } = req.query;
@@ -424,10 +495,13 @@ router.get('/entities/assets', async (req, res) => {
     if (status) filter.status = status;
     if (condition) filter.condition = condition;
 
-    const assets = await Asset.find(filter)
+    let assets = await Asset.find(filter)
       .select('_id asset_no category status condition floor_id building_id site_id customer_id')
       .sort({ asset_no: 1 })
       .lean();
+
+    // Apply resource access filtering
+    assets = filterByResourceAccess(assets, 'asset', req.user);
 
     const formattedAssets = assets.map(asset => ({
       id: asset._id,
@@ -457,6 +531,7 @@ router.get('/entities/assets', async (req, res) => {
 });
 
 // GET /api/dropdowns/entities/tenants - Get all tenants for dropdown (with optional building filter)
+// FILTERED by user's resource_access (Admin sees all)
 router.get('/entities/tenants', async (req, res) => {
   try {
     const { building_id, site_id, customer_id, floor_id, tenant_status } = req.query;
@@ -510,10 +585,13 @@ router.get('/entities/tenants', async (req, res) => {
     }
     if (tenant_status) filter.tenant_status = tenant_status;
 
-    const tenants = await BuildingTenant.find(filter)
+    let tenants = await BuildingTenant.find(filter)
       .select('_id  tenant_trading_name tenant_legal_name building_id site_id customer_id')
       .sort({ tenant_trading_name: 1 })
       .lean();
+
+    // Apply resource access filtering
+    tenants = filterByResourceAccess(tenants, 'tenant', req.user);
 
     const formattedTenants = tenants.map(tenant => ({
       id: tenant._id,
@@ -540,6 +618,7 @@ router.get('/entities/tenants', async (req, res) => {
 });
 
 // GET /api/dropdowns/entities/vendors - Get all vendors for dropdown
+// FILTERED by user's resource_access (Admin sees all)
 router.get('/entities/vendors', async (req, res) => {
   try {
     const { category } = req.query;
@@ -567,10 +646,13 @@ router.get('/entities/vendors', async (req, res) => {
       filter.category = category;
     }
 
-    const vendors = await Vendor.find(filter)
+    let vendors = await Vendor.find(filter)
       .select('_id contractor_name trading_name contractor_type')
       .sort({ trading_name: 1 })
       .lean();
+
+    // Apply resource access filtering
+    vendors = filterByResourceAccess(vendors, 'vendor', req.user);
 
     const formattedVendors = vendors.map(vendor => ({
       id: vendor._id,
@@ -595,6 +677,8 @@ router.get('/entities/vendors', async (req, res) => {
 });
 
 // GET /api/dropdowns/entities/users - Get all users for dropdown
+// FILTERED by user's resource_access (Admin sees all)
+// Note: Users typically don't have resource-level filtering, but pattern applied for consistency
 router.get('/entities/users', async (req, res) => {
   try {
     const tenantId = req.tenant?.tenantId || req.headers['x-tenant-id'] || req.query.tenant_id;
@@ -618,10 +702,13 @@ router.get('/entities/users', async (req, res) => {
       tenant_id: new mongoose.Types.ObjectId(tenantId)
     };
 
-    const users = await User.find(filter)
+    let users = await User.find(filter)
       .select('_id full_name email first_name last_name')
       .sort({ full_name: 1 })
       .lean();
+
+    // Apply resource access filtering (typically returns all users in tenant for non-admin roles)
+    users = filterByResourceAccess(users, 'user', req.user);
 
     const formattedUsers = users.map(user => ({
       id: user._id,

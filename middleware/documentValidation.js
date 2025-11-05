@@ -19,14 +19,14 @@ const createDocumentSchema = Joi.object({
   // Engineering discipline - loaded from GET /api/dropdowns (document_document_engineering_disciplines)
   engineering_discipline: Joi.string().optional().trim(),
 
-  // Customer information (required)
-  customer_id: Joi.string().required(),
+  // Customer information (optional - will be resolved from building_id if not provided)
+  customer_id: Joi.string().optional().allow(''),
   customer_name: Joi.string().optional(),
 
-  // Location associations (optional)
-  site_id: Joi.string().optional(),
+  // Location associations (optional, can be resolved from building_id)
+  site_id: Joi.string().optional().allow(''),
   site_name: Joi.string().optional(),
-  building_id: Joi.string().optional(),
+  building_id: Joi.string().optional().allow(''),
   building_name: Joi.string().optional(),
   floor_id: Joi.string().optional(),
   floor_name: Joi.string().optional(),
@@ -102,6 +102,16 @@ const createDocumentSchema = Joi.object({
       email: Joi.string().email().required().trim()
     })
   ).optional()
+}).custom((value, helpers) => {
+  // Custom validation: Require either customer_id OR building_id
+  const hasCustomerId = value.customer_id && value.customer_id !== '';
+  const hasBuildingId = value.building_id && value.building_id !== '';
+
+  if (!hasCustomerId && !hasBuildingId) {
+    return helpers.message('Either customer or building must be provided');
+  }
+
+  return value;
 });
 
 // Document update validation schema
