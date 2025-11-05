@@ -4,6 +4,7 @@ const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 const { logUpdate, logDelete } = require('../utils/auditLogger');
+const { resolveHierarchy } = require('../utils/hierarchyLookup');
 
 const router = express.Router();
 
@@ -113,12 +114,18 @@ const validateTenantData = (req, res, next) => {
 
   // Required fields validation
   if (req.method === 'POST') {
-    const requiredFields = ['tenant_legal_name', 'building_id', 'customer_id'];
-    requiredFields.forEach(field => {
-      if (!tenant_data[field]) {
-        errors.push(`${field.replace('_', ' ')} is required`);
-      }
-    });
+    // tenant_legal_name is always required
+    if (!tenant_data.tenant_legal_name) {
+      errors.push('Tenant legal name is required');
+    }
+
+    // Require either customer_id OR building_id
+    const hasCustomerId = tenant_data.customer_id && tenant_data.customer_id !== '';
+    const hasBuildingId = tenant_data.building_id && tenant_data.building_id !== '';
+
+    if (!hasCustomerId && !hasBuildingId) {
+      errors.push('Either customer or building must be provided');
+    }
   }
 
   if (errors.length > 0) {
@@ -290,10 +297,25 @@ router.post('/', checkModulePermission('tenants', 'create'), validateTenantData,
     }
 
     // Create building tenant with tenant_id from authenticated user
-    const tenantData = {
+    let tenantData = {
       ...req.body,
       tenant_id: tenantId
     };
+
+    // Auto-populate parent entity IDs from hierarchy
+    tenantData = await resolveHierarchy(tenantData);
+
+    // Validate customer_id was populated
+    if (!tenantData.customer_id || tenantData.customer_id === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected building is not properly configured. Please contact your administrator to assign a customer to this building.',
+        errors: [{
+          field: 'building_id',
+          message: 'Building does not have a valid customer assignment'
+        }]
+      });
+    }
 
     const tenant = new BuildingTenant(tenantData);
     tenant.$setAuditContext(req, 'create');
@@ -369,20 +391,42 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
     }
 
     // Prevent updating tenant_id
-    const updateData = { ...req.body };
+    let updateData = { ...req.body };
     delete updateData.tenant_id;
 
+    // Auto-populate parent entity IDs
+    updateData = await resolveHierarchy(updateData);
+
+    // Validate customer_id if building_id was provided
+    if (updateData.building_id && (!updateData.customer_id || updateData.customer_id === '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected building is not properly configured. Please contact your administrator.',
+        errors: [{
+          field: 'building_id',
+          message: 'Building does not have a valid customer assignment'
+        }]
+      });
+    }
+
     // Build atomic update object - filter out undefined/null to preserve existing data
-    const allowedFields = ['tenant_name', 'customer_id', 'site_id', 'building_id', 'floor_id',
-      'unit_number', 'lease_start', 'lease_end', 'lease_status', 'status', 'is_active',
-      'contact_info', 'notes', 'rent_amount', 'deposit_amount'];
+    const allowedFields = [
+      'tenant_name', 'tenant_legal_name', 'tenant_trading_name',
+      'customer_id', 'site_id', 'building_id', 'floor_id',
+      'abn', 'industry_type', 'industry', 'lease_status',
+      'location', 'occupied_area', 'occupied_area_unit', 'area_sqm',
+      'lease_start_date', 'lease_end_date', 'rent_amount', 'rent_frequency',
+      'employee_count', 'business_hours', 'special_requirements',
+      'parking_allocation', 'emergency_contact', 'contacts',
+      'contact_details', 'metadata', 'is_active'
+    ];
     const atomicUpdate = {};
     Object.keys(updateData).forEach(key => {
       if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {
         atomicUpdate[key] = updateData[key];
       }
     });
-    
+
     // Add updated_at
     atomicUpdate.updated_at = new Date().toISOString();
 

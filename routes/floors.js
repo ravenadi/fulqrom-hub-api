@@ -1,9 +1,12 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Floor = require('../models/Floor');
+const Customer = require('../models/Customer');
+const Site = require('../models/Site');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
+const { resolveHierarchy } = require('../utils/hierarchyLookup');
 
 const router = express.Router();
 
@@ -178,7 +181,7 @@ router.post('/', checkModulePermission('floors', 'create'), async (req, res) => 
   try {
     // Validation for new fields
     const errors = [];
-    const floorData = { ...req.body };
+    let floorData = { ...req.body };
 
     // Handle backward compatibility: occupancy -> maximum_occupancy
     if (floorData.occupancy !== undefined && floorData.maximum_occupancy === undefined) {
@@ -242,6 +245,51 @@ router.post('/', checkModulePermission('floors', 'create'), async (req, res) => 
       });
     }
 
+    // Auto-populate parent entity IDs from building
+    floorData = await resolveHierarchy(floorData);
+
+    // Validate that customer_id was populated
+    if (!floorData.customer_id || floorData.customer_id === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected building is not properly configured. Please contact your administrator to assign a customer to this building.',
+        errors: [{
+          field: 'building_id',
+          message: 'Building does not have a valid customer assignment'
+        }]
+      });
+    }
+
+    // Validate that site_id was populated
+    if (!floorData.site_id || floorData.site_id === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected building is not properly configured. Please contact your administrator to assign a site to this building.',
+        errors: [{
+          field: 'building_id',
+          message: 'Building does not have a valid site assignment'
+        }]
+      });
+    }
+
+    // Validate customer exists
+    const customer = await Customer.findById(floorData.customer_id);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    // Validate site exists
+    const site = await Site.findById(floorData.site_id);
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+
     // Add tenant_id to floor data
     floorData.tenant_id = tenantId;
 
@@ -275,7 +323,7 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
   try {
     // Validation for new fields
     const errors = [];
-    const floorData = { ...req.body };
+    let floorData = { ...req.body };
 
     // Handle backward compatibility: occupancy -> maximum_occupancy
     if (floorData.occupancy !== undefined && floorData.maximum_occupancy === undefined) {
@@ -376,6 +424,47 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
       });
     }
 
+    // Conditional hierarchy resolution
+    // If building_id changed, re-resolve hierarchy
+    if (floorData.building_id &&
+        floorData.building_id !== floor.building_id?.toString()) {
+      floorData = await resolveHierarchy(floorData);
+    }
+    // If customer_id or site_id is empty, resolve from building
+    else if ((!floorData.customer_id || floorData.customer_id === '') ||
+             (!floorData.site_id || floorData.site_id === '')) {
+      floorData = await resolveHierarchy(floorData);
+    }
+    // Otherwise, preserve existing values
+    else {
+      floorData.customer_id = floorData.customer_id || floor.customer_id;
+      floorData.site_id = floorData.site_id || floor.site_id;
+    }
+
+    // Validate customer_id is present
+    if (!floorData.customer_id || floorData.customer_id === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Building is not properly configured',
+        errors: [{
+          field: 'building_id',
+          message: 'Building does not have a valid customer assignment'
+        }]
+      });
+    }
+
+    // Validate site_id is present
+    if (!floorData.site_id || floorData.site_id === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Building is not properly configured',
+        errors: [{
+          field: 'building_id',
+          message: 'Building does not have a valid site assignment'
+        }]
+      });
+    }
+
     // Prevent updating tenant_id
     const safeFloorData = { ...floorData };
     delete safeFloorData.tenant_id;
@@ -389,7 +478,7 @@ router.put('/:id', checkResourcePermission('floor', 'edit', (req) => req.params.
         atomicUpdate[key] = safeFloorData[key];
       }
     });
-    
+
     // Add updated_at
     atomicUpdate.updated_at = new Date().toISOString();
 

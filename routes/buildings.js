@@ -7,6 +7,7 @@ const BuildingTenant = require('../models/BuildingTenant');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
+const { resolveHierarchy } = require('../utils/hierarchyLookup');
 
 const router = express.Router();
 
@@ -441,12 +442,23 @@ router.post('/', checkModulePermission('buildings', 'create'), async (req, res) 
       });
     }
 
-    // Create building with tenant_id from authenticated user
-    const buildingData = {
-      ...req.body,
-      tenant_id: tenantId
-    };
+    // Auto-populate parent entity IDs using hierarchy resolver
+    let buildingData = { ...req.body, tenant_id: tenantId };
+    buildingData = await resolveHierarchy(buildingData);
 
+    // Validate customer_id was populated after resolution
+    if (!buildingData.customer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected site is not properly configured. Please contact your administrator to assign a customer to this site.',
+        errors: [{
+          field: 'site_id',
+          message: 'Site does not have a valid customer assignment'
+        }]
+      });
+    }
+
+    // Create building with resolved hierarchy
     const building = new Building(buildingData);
     await building.save();
 
@@ -580,8 +592,23 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       });
     }
 
+    // Auto-populate parent entity IDs using hierarchy resolver
+    let updateData = { ...req.body };
+    updateData = await resolveHierarchy(updateData);
+
+    // Validate customer_id was populated after resolution (if site_id was provided)
+    if (updateData.site_id && !updateData.customer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'The selected site is not properly configured. Please contact your administrator to assign a customer to this site.',
+        errors: [{
+          field: 'site_id',
+          message: 'Site does not have a valid customer assignment'
+        }]
+      });
+    }
+
     // Prevent updating tenant_id
-    const updateData = { ...req.body };
     delete updateData.tenant_id;
 
     // Build atomic update object - filter out undefined/null to preserve existing data
