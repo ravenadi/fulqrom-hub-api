@@ -342,3 +342,4 @@ erDiagram
 6. **Fine-grained Permissions**: Users have `resource_access` array for granular control
 
 
+

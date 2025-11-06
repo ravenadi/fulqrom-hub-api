@@ -154,3 +154,4 @@ If you don't see the Cookie header, the frontend is NOT configured to send crede
 - `server.js` - CORS configuration (already has `credentials: true`)
 
 
+
