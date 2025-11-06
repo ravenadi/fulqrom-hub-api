@@ -417,7 +417,7 @@ router.put('/:id', checkResourcePermission('tenant', 'edit', (req) => req.params
       'location', 'occupied_area', 'occupied_area_unit', 'area_sqm',
       'lease_start_date', 'lease_end_date', 'rent_amount', 'rent_frequency',
       'employee_count', 'business_hours', 'special_requirements',
-      'parking_allocation', 'emergency_contact', 'contacts',
+      'parking_allocation', 'emergency_contacts', 'contacts',
       'contact_details', 'metadata', 'is_active'
     ];
     const atomicUpdate = {};
