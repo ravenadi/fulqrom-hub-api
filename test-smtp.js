@@ -1,15 +1,7 @@
 require('dotenv').config();
 const { sendEmail, verifyConnection } = require('./utils/mailer');
 
-// Override environment variables with Gmail SMTP settings
-process.env.MAIL_HOST = 'smtp.gmail.com';
-process.env.MAIL_PORT = '587';
-process.env.MAIL_USERNAME = 'ben@ravenlabs.biz';
-process.env.MAIL_PASSWORD = 'IH$jV*67^SSVVoRh';
-process.env.MAIL_ENCRYPTION = 'tls';
-process.env.MAIL_FROM_ADDRESS = 'ben@ravenlabs.biz';
-process.env.MAIL_FROM_NAME = 'Fulqrom Hub Test';
-
+ 
 
 // process.env.MAIL_PROVIDER='smtp';
 // process.env.MAIL_MAILER='smtp';
