@@ -4602,99 +4602,83 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
         comment: comment
       };
 
-      // Build list of recipients for in-app notifications (always include creator)
-      const inAppRecipients = [];
+      // ============================================================================
+      // SIMPLIFIED: Build notification recipient list (Owner + Approvers - Current User)
+      // ============================================================================
+      const allRecipients = [];
 
-      // Add document creator if exists and not the reviewer
-      // If created_by doesn't exist, try to find the creator from uploaded_by or other fields
-      if (!document.created_by && document.uploaded_by) {
-        // Try to get user info from uploaded_by field
+      // 1. Add document owner/creator
+      if (document.created_by?.email) {
+        allRecipients.push({
+          user_id: document.created_by.user_id || document.created_by.email.toLowerCase(),
+          user_email: document.created_by.email.toLowerCase(),
+          user_name: document.created_by.user_name || document.created_by.email
+        });
+      } else if (document.uploaded_by) {
+        // Fallback: try to find creator from uploaded_by field
         const User = require('../models/User');
         try {
-          // If uploaded_by is an email, find the user
           if (typeof document.uploaded_by === 'string' && document.uploaded_by.includes('@')) {
             const creator = await User.findOne({ email: document.uploaded_by }).lean();
-            if (creator && creator.email !== user_email) {
-              inAppRecipients.push({
+            if (creator) {
+              allRecipients.push({
                 user_id: creator._id.toString(),
-                user_email: creator.email.toLowerCase()
+                user_email: creator.email.toLowerCase(),
+                user_name: creator.name || creator.email
               });
             }
           }
         } catch (err) {
           console.error('Error finding creator from uploaded_by:', err);
         }
-      } else if (document.created_by?.email && document.created_by.email.toLowerCase() !== user_email.toLowerCase()) {
-        // Use user_id if available, otherwise use email as fallback
-        const creatorUserId = document.created_by.user_id || document.created_by.email.toLowerCase();
-
-        inAppRecipients.push({
-          user_id: creatorUserId,
-          user_email: document.created_by.email.toLowerCase()
-        });
       }
 
-      // Build email recipient list: document owner + ALL approvers (excluding reviewer)
-      const emailRecipients = [];
-
-      // Add document owner if exists and not the reviewer
-      if (document.created_by?.email && document.created_by.email.toLowerCase() !== user_email.toLowerCase()) {
-        emailRecipients.push({
-          email: document.created_by.email.toLowerCase(),
-          name: document.created_by.user_name || document.created_by.email
-        });
-      }
-
-      // Add ALL approvers (excluding the reviewer)
+      // 2. Add ALL approvers
       if (document.approval_config?.approvers) {
         for (const approver of document.approval_config.approvers) {
-          if (approver.user_email.toLowerCase() !== user_email.toLowerCase()) {
-            // Avoid duplicates
-            if (!emailRecipients.find(r => r.email === approver.user_email.toLowerCase())) {
-              emailRecipients.push({
-                email: approver.user_email.toLowerCase(),
-                name: approver.user_name || approver.user_email
-              });
-            }
+          // Avoid duplicates (check if already added)
+          if (!allRecipients.find(r => r.user_email === approver.user_email.toLowerCase())) {
+            allRecipients.push({
+              user_id: approver.user_id || approver.user_email.toLowerCase(),
+              user_email: approver.user_email.toLowerCase(),
+              user_name: approver.user_name || approver.user_email
+            });
           }
         }
       }
 
-      console.log('📧 Sending review notification emails to:', {
-        count: emailRecipients.length,
-        recipients: emailRecipients.map(r => r.email)
+      // 3. Exclude current logged-in user from the list
+      const recipients = allRecipients.filter(r =>
+        r.user_email.toLowerCase() !== user_email.toLowerCase()
+      );
+
+      console.log('📧 Sending review notifications to:', {
+        count: recipients.length,
+        recipients: recipients.map(r => r.user_email)
       });
 
       // Send email to all recipients
-      for (const recipient of emailRecipients) {
+      for (const recipient of recipients) {
         try {
           // Non-blocking: Send email after response
           sendEmailAsync(
             () => emailService.sendDocumentUpdate({
-              to: recipient.email,
+              to: recipient.user_email,
               documentId: id,
-              creatorName: recipient.name,
+              creatorName: recipient.user_name,
               documentDetails,
               statusUpdate
             }),
-            `document_update_email_${recipient.email}`
+            `document_update_email_${recipient.user_email}`
           );
         } catch (emailError) {
           console.error('Failed to send email notification:', emailError);
           // Email notification failed - continue
         }
-
-        // Add to in-app notification list (avoid duplicates)
-        if (!inAppRecipients.find(r => r.user_email === recipient.email)) {
-          inAppRecipients.push({
-            user_id: recipient.email,
-            user_email: recipient.email
-          });
-        }
       }
 
       // Non-blocking: Send in-app notifications after response
-      if (inAppRecipients.length > 0) {
+      if (recipients.length > 0) {
         // If status was changed, notify about status change. Otherwise, notify about comment
         if (statusChanged) {
           sendNotificationAsync(
@@ -4702,13 +4686,13 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
               document,
               previousStatus,
               status,
-              inAppRecipients,
+              recipients,
               {
                 user_id: user_id || 'unknown',
                 user_name: user_name || user_email,
                 user_email: user_email
               },
-              document.tenant_id  // ✅ ADD tenant_id for multi-tenancy
+              document.tenant_id
             ),
             'document_status_changed_comment'
           );
@@ -4723,8 +4707,8 @@ router.post('/:id/review', validateObjectId, async (req, res) => {
                 user_email: user_email,
                 comment: comment
               },
-              inAppRecipients,
-              document.tenant_id  // ✅ ADD tenant_id for multi-tenancy
+              recipients,
+              document.tenant_id
             ),
             'document_comment_added'
           );
