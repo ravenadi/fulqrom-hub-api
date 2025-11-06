@@ -4,7 +4,9 @@ const Building = require('../models/Building');
 const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
 const BuildingTenant = require('../models/BuildingTenant');
+const Document = require('../models/Document');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
+const { applyScopeFiltering } = require('../middleware/authorizationRules');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 const { resolveHierarchy } = require('../utils/hierarchyLookup');
@@ -198,13 +200,19 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
           as: 'assets_data'
         }
       },
-      // Lookup tenants count
+      // Lookup tenants count (Active tenants only)
       {
         $lookup: {
           from: 'building_tenants',
           let: { buildingId: '$_id' },
           pipeline: [
-            { $match: { $expr: { $eq: ['$building_id', '$$buildingId'] } } },
+            {
+              $match: {
+                $expr: { $eq: ['$building_id', '$$buildingId'] },
+                tenant_status: 'Active',
+                is_delete: { $ne: true }
+              }
+            },
             { $count: 'count' }
           ],
           as: 'tenants_data'
@@ -361,6 +369,107 @@ router.get('/:id', checkResourcePermission('building', 'view', (req) => req.para
     res.status(500).json({
       success: false,
       message: 'Error fetching building',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/buildings/:id/stats - Get building statistics (counts only, for performance)
+router.get('/:id/stats', checkResourcePermission('building', 'view', (req) => req.params.id), applyScopeFiltering('document'), async (req, res) => {
+  try {
+    const buildingId = req.params.id;
+    const tenantId = req.tenant?.tenantId;
+
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required'
+      });
+    }
+
+    // Validate building exists and user has access
+    const building = await Building.findOne({
+      _id: buildingId,
+      tenant_id: tenantId
+    });
+
+    if (!building) {
+      return res.status(404).json({
+        success: false,
+        message: 'Building not found'
+      });
+    }
+
+    // Build documents filter query with category/discipline restrictions
+    const documentsFilterQuery = {
+      'location.building.building_id': buildingId,
+      tenant_id: tenantId,
+      is_delete: { $ne: true },
+      category: { $ne: 'Version' }
+    };
+
+    // Apply document category/discipline access restrictions (Fine-Grained Permissions)
+    if (req.documentFilters && !req.documentFilters.hasFullAccess) {
+      // User has category restrictions
+      if (req.documentFilters.allowedCategories && req.documentFilters.allowedCategories.length > 0) {
+        // Apply allowed categories restriction (and exclude Version)
+        const allowedCats = req.documentFilters.allowedCategories.filter(cat => cat !== 'Version');
+        documentsFilterQuery.category = { $in: allowedCats };
+      }
+
+      // User has discipline restrictions
+      if (req.documentFilters.allowedDisciplines && req.documentFilters.allowedDisciplines.length > 0) {
+        documentsFilterQuery.engineering_discipline = { $in: req.documentFilters.allowedDisciplines };
+      }
+
+      // If user has NO allowed categories and NO allowed disciplines, they shouldn't see any documents
+      if (req.documentFilters.allowedCategories.length === 0 &&
+          req.documentFilters.allowedDisciplines.length === 0) {
+        documentsFilterQuery._id = { $in: [] }; // Return empty result set
+      }
+    }
+
+    // Execute all count queries in parallel for performance
+    const [floorsCount, assetsCount, documentsCount, tenantsCount] = await Promise.all([
+      // Count floors
+      Floor.countDocuments({
+        building_id: buildingId,
+        tenant_id: tenantId,
+        is_delete: { $ne: true }
+      }),
+      // Count assets
+      Asset.countDocuments({
+        building_id: buildingId,
+        tenant_id: tenantId,
+        is_delete: { $ne: true }
+      }),
+      // Count documents with user's access restrictions applied
+      Document.countDocuments(documentsFilterQuery),
+      // Count active tenants only
+      BuildingTenant.countDocuments({
+        building_id: buildingId,
+        tenant_id: tenantId,
+        tenant_status: 'Active',
+        is_delete: { $ne: true }
+      })
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        building_id: buildingId,
+        floors_count: floorsCount,
+        assets_count: assetsCount,
+        documents_count: documentsCount,
+        active_tenants_count: tenantsCount
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching building stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching building statistics',
       error: error.message
     });
   }

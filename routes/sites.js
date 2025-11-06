@@ -176,13 +176,19 @@ router.get('/', checkModulePermission('sites', 'view'), tenantContext, async (re
           as: 'floors_data'
         }
       },
-      // Lookup tenants count
+      // Lookup tenants count (Active tenants only)
       {
         $lookup: {
           from: 'building_tenants',
           let: { siteId: '$_id' },
           pipeline: [
-            { $match: { $expr: { $eq: ['$site_id', '$$siteId'] } } },
+            {
+              $match: {
+                $expr: { $eq: ['$site_id', '$$siteId'] },
+                tenant_status: 'Active',
+                is_delete: { $ne: true }
+              }
+            },
             { $count: 'count' }
           ],
           as: 'tenants_data'
@@ -362,13 +368,19 @@ router.get('/:id', checkResourcePermission('site', 'view', (req) => req.params.i
           as: 'floors_data'
         }
       },
-      // Lookup tenants count
+      // Lookup tenants count (Active tenants only)
       {
         $lookup: {
           from: 'building_tenants',
           let: { siteId: '$_id' },
           pipeline: [
-            { $match: { $expr: { $eq: ['$site_id', '$$siteId'] } } },
+            {
+              $match: {
+                $expr: { $eq: ['$site_id', '$$siteId'] },
+                tenant_status: 'Active',
+                is_delete: { $ne: true }
+              }
+            },
             { $count: 'count' }
           ],
           as: 'tenants_data'
