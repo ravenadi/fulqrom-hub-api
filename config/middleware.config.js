@@ -67,6 +67,26 @@ const isAuthenticatedOnlyRoute = (path) => {
 const getModuleFromPath = (path) => {
   const pathSegments = path.split('/').filter(segment => segment);
   const moduleName = pathSegments[0];
+
+  // Special handling for hierarchy routes - determine module based on the specific hierarchy endpoint
+  if (moduleName === 'hierarchy' && pathSegments.length > 1) {
+    const hierarchyType = pathSegments[1];
+
+    // /api/hierarchy/building/:building_id -> requires buildings permission
+    if (hierarchyType === 'building') {
+      return 'buildings';
+    }
+
+    // /api/hierarchy/site/:site_id -> requires sites permission
+    if (hierarchyType === 'site') {
+      return 'sites';
+    }
+
+    // /api/hierarchy/:customer_id (default) -> requires customers permission
+    // This matches routes like /api/hierarchy/123 or /api/hierarchy/123/stats
+    return 'customers';
+  }
+
   return MODULE_MAP[moduleName] || null;
 };
 
