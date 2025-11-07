@@ -13,7 +13,8 @@ const ROLE_PERMISSIONS = {
     vendors: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     customers: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     users: { can_view: true, can_create: true, can_edit: true, can_delete: true },
-    analytics: { can_view: true, can_create: true, can_edit: true, can_delete: true }
+    analytics: { can_view: true, can_create: true, can_edit: true, can_delete: true },
+    audit_logs: { can_view: true, can_create: true, can_edit: true, can_delete: true }
   },
   'Property Manager': {
     sites: { can_view: true, can_create: true, can_edit: true, can_delete: true },
@@ -25,7 +26,8 @@ const ROLE_PERMISSIONS = {
     vendors: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     customers: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     users: { can_view: true, can_create: true, can_edit: true, can_delete: true },
-    analytics: { can_view: true, can_create: true, can_edit: true, can_delete: true }
+    analytics: { can_view: true, can_create: true, can_edit: true, can_delete: true },
+    audit_logs: { can_view: true, can_create: true, can_edit: true, can_delete: true }
   },
   'Building Manager': {
     sites: { can_view: false, can_create: false, can_edit: false, can_delete: false },
@@ -37,7 +39,8 @@ const ROLE_PERMISSIONS = {
     vendors: { can_view: true, can_create: true, can_edit: true, can_delete: true },
     customers: { can_view: false, can_create: false, can_edit: false, can_delete: false },
     users: { can_view: true, can_create: true, can_edit: true, can_delete: true },
-    analytics: { can_view: true, can_create: true, can_edit: false, can_delete: false }
+    analytics: { can_view: true, can_create: true, can_edit: false, can_delete: false },
+    audit_logs: { can_view: true, can_create: false, can_edit: false, can_delete: false }
   },
   'Contractor': {
     sites: { can_view: false, can_create: false, can_edit: false, can_delete: false },
@@ -49,7 +52,8 @@ const ROLE_PERMISSIONS = {
     vendors: { can_view: false, can_create: false, can_edit: false, can_delete: false },
     customers: { can_view: false, can_create: false, can_edit: false, can_delete: false },
     users: { can_view: false, can_create: false, can_edit: false, can_delete: false },
-    analytics: { can_view: false, can_create: false, can_edit: false, can_delete: false }
+    analytics: { can_view: false, can_create: false, can_edit: false, can_delete: false },
+    audit_logs: { can_view: true, can_create: false, can_edit: false, can_delete: false }
   },
   'Tenants': {
     sites: { can_view: false, can_create: false, can_edit: false, can_delete: false },
@@ -61,7 +65,8 @@ const ROLE_PERMISSIONS = {
     vendors: { can_view: false, can_create: false, can_edit: false, can_delete: false },
     customers: { can_view: false, can_create: false, can_edit: false, can_delete: false },
     users: { can_view: false, can_create: false, can_edit: false, can_delete: false },
-    analytics: { can_view: false, can_create: false, can_edit: false, can_delete: false }
+    analytics: { can_view: false, can_create: false, can_edit: false, can_delete: false },
+    audit_logs: { can_view: false, can_create: false, can_edit: false, can_delete: false }
   }
 };
 
