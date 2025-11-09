@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "scheduler": "node scripts/notificationScheduler.js --daemon",
-    "send-reminders": "node scripts/notificationScheduler.js",
+    "scheduler": "BYPASS_TENANT_FILTER=true node scripts/notificationScheduler.js --daemon",
+    "send-reminders": "BYPASS_TENANT_FILTER=true node scripts/notificationScheduler.js",
     "test-expiry": "node scripts/test-expiry-notifications.js",
     "reset-expiry-notifications": "node scripts/reset-expiry-notifications.js",
     "migrate:tenant-structure": "node migrations/run_migration.js",
