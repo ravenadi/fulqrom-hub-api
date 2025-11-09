@@ -243,25 +243,36 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
 
     // Check if user is Admin (full access - no filtering needed)
     if (!isUserAdmin(user)) {
-      // Check if user has module-level access to buildings
-      if (!hasModuleLevelAccess(user, 'buildings')) {
-        // No module access - filter by specific building IDs from resource_access
-        const resourceIds = getAccessibleResourceIds(user, 'building');
-        const accessibleBuildingIds = resourceIds.building || [];
+      // Get user's accessible building IDs from resource_access
+      const resourceIds = getAccessibleResourceIds(user, 'building');
+      const accessibleBuildingIds = resourceIds.building || [];
 
-        if (accessibleBuildingIds.length === 0) {
-          // User has no access to any buildings
-          return res.json({
-            success: true,
-            data: [],
-            count: 0,
-            message: 'No buildings accessible to this user'
-          });
-        }
+      console.log('🔍 Building Coordinates - User Access Check:', {
+        userId: user._id,
+        isAdmin: isUserAdmin(user),
+        hasModuleAccess: hasModuleLevelAccess(user, 'buildings'),
+        accessibleBuildingIds,
+        buildingIdsCount: accessibleBuildingIds.length
+      });
 
-        // Filter by accessible building IDs
+      // If user has specific building access restrictions, apply them
+      if (accessibleBuildingIds.length > 0) {
+        // Filter by accessible building IDs only
         filterQuery._id = { $in: accessibleBuildingIds };
+        console.log('✅ Applying building ID filter:', accessibleBuildingIds);
+      } else if (!hasModuleLevelAccess(user, 'buildings')) {
+        // User has no module-level access AND no specific resource access
+        console.log('❌ User has no access to buildings');
+        return res.json({
+          success: true,
+          data: [],
+          count: 0,
+          message: 'No buildings accessible to this user'
+        });
+      } else {
+        console.log('✅ User has module-level access, showing all buildings in tenant');
       }
+      // If user has module-level access and no specific restrictions, show all buildings in tenant
     }
 
     // Fetch buildings with address data for map display (filtered by permissions)
