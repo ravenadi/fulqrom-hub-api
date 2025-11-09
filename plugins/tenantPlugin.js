@@ -80,6 +80,11 @@ function tenantPlugin(schema, options = {}) {
       return next();
     }
 
+    // Allow bypass for cron jobs/scheduled tasks
+    if (process.env.BYPASS_TENANT_FILTER === 'true') {
+      return next();
+    }
+
     // Get tenant from ALS context (or fallback to options for backward compatibility)
     const tenantId = getTenant() || options._tenantId;
 
@@ -120,6 +125,11 @@ function tenantPlugin(schema, options = {}) {
       return next();
     }
 
+    // Allow bypass for cron jobs/scheduled tasks
+    if (process.env.BYPASS_TENANT_FILTER === 'true') {
+      return next();
+    }
+
     // Get tenant from ALS
     const tenantId = getTenant() || options._tenantId;
 
@@ -157,6 +167,11 @@ function tenantPlugin(schema, options = {}) {
       return next();
     }
 
+    // Allow bypass for cron jobs/scheduled tasks
+    if (process.env.BYPASS_TENANT_FILTER === 'true') {
+      return next();
+    }
+
     // Get tenant from ALS
     const tenantId = getTenant() || options._tenantId;
 
@@ -189,15 +204,20 @@ function tenantPlugin(schema, options = {}) {
   schema.pre('save', function(next) {
     // Only set tenant_id if document is new and doesn't have one
     if (this.isNew && !this.tenant_id) {
+      // Allow bypass for cron jobs/scheduled tasks
+      if (process.env.BYPASS_TENANT_FILTER === 'true') {
+        return next();
+      }
+
       const tenantId = getTenant();
-      
+
       if (!tenantId) {
         if (process.env.NODE_ENV === 'production' && required) {
           const error = new Error('Tenant context missing for save. Cannot create document without tenant.');
           error.code = 'TENANT_CONTEXT_MISSING';
           return next(error);
         }
-        
+
         if (process.env.NODE_ENV === 'development') {
           console.warn(`⚠️  Saving new document without tenant_id: ${this.constructor.modelName}`);
         }
@@ -205,7 +225,7 @@ function tenantPlugin(schema, options = {}) {
         this.tenant_id = tenantId;
       }
     }
-    
+
     next();
   });
 
