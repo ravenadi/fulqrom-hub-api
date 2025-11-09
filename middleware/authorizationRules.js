@@ -17,6 +17,99 @@ const fetchUserById = async (userId) => {
 };
 
 /**
+ * Check if user has Admin role (full access to everything)
+ * @param {Object} user - User object with populated role_ids
+ * @returns {boolean} - True if user is Admin
+ */
+const isUserAdmin = (user) => {
+  if (!user || !user.role_ids) return false;
+  return user.role_ids.some(role => role.is_active && role.name === 'Admin');
+};
+
+/**
+ * Check if user has module-level access to a specific module
+ * @param {Object} user - User object with populated role_ids
+ * @param {string} moduleName - Module name (e.g., 'buildings', 'sites', 'customers')
+ * @returns {boolean} - True if user has module-level view access
+ */
+const hasModuleLevelAccess = (user, moduleName) => {
+  if (!user || !user.role_ids) return false;
+
+  for (const role of user.role_ids) {
+    if (!role.is_active) continue;
+
+    const modulePermission = role.permissions?.find(p => p.entity === moduleName);
+    if (modulePermission && modulePermission.view) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+/**
+ * Get accessible resource IDs for a user by resource type
+ * Returns an object with resource types as keys and arrays of accessible IDs as values
+ * @param {Object} user - User object with resource_access array
+ * @param {string|string[]} resourceTypes - Single resource type or array of types (e.g., 'building' or ['building', 'site'])
+ * @returns {Object} - Object with resource types as keys and arrays of IDs as values
+ * Example: { building: ['id1', 'id2'], site: ['id3', 'id4'] }
+ */
+const getAccessibleResourceIds = (user, resourceTypes) => {
+  if (!user || !user.resource_access) {
+    return {};
+  }
+
+  // Normalize to array
+  const typesArray = Array.isArray(resourceTypes) ? resourceTypes : [resourceTypes];
+
+  const result = {};
+
+  for (const resourceType of typesArray) {
+    const accessibleResources = user.resource_access.filter(
+      ra => ra.resource_type === resourceType && ra.permissions?.can_view
+    );
+
+    result[resourceType] = accessibleResources.map(ra => ra.resource_id);
+  }
+
+  return result;
+};
+
+/**
+ * Get user's resource access with full permission details
+ * @param {Object} user - User object with resource_access array
+ * @param {string|string[]} resourceTypes - Single resource type or array of types
+ * @returns {Object} - Object with resource types as keys and arrays of resource access objects
+ * Example: { building: [{ resource_id: 'id1', resource_name: 'Building 1', permissions: {...} }] }
+ */
+const getResourcePermissions = (user, resourceTypes) => {
+  if (!user || !user.resource_access) {
+    return {};
+  }
+
+  // Normalize to array
+  const typesArray = Array.isArray(resourceTypes) ? resourceTypes : [resourceTypes];
+
+  const result = {};
+
+  for (const resourceType of typesArray) {
+    const accessibleResources = user.resource_access.filter(
+      ra => ra.resource_type === resourceType && ra.permissions?.can_view
+    );
+
+    result[resourceType] = accessibleResources.map(ra => ({
+      resource_id: ra.resource_id,
+      resource_name: ra.resource_name,
+      resource_type: ra.resource_type,
+      permissions: ra.permissions
+    }));
+  }
+
+  return result;
+};
+
+/**
  * Authorization Rules Middleware
  * Enforces the 5 authorization rules from the spreadsheet
  */
@@ -460,6 +553,14 @@ const applyScopeFiltering = (resourceType) => {
 };
 
 module.exports = {
+  // Utility functions for resource permission checking
+  fetchUserById,
+  isUserAdmin,
+  hasModuleLevelAccess,
+  getAccessibleResourceIds,
+  getResourcePermissions,
+
+  // Original authorization rule functions
   getAccessibleResources,
   canCreateUserWithRole,
   canDownloadDocument,

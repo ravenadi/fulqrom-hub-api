@@ -1,7 +1,13 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { checkModulePermission } = require('../middleware/checkPermission');
-const { applyScopeFiltering } = require('../middleware/authorizationRules');
+const {
+  applyScopeFiltering,
+  fetchUserById,
+  isUserAdmin,
+  hasModuleLevelAccess,
+  getAccessibleResourceIds
+} = require('../middleware/authorizationRules');
 
 // Import models
 const Customer = require('../models/Customer');
@@ -200,11 +206,19 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
   try {
     // Get tenant context from authenticated user only
     const tenantId = req.tenant?.tenantId;
+    const userId = req.user?.id || req.user?._id;
 
     if (!tenantId) {
       return res.status(403).json({
         success: false,
         message: 'Tenant context required. User must be associated with a tenant.'
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User authentication required.'
       });
     }
 
@@ -217,7 +231,40 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
       filterQuery.tenant_id = tenantId;
     }
 
-    // Fetch ALL buildings with address data for map display (no limit)
+    // Apply resource-level filtering based on user's resource_access
+    const user = await fetchUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user is Admin (full access - no filtering needed)
+    if (!isUserAdmin(user)) {
+      // Check if user has module-level access to buildings
+      if (!hasModuleLevelAccess(user, 'buildings')) {
+        // No module access - filter by specific building IDs from resource_access
+        const resourceIds = getAccessibleResourceIds(user, 'building');
+        const accessibleBuildingIds = resourceIds.building || [];
+
+        if (accessibleBuildingIds.length === 0) {
+          // User has no access to any buildings
+          return res.json({
+            success: true,
+            data: [],
+            count: 0,
+            message: 'No buildings accessible to this user'
+          });
+        }
+
+        // Filter by accessible building IDs
+        filterQuery._id = { $in: accessibleBuildingIds };
+      }
+    }
+
+    // Fetch buildings with address data for map display (filtered by permissions)
     // NOTE: Removed latitude/longitude from select to force address-based geocoding on frontend
     const buildings = await Building.find(filterQuery)
       .select('_id building_name address site_id customer_id')
