@@ -103,16 +103,16 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         }
       }
 
-      // Map action to permission field (using v2 schema: view, create, edit, delete)
+      // Map action to permission field (User model uses can_view, can_create, etc.)
       const permissionMap = {
-        'view': 'view',
-        'read': 'view',
-        'create': 'create',
-        'add': 'create',
-        'edit': 'edit',
-        'update': 'edit',
-        'delete': 'delete',
-        'remove': 'delete'
+        'view': 'can_view',
+        'read': 'can_view',
+        'create': 'can_create',
+        'add': 'can_create',
+        'edit': 'can_edit',
+        'update': 'can_edit',
+        'delete': 'can_delete',
+        'remove': 'can_delete'
       };
       const permissionField = permissionMap[action.toLowerCase()];
 
@@ -130,7 +130,7 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
 
       if (resourceAccess) {
         // User has specific access to this resource - check permission
-        if (resourceAccess.permissions?.[permissionField]) {
+        if (resourceAccess.permissions?.[permissionField] === true) {
           // Permission granted via resource access
           req.permissionSource = 'resource_access';
           req.resourceAccess = resourceAccess;
