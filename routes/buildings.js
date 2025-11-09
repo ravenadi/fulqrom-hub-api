@@ -10,6 +10,7 @@ const { applyScopeFiltering } = require('../middleware/authorizationRules');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 const { resolveHierarchy } = require('../utils/hierarchyLookup');
+const { applyResourceFilter } = require('../utils/resourceFilter');
 
 const router = express.Router();
 
@@ -46,6 +47,9 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
       tenant_id: tenantId,
       is_delete: { $ne: true }  // Exclude soft-deleted records
     };
+
+    // Apply resource-level filtering based on user's permissions
+    filterQuery = await applyResourceFilter(req, filterQuery, 'building');
 
     // Search functionality
     if (search) {

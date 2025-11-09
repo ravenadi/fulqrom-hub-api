@@ -8,6 +8,7 @@ const { checkResourcePermission, checkModulePermission } = require('../middlewar
 const { tenantContext } = require('../middleware/tenantContext');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
+const { applyResourceFilter } = require('../utils/resourceFilter');
 
 const router = express.Router();
 
@@ -57,6 +58,9 @@ router.get('/', checkModulePermission('sites', 'view'), tenantContext, async (re
         message: 'Tenant context required to access sites'
       });
     }
+
+    // Apply resource-level filtering based on user's permissions
+    filterQuery = await applyResourceFilter(req, filterQuery, 'site');
 
     if (customer_id) {
       // Support multi-select with comma-separated values

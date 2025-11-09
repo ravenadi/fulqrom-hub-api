@@ -16,6 +16,7 @@ const {
   buildApiResponse,
   handleError
 } = require('../middleware/searchHelpers');
+const { applyResourceFilter } = require('../utils/resourceFilter');
 
 const router = express.Router();
 
@@ -38,6 +39,9 @@ router.get('/', checkModulePermission('customers', 'view'), async (req, res) => 
     let filterQuery = {
       is_delete: { $ne: true }
     };
+
+    // Apply resource-level filtering based on user's permissions
+    filterQuery = await applyResourceFilter(req, filterQuery, 'customer');
 
     // Simple search across key fields
     if (search) {

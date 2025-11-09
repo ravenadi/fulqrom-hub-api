@@ -285,15 +285,26 @@ router.post('/', validateUserCreation, async (req, res) => {
       // Continue with creation - Auth0 check failed but we can still try to create
     }
 
-    // Validate role IDs if provided
-    if (role_ids && role_ids.length > 0) {
-      const validRoles = await Role.find({ _id: { $in: role_ids } });
-      if (validRoles.length !== role_ids.length) {
-        return res.status(400).json({
-          success: false,
-          message: 'One or more role IDs are invalid'
-        });
-      }
+    // Filter out empty strings from role_ids
+    if (role_ids !== undefined) {
+      role_ids = role_ids.filter(id => id && id.trim() !== '');
+    }
+
+    // Role is required for user creation
+    if (!role_ids || role_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Role is required'
+      });
+    }
+
+    // Validate role IDs
+    const validRoles = await Role.find({ _id: { $in: role_ids } });
+    if (validRoles.length !== role_ids.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'One or more role IDs are invalid'
+      });
     }
 
     // Validate resource_access if provided
@@ -644,6 +655,19 @@ router.put('/:id', validateUserElevation, async (req, res) => {
           message: 'User with this email already exists'
         });
       }
+    }
+
+    // Filter out empty strings from role_ids
+    if (role_ids !== undefined) {
+      role_ids = role_ids.filter(id => id && id.trim() !== '');
+    }
+
+    // Role is required - if role_ids is being updated, it cannot be empty
+    if (role_ids !== undefined && role_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Role is required'
+      });
     }
 
     // Validate role IDs if provided
