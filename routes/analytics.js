@@ -27,6 +27,7 @@ router.get('/dashboard', checkModulePermission('analytics', 'view'), applyScopeF
   try {
     // Get tenant context from authenticated user only - never from query parameters for security
     const tenantId = req.tenant?.tenantId;
+    const userId = req.user?.id || req.user?._id;
 
     if (!tenantId) {
       return res.status(403).json({
@@ -35,15 +36,85 @@ router.get('/dashboard', checkModulePermission('analytics', 'view'), applyScopeF
       });
     }
 
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User authentication required.'
+      });
+    }
+
+    // Fetch user for resource access filtering
+    const user = await fetchUserById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const isAdmin = isUserAdmin(user);
+
     // Build filter query based on tenant context
     let filterQuery = {};
     let documentFilterQuery = {};
     let userFilterQuery = {};
-    
+    let assetFilterQuery = {};
+
     if (tenantId) {
       filterQuery.tenant_id = tenantId;
       documentFilterQuery = { tenant_id: tenantId };
       userFilterQuery = { tenant_id: tenantId };
+      assetFilterQuery = { tenant_id: tenantId };
+    }
+
+    // Apply resource-level filtering for non-admin users
+    if (!isAdmin) {
+      // Get accessible resource IDs for assets
+      const resourceIds = getAccessibleResourceIds(user, 'asset');
+      const accessibleAssetIds = resourceIds.asset || [];
+
+      // If user has specific asset access restrictions, apply them
+      if (accessibleAssetIds.length > 0) {
+        assetFilterQuery._id = { $in: accessibleAssetIds };
+        console.log('✅ [DASHBOARD] Applying asset ID filter:', accessibleAssetIds.length, 'assets');
+      } else if (!hasModuleLevelAccess(user, 'assets')) {
+        // User has no module-level access AND no specific resource access - count as 0
+        assetFilterQuery._id = { $in: [] }; // No assets accessible
+        console.log('❌ [DASHBOARD] User has no access to assets');
+      }
+
+      // Apply document filtering based on document categories and engineering disciplines
+      const hasDocumentCategories = user.document_categories && user.document_categories.length > 0;
+      const hasEngineeringDisciplines = user.engineering_disciplines && user.engineering_disciplines.length > 0;
+      const hasDocumentModuleAccess = hasModuleLevelAccess(user, 'documents');
+
+      // If user has no document access at all (no module access AND no category/discipline permissions)
+      if (!hasDocumentModuleAccess && !hasDocumentCategories && !hasEngineeringDisciplines) {
+        documentFilterQuery._id = { $in: [] }; // No documents accessible
+        console.log('❌ [DASHBOARD] User has no access to documents');
+      } else {
+        // User has some level of document access - apply filters if specified
+        if (hasDocumentCategories && hasEngineeringDisciplines) {
+          // User has BOTH category AND discipline restrictions - documents must match BOTH
+          documentFilterQuery.$and = [
+            { category: { $in: user.document_categories } },
+            { engineering_discipline: { $in: user.engineering_disciplines } }
+          ];
+          console.log('✅ [DASHBOARD] Applying BOTH category AND discipline filters:', {
+            categories: user.document_categories,
+            disciplines: user.engineering_disciplines
+          });
+        } else if (hasDocumentCategories) {
+          // User has ONLY category restrictions
+          documentFilterQuery.category = { $in: user.document_categories };
+          console.log('✅ [DASHBOARD] Applying document category filter:', user.document_categories);
+        } else if (hasEngineeringDisciplines) {
+          // User has ONLY discipline restrictions
+          documentFilterQuery.engineering_discipline = { $in: user.engineering_disciplines };
+          console.log('✅ [DASHBOARD] Applying engineering discipline filter:', user.engineering_disciplines);
+        }
+        // If user has module access but no category/discipline restrictions, show all documents (no additional filter)
+      }
     }
 
     // Use Promise.all for parallel execution of all stats queries
@@ -60,46 +131,46 @@ router.get('/dashboard', checkModulePermission('analytics', 'view'), applyScopeF
     ] = await Promise.all([
       // Total Customers/Tenants - for tenant context, count only that tenant
       Customer.countDocuments(tenantId ? { tenant_id: tenantId } : {}),
-      
+
       // Total Sites
       Site.countDocuments(filterQuery),
-      
+
       // Total Buildings
       Building.countDocuments(filterQuery),
-      
+
       // Total Floors
       Floor.countDocuments(filterQuery),
-      
-      // Total Assets
-      Asset.countDocuments(filterQuery),
-      
-      // Total Documents - use correct filter
+
+      // Total Assets - use filtered query for resource access
+      Asset.countDocuments(assetFilterQuery),
+
+      // Total Documents - use filtered query for document permissions
       Document.countDocuments(documentFilterQuery),
-      
+
       // Total Vendors
       Vendor.countDocuments(filterQuery),
-      
+
       // Total Users - use correct filter
       User.countDocuments(userFilterQuery),
-      
-      // Storage calculation using aggregation for efficiency
+
+      // Storage calculation using aggregation for efficiency - apply document filters
       Document.aggregate([
-        ...(tenantId ? [{ $match: { tenant_id: tenantId } }] : []),
+        { $match: documentFilterQuery },
         {
           $group: {
             _id: null,
             totalSizeBytes: { $sum: { $ifNull: ['$file.file_meta.file_size', 0] } },
-            documentsWithFiles: { 
-              $sum: { 
+            documentsWithFiles: {
+              $sum: {
                 $cond: [
                   { $and: [
                     { $ne: ['$file.file_meta.file_size', null] },
                     { $gt: ['$file.file_meta.file_size', 0] }
-                  ]}, 
-                  1, 
+                  ]},
+                  1,
                   0
-                ] 
-              } 
+                ]
+              }
             },
             totalRecords: { $sum: 1 }
           }
