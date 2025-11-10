@@ -205,7 +205,11 @@ router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
         { serial: new RegExp(search, 'i') },
         { area: new RegExp(search, 'i') },
         { category: new RegExp(search, 'i') },
-        { type: new RegExp(search, 'i') }
+        { type: new RegExp(search, 'i') },
+        { status: new RegExp(search, 'i') },
+        { criticality_level: new RegExp(search, 'i') },
+        { owner: new RegExp(search, 'i') },
+        { service_status: new RegExp(search, 'i') }
       ];
     }
 
