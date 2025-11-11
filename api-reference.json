@@ -2,40 +2,179 @@
   "api_info": {
     "title": "Fulqrom Hub REST API",
     "version": "2.0.0",
-    "description": "Comprehensive API reference for Fulqrom Hub - Multi-tenant facility management system with resilient authentication",
+    "description": "Comprehensive API reference for Fulqrom Hub - Multi-tenant facility management system with BFF session-based authentication",
     "base_url": "/api",
-    "authentication": "Auth0 JWT Bearer Token",
-    "authorization": "Role-based permissions with tenant isolation",
-    "last_updated": "2024-12-20"
+    "authentication": "Session-based authentication with HttpOnly cookies (BFF pattern)",
+    "authorization": "Role-based permissions with tenant isolation and resource-level access control",
+    "last_updated": "2025-01-11"
   },
   "endpoints": {
     "auth": {
-      "description": "Authentication and user management with resilient Auth0 integration",
+      "description": "BFF (Backend-for-Frontend) authentication with session management and Auth0 integration",
       "endpoints": [
         {
           "method": "POST",
-          "path": "/auth/prepare-login",
-          "description": "Prepare user for login by ensuring MongoDB/Auth0 sync (call before Auth0 login)",
+          "path": "/auth/login",
+          "description": "Create server-side session from Auth0 token (BFF login)",
           "parameters": {
+            "headers": {
+              "Authorization": "Bearer <auth0_token> (required)"
+            },
             "body": {
-              "email": "string (required)"
+              "remember_me": "boolean (optional)"
+            }
+          },
+          "response": {
+            "cookies": ["sid (HttpOnly)", "csrf"],
+            "body": {
+              "success": true,
+              "message": "Login successful",
+              "data": {
+                "user": "User object",
+                "session": "Session metadata"
+              }
             }
           }
         },
         {
           "method": "POST",
-          "path": "/auth/password-reset",
-          "description": "Request password reset with auto-sync",
-          "parameters": {
+          "path": "/auth/refresh",
+          "description": "Refresh session and extend TTL",
+          "authentication": "Required (session cookie)",
+          "response": {
+            "cookies": ["sid (refreshed)", "csrf (refreshed)"],
             "body": {
-              "email": "string (required)"
+              "success": true,
+              "expires_at": "ISO 8601 date"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/auth/refresh-session",
+          "description": "Alternative refresh endpoint - validates session, extends TTL, and returns user info",
+          "authentication": "Required (session cookie)",
+          "response": {
+            "cookies": ["sid (refreshed)", "csrf (refreshed)"],
+            "body": {
+              "success": true,
+              "user": "User object with roles and permissions",
+              "data": {
+                "expires_at": "ISO 8601 date"
+              }
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/auth/logout",
+          "description": "Invalidate current session and clear cookies",
+          "authentication": "Optional (allows logout even with expired session)",
+          "response": {
+            "cookies": ["sid (cleared)", "csrf (cleared)"],
+            "body": {
+              "success": true,
+              "message": "Logout successful"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/auth/logout-all",
+          "description": "Invalidate all sessions for current user (logout from all devices)",
+          "authentication": "Required (session cookie)",
+          "response": {
+            "cookies": ["sid (cleared)", "csrf (cleared)"],
+            "body": {
+              "success": true,
+              "message": "All sessions have been logged out"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/auth/me",
+          "description": "Get current authenticated user information",
+          "authentication": "Required (session cookie)",
+          "response": {
+            "body": {
+              "success": true,
+              "data": {
+                "id": "User ID",
+                "email": "User email",
+                "full_name": "User name",
+                "tenant_id": "Tenant object",
+                "roles": "Array of role objects",
+                "resource_access": "Resource permissions",
+                "is_active": "boolean",
+                "session": "Session metadata"
+              }
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/auth/sessions",
+          "description": "List all active sessions for current user",
+          "authentication": "Required (session cookie)",
+          "response": {
+            "body": {
+              "success": true,
+              "data": [
+                {
+                  "id": "Session ID",
+                  "session_name": "Device description",
+                  "device_info": "Device metadata",
+                  "ip_address": "IP address",
+                  "geolocation": "Location data",
+                  "created_at": "ISO 8601 date",
+                  "last_activity": "ISO 8601 date",
+                  "expires_at": "ISO 8601 date",
+                  "is_current": "boolean"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/auth/sessions/:sessionId",
+          "description": "Revoke a specific session (not current session)",
+          "authentication": "Required (session cookie)",
+          "parameters": {
+            "path": {
+              "sessionId": "string (required)"
+            }
+          },
+          "response": {
+            "body": {
+              "success": true,
+              "message": "Session revoked successfully"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/auth/config",
+          "description": "Get Auth0 configuration for frontend initialization (public endpoint)",
+          "authentication": "None (public endpoint)",
+          "response": {
+            "body": {
+              "success": true,
+              "data": {
+                "domain": "Auth0 domain",
+                "clientId": "Frontend Auth0 client ID",
+                "audience": "Auth0 API audience",
+                "callbackUrl": "OAuth callback URL"
+              }
             }
           }
         },
         {
           "method": "POST",
           "path": "/auth/sync-user",
-          "description": "Sync or create user from Auth0 authentication",
+          "description": "Sync or create user from Auth0 authentication (public endpoint)",
+          "authentication": "None (public endpoint)",
           "parameters": {
             "body": {
               "auth0_id": "string (required)",
@@ -44,29 +183,61 @@
               "phone": "string (optional)",
               "roles": "array (optional)"
             }
+          },
+          "response": {
+            "body": {
+              "success": true,
+              "data": {
+                "id": "User ID",
+                "auth0_id": "Auth0 ID",
+                "email": "User email",
+                "tenant_id": "Tenant ID or null",
+                "role_ids": "Array of roles"
+              }
+            }
           }
         },
         {
           "method": "GET",
-          "path": "/auth/user/:auth0_id",
-          "description": "Get user by Auth0 ID",
+          "path": "/auth/user/:auth0Id",
+          "description": "Get user by Auth0 ID (public fallback endpoint)",
+          "authentication": "None (public endpoint)",
           "parameters": {
             "path": {
-              "auth0_id": "string (required)"
+              "auth0Id": "string (required)"
+            }
+          },
+          "response": {
+            "body": {
+              "success": true,
+              "data": "User object"
             }
           }
         },
         {
           "method": "POST",
           "path": "/auth/change-password",
-          "description": "Change user password in Auth0",
+          "description": "Change user password in Auth0 with verification",
+          "authentication": "Required (Bearer token or session)",
           "parameters": {
             "body": {
               "auth0_id": "string (required)",
-              "current_password": "string (required)",
-              "new_password": "string (required)"
+              "current_password": "string (required unless skip_verification=true)",
+              "new_password": "string (required, min 8 characters)",
+              "skip_verification": "boolean (optional, skips password verification if user authenticated with valid token)"
             }
-          }
+          },
+          "response": {
+            "body": {
+              "success": true,
+              "message": "Password changed successfully"
+            }
+          },
+          "notes": [
+            "Sends password change confirmation email",
+            "Validates password strength requirements",
+            "Can skip current password verification if user has valid Bearer token"
+          ]
         }
       ]
     },
@@ -260,6 +431,20 @@
               "id": "string (required)"
             }
           }
+        },
+        {
+          "method": "GET",
+          "path": "/buildings/:id/stats",
+          "description": "Get building statistics (counts for floors, assets, documents, tenants)",
+          "parameters": {
+            "path": {
+              "id": "string (required)"
+            }
+          },
+          "notes": [
+            "Returns counts only for performance",
+            "Document counts respect user's document category/discipline access restrictions"
+          ]
         },
         {
           "method": "POST",
@@ -2401,19 +2586,53 @@
     }
   },
   "authentication": {
-    "type": "JWT Bearer Token",
-    "provider": "Auth0",
-    "header": "Authorization: Bearer <token>",
-    "resilient_features": [
-      "prepare-login endpoint for pre-auth sync",
-      "password-reset with auto-sync",
-      "post-login sync with fallback handling",
-      "Auth0 Management API integration"
+    "type": "BFF (Backend-for-Frontend) Session-Based Authentication",
+    "provider": "Auth0 + MongoDB Sessions",
+    "implementation": {
+      "pattern": "Backend-for-Frontend (BFF)",
+      "session_storage": "MongoDB sessions collection",
+      "cookies": [
+        "sid - Session ID (HttpOnly, Secure, SameSite=Strict)",
+        "csrf - CSRF token (Secure, SameSite=Strict)"
+      ],
+      "token_handling": "Auth0 tokens never exposed to frontend - handled server-side only"
+    },
+    "security_features": [
+      "HttpOnly cookies prevent XSS token theft",
+      "CSRF protection with double-submit cookie pattern",
+      "Session-based authentication (stateful)",
+      "Multi-device session management",
+      "Automatic session expiry and cleanup",
+      "IP address and device tracking",
+      "Geolocation tracking for sessions"
+    ],
+    "session_management": [
+      "Default TTL: 7 days",
+      "Remember Me TTL: 30 days",
+      "Automatic session refresh on activity",
+      "Session revocation (single or all devices)",
+      "Active sessions list per user"
+    ],
+    "auth0_integration": [
+      "Frontend authenticates with Auth0 Universal Login",
+      "Backend exchanges Auth0 token for server-side session",
+      "User sync between Auth0 and MongoDB",
+      "Password management via Auth0 Management API",
+      "Auth0 roles mapped to application permissions"
     ],
     "middleware": [
-      "authMiddleware - Validates JWT token",
-      "authorizationMiddleware - Checks user permissions",
+      "sessionAuth - Validates session cookie and loads user context",
+      "csrfProtection - Validates CSRF token on state-changing requests",
+      "checkModulePermission - Module-level permission checks",
+      "checkResourcePermission - Resource-level permission checks",
       "tenantContext - Sets tenant context for multi-tenancy"
+    ],
+    "public_endpoints": [
+      "/auth/config - Auth0 configuration",
+      "/auth/sync-user - User synchronization",
+      "/auth/user/:auth0Id - User lookup",
+      "/organizations/register - Organization registration",
+      "/health - Health check"
     ]
   },
   "authorization": {
@@ -2558,37 +2777,97 @@
     ]
   },
   "new_features": {
-    "resilient_authentication": {
-      "description": "Enhanced authentication system with Auth0 resilience",
+    "bff_authentication": {
+      "description": "Backend-for-Frontend (BFF) session-based authentication pattern",
+      "security_benefits": [
+        "Tokens never exposed to frontend (prevents XSS theft)",
+        "HttpOnly cookies for session management",
+        "CSRF protection on all state-changing operations",
+        "Multi-device session management",
+        "Session revocation capabilities"
+      ],
       "endpoints": [
-        "/auth/prepare-login",
-        "/auth/password-reset", 
-        "/auth/sync-user"
+        "/auth/login - Create session from Auth0 token",
+        "/auth/logout - Invalidate current session",
+        "/auth/logout-all - Invalidate all user sessions",
+        "/auth/refresh - Refresh session TTL",
+        "/auth/refresh-session - Refresh and return user data",
+        "/auth/me - Get current user",
+        "/auth/sessions - List active sessions",
+        "/auth/sessions/:id - Revoke specific session",
+        "/auth/config - Get Auth0 config"
       ]
     },
     "resource_level_permissions": {
       "description": "Fine-grained permissions for specific resources",
+      "features": [
+        "Customer-scoped access control",
+        "Site-scoped access control",
+        "Building-scoped access control",
+        "Floor-scoped access control",
+        "Document category restrictions",
+        "Engineering discipline restrictions"
+      ],
       "endpoints": [
-        "/users/:id/accessible-resources",
-        "/users/resource-access",
-        "/users/:id/resource-access"
+        "/users/:id/accessible-resources - Get user's accessible resources",
+        "/users/resource-access - Assign resource permissions",
+        "/users/:id/resource-access - Get user's resource permissions"
       ]
     },
     "comprehensive_filtering": {
       "description": "Enhanced filtering capabilities across all endpoints",
       "features": [
-        "Multi-select filtering",
-        "Range filtering",
-        "Advanced search",
-        "Tenant isolation"
+        "Multi-select filtering with comma-separated values",
+        "Range filtering (age, cost, value ranges)",
+        "Advanced full-text search across multiple fields",
+        "Automatic tenant isolation on all queries",
+        "Tag-based filtering",
+        "Hierarchical filtering (customer > site > building > floor)"
       ]
     },
     "analytics_enhancements": {
-      "description": "Improved analytics with tenant isolation",
+      "description": "Improved analytics with tenant isolation and performance optimizations",
+      "features": [
+        "Dashboard analytics with caching",
+        "Building coordinates for map visualization",
+        "Tenant-isolated reporting",
+        "Module-specific statistics endpoints",
+        "Performance-optimized aggregations"
+      ],
       "endpoints": [
-        "/analytics/dashboard",
-        "/analytics/buildings/coordinates"
+        "/analytics/dashboard - Comprehensive dashboard data",
+        "/analytics/buildings/coordinates - Building map data",
+        "/admin/stats/all - System-wide statistics (super admin)",
+        "/admin/analytics/usage - Usage analytics (super admin)"
       ]
+    },
+    "optimistic_concurrency_control": {
+      "description": "Version-based optimistic locking to prevent lost updates",
+      "implementation": [
+        "If-Match header with __v version number",
+        "Atomic findOneAndUpdate with version check",
+        "409 Conflict response on version mismatch",
+        "Client must retry with fresh data on conflict"
+      ],
+      "supported_endpoints": [
+        "PUT /buildings/:id",
+        "PUT /sites/:id",
+        "PUT /customers/:id",
+        "PUT /assets/:id",
+        "PUT /documents/:id"
+      ]
+    },
+    "audit_logging": {
+      "description": "Comprehensive audit trail for compliance and security",
+      "features": [
+        "Automatic logging of all create/update/delete operations",
+        "Tenant-isolated audit logs",
+        "User attribution for all changes",
+        "IP address and device tracking",
+        "Filterable audit log queries",
+        "Resource type and action filtering"
+      ],
+      "endpoint": "/audit-logs - Query audit logs with filtering"
     }
   }
 }
