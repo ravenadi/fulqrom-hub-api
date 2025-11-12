@@ -272,7 +272,7 @@ router.get('/kpis', checkModulePermission('analytics', 'view'), applyScopeFilter
   }
 });
 
-// GET /api/analytics/buildings/coordinates - Lightweight endpoint for building coordinates only
+// GET /api/analytics/buildings/coordinates - Lightweight endpoint for site coordinates (portfolio map)
 router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'), applyScopeFiltering('analytics'), async (req, res) => {
   try {
     // Get tenant context from authenticated user only
@@ -294,7 +294,7 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
     }
 
     // Build filter query based on tenant context
-    // IMPORTANT: Exclude soft-deleted buildings
+    // IMPORTANT: Exclude soft-deleted sites
     let filterQuery = {
       is_delete: { $ne: true }
     };
@@ -314,47 +314,42 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
 
     // Check if user is Admin (full access - no filtering needed)
     if (!isUserAdmin(user)) {
-      // Get user's accessible building IDs from resource_access
-      const resourceIds = getAccessibleResourceIds(user, 'building');
-      const accessibleBuildingIds = resourceIds.building || [];
+      // Get user's accessible site IDs from resource_access
+      const resourceIds = getAccessibleResourceIds(user, 'site');
+      const accessibleSiteIds = resourceIds.site || [];
 
-      console.log('🔍 Building Coordinates - User Access Check:', {
+      console.log('🔍 Site Coordinates - User Access Check:', {
         userId: user._id,
         isAdmin: isUserAdmin(user),
-        hasModuleAccess: hasModuleLevelAccess(user, 'buildings'),
-        accessibleBuildingIds,
-        buildingIdsCount: accessibleBuildingIds.length
+        hasModuleAccess: hasModuleLevelAccess(user, 'sites'),
+        accessibleSiteIds,
+        siteIdsCount: accessibleSiteIds.length
       });
 
-      // If user has specific building access restrictions, apply them
-      if (accessibleBuildingIds.length > 0) {
-        // Filter by accessible building IDs only
-        filterQuery._id = { $in: accessibleBuildingIds };
-        console.log('✅ Applying building ID filter:', accessibleBuildingIds);
-      } else if (!hasModuleLevelAccess(user, 'buildings')) {
+      // If user has specific site access restrictions, apply them
+      if (accessibleSiteIds.length > 0) {
+        // Filter by accessible site IDs only
+        filterQuery._id = { $in: accessibleSiteIds };
+        console.log('✅ Applying site ID filter:', accessibleSiteIds);
+      } else if (!hasModuleLevelAccess(user, 'sites')) {
         // User has no module-level access AND no specific resource access
-        console.log('❌ User has no access to buildings');
+        console.log('❌ User has no access to sites');
         return res.json({
           success: true,
           data: [],
           count: 0,
-          message: 'No buildings accessible to this user'
+          message: 'No sites accessible to this user'
         });
       } else {
-        console.log('✅ User has module-level access, showing all buildings in tenant');
+        console.log('✅ User has module-level access, showing all sites in tenant');
       }
-      // If user has module-level access and no specific restrictions, show all buildings in tenant
+      // If user has module-level access and no specific restrictions, show all sites in tenant
     }
 
-    // Fetch buildings with address data for map display (filtered by permissions)
+    // Fetch sites with address data for map display (filtered by permissions)
     // NOTE: Removed latitude/longitude from select to force address-based geocoding on frontend
-    const buildings = await Building.find(filterQuery)
-      .select('_id building_name address site_id customer_id')
-      .populate({
-        path: 'site_id',
-        select: 'site_name is_delete',
-        match: { is_delete: { $ne: true } }
-      })
+    const sites = await Site.find(filterQuery)
+      .select('_id site_name address customer_id')
       .populate({
         path: 'customer_id',
         select: 'organisation_name is_delete',
@@ -362,27 +357,22 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
       })
       .lean();
 
-    // Transform to lightweight format for map - returns ALL buildings with address data
+    // Transform to lightweight format for map - returns ALL sites with address data
     // Frontend will handle geocoding from address fields
-    // IMPORTANT: Filter out buildings whose customer or site was deleted (will be null after populate match)
-    const coordinates = buildings
-      .filter(building => {
-        // Exclude buildings with deleted customer or site (populated as null)
-        return building.customer_id !== null && building.site_id !== null;
+    // IMPORTANT: Filter out sites whose customer was deleted (will be null after populate match)
+    const coordinates = sites
+      .filter(site => {
+        // Exclude sites with deleted customer (populated as null)
+        return site.customer_id !== null;
       })
-      .map(building => ({
-        id: building._id.toString(),
-        building_name: building.building_name,
+      .map(site => ({
+        id: site._id.toString(),
+        site_name: site.site_name,
         // NOTE: latitude/longitude intentionally excluded to force address-based geocoding
-        address: building.address,
-        site_id: building.site_id ? {
-          _id: building.site_id._id,
-          id: building.site_id._id,
-          site_name: building.site_id.site_name
-        } : null,
-        customer_id: building.customer_id ? {
-          _id: building.customer_id._id,
-          id: building.customer_id._id
+        address: site.address,
+        customer_id: site.customer_id ? {
+          _id: site.customer_id._id,
+          id: site.customer_id._id
         } : null
       }));
 
@@ -390,14 +380,135 @@ router.get('/buildings/coordinates', checkModulePermission('analytics', 'view'),
       success: true,
       data: coordinates,
       count: coordinates.length,
-      message: `Retrieved ${coordinates.length} building coordinates`
+      message: `Retrieved ${coordinates.length} site coordinates`
     });
 
   } catch (error) {
-    console.error('Error fetching building coordinates:', error);
+    console.error('Error fetching site coordinates:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching building coordinates',
+      message: 'Error fetching site coordinates',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/analytics/sites/coordinates - Lightweight endpoint for site coordinates only
+router.get('/sites/coordinates', checkModulePermission('analytics', 'view'), applyScopeFiltering('analytics'), async (req, res) => {
+  try {
+    // Get tenant context from authenticated user only
+    const tenantId = req.tenant?.tenantId;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required. User must be associated with a tenant.'
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User authentication required.'
+      });
+    }
+
+    // Build filter query based on tenant context
+    // IMPORTANT: Exclude soft-deleted sites
+    let filterQuery = {
+      is_delete: { $ne: true }
+    };
+    if (tenantId) {
+      filterQuery.tenant_id = tenantId;
+    }
+
+    // Apply resource-level filtering based on user's resource_access
+    const user = await fetchUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user is Admin (full access - no filtering needed)
+    if (!isUserAdmin(user)) {
+      // Get user's accessible site IDs from resource_access
+      const resourceIds = getAccessibleResourceIds(user, 'site');
+      const accessibleSiteIds = resourceIds.site || [];
+
+      console.log('🔍 Site Coordinates - User Access Check:', {
+        userId: user._id,
+        isAdmin: isUserAdmin(user),
+        hasModuleAccess: hasModuleLevelAccess(user, 'sites'),
+        accessibleSiteIds,
+        siteIdsCount: accessibleSiteIds.length
+      });
+
+      // If user has specific site access restrictions, apply them
+      if (accessibleSiteIds.length > 0) {
+        // Filter by accessible site IDs only
+        filterQuery._id = { $in: accessibleSiteIds };
+        console.log('✅ Applying site ID filter:', accessibleSiteIds);
+      } else if (!hasModuleLevelAccess(user, 'sites')) {
+        // User has no module-level access AND no specific resource access
+        console.log('❌ User has no access to sites');
+        return res.json({
+          success: true,
+          data: [],
+          count: 0,
+          message: 'No sites accessible to this user'
+        });
+      } else {
+        console.log('✅ User has module-level access, showing all sites in tenant');
+      }
+      // If user has module-level access and no specific restrictions, show all sites in tenant
+    }
+
+    // Fetch sites with address data for map display (filtered by permissions)
+    // NOTE: Removed latitude/longitude from select to force address-based geocoding on frontend
+    const sites = await Site.find(filterQuery)
+      .select('_id site_name address customer_id')
+      .populate({
+        path: 'customer_id',
+        select: 'organisation_name is_delete',
+        match: { is_delete: { $ne: true } }
+      })
+      .lean();
+
+    // Transform to lightweight format for map - returns ALL sites with address data
+    // Frontend will handle geocoding from address fields
+    // IMPORTANT: Filter out sites whose customer was deleted (will be null after populate match)
+    const coordinates = sites
+      .filter(site => {
+        // Exclude sites with deleted customer (populated as null)
+        return site.customer_id !== null;
+      })
+      .map(site => ({
+        id: site._id.toString(),
+        site_name: site.site_name,
+        // NOTE: latitude/longitude intentionally excluded to force address-based geocoding
+        address: site.address,
+        customer_id: site.customer_id ? {
+          _id: site.customer_id._id,
+          id: site.customer_id._id
+        } : null
+      }));
+
+    res.json({
+      success: true,
+      data: coordinates,
+      count: coordinates.length,
+      message: `Retrieved ${coordinates.length} site coordinates`
+    });
+
+  } catch (error) {
+    console.error('Error fetching site coordinates:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching site coordinates',
       error: error.message
     });
   }
