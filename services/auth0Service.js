@@ -54,6 +54,30 @@ const createAuth0User = async (userData) => {
     return auth0User;
   } catch (error) {
     console.error('Auth0 create user error:', error);
+
+    // Check for conflict error (user already exists)
+    if (error.statusCode === 409 || (error.message && error.message.includes('409'))) {
+      const conflictError = new Error(`Failed to create user in Auth0: ConflictError\nStatus code: 409\nBody: ${JSON.stringify({
+        statusCode: 409,
+        error: 'Conflict',
+        message: 'The user already exists.',
+        errorCode: 'auth0_idp_error'
+      }, null, 2)}`);
+      conflictError.statusCode = 409;
+      throw conflictError;
+    }
+
+    // Check for password strength error
+    if (error.statusCode === 400 && (error.message && (error.message.includes('PasswordStrengthError') || error.message.includes('Password is too weak')))) {
+      const passwordError = new Error(`Failed to create user in Auth0: BadRequestError\nStatus code: 400\nBody: ${JSON.stringify({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'PasswordStrengthError: Password is too weak'
+      }, null, 2)}`);
+      passwordError.statusCode = 400;
+      throw passwordError;
+    }
+
     throw new Error(`Failed to create user in Auth0: ${error.message}`);
   }
 };
@@ -150,10 +174,24 @@ const updateAuth0User = async (auth0UserId, updateData) => {
 const deleteAuth0User = async (auth0UserId) => {
   try {
     const management = getAuth0Client();
-    await management.users.delete({ id: auth0UserId });
+
+    // Validate auth0UserId is a string
+    if (!auth0UserId || typeof auth0UserId !== 'string') {
+      throw new Error(`Invalid Auth0 user ID: ${auth0UserId}`);
+    }
+
+    console.log(`🗑️  Deleting Auth0 user: ${auth0UserId}`);
+
+    // Auth0 SDK v5 API - pass ID directly as string parameter
+    await management.users.delete(auth0UserId);
+
+    console.log(`✅ Successfully deleted Auth0 user: ${auth0UserId}`);
   } catch (error) {
-    console.error('Auth0 delete user error:', error.message);
-    throw new Error(`Failed to delete user from Auth0: ${error.message}`);
+    console.error('Auth0 delete user error:', error);
+
+    // Format error message for better debugging
+    const errorMessage = error.message || JSON.stringify(error);
+    throw new Error(`Failed to delete user from Auth0: ${errorMessage}`);
   }
 };
 
@@ -597,24 +635,23 @@ const ensureAuth0User = async (userData) => {
     // First check if user already exists
     const existingUser = await getAuth0UserByEmail(userData.email);
     if (existingUser) {
-      console.log(`✅ Auth0 user already exists: ${existingUser.user_id}`);
-      
-      // Sync roles if user exists
-      if (userData.role_ids && userData.role_ids.length > 0) {
-        try {
-          await syncUserRoles(existingUser.user_id, userData.role_ids);
-        } catch (roleError) {
-          console.error('Failed to sync roles for existing user:', roleError.message);
-        }
-      }
-      
-      return existingUser;
+      console.log(`⚠️ Auth0 user already exists: ${existingUser.user_id} for email: ${userData.email}`);
+
+      // Throw conflict error to trigger rollback in the calling function
+      const conflictError = new Error(`Failed to create user in Auth0: ConflictError\nStatus code: 409\nBody: ${JSON.stringify({
+        statusCode: 409,
+        error: 'Conflict',
+        message: 'The user already exists.',
+        errorCode: 'auth0_idp_error'
+      }, null, 2)}`);
+      conflictError.statusCode = 409;
+      throw conflictError;
     }
 
     // User doesn't exist, create new one
     console.log(`🆕 Creating new Auth0 user for: ${userData.email}`);
     const newUser = await createAuth0User(userData);
-    
+
     // Assign roles to new user
     if (userData.role_ids && userData.role_ids.length > 0) {
       try {
@@ -623,7 +660,7 @@ const ensureAuth0User = async (userData) => {
         console.error('Failed to assign roles to new user:', roleError.message);
       }
     }
-    
+
     return newUser;
   } catch (error) {
     console.error('Error ensuring Auth0 user:', error);

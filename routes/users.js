@@ -396,14 +396,16 @@ router.post('/', validateUserCreation, async (req, res) => {
 
     // Try to use transactions if MongoDB supports it (replica set)
     const mongoose = require('mongoose');
- 
 
- 
+
+
+    // Track the created user for rollback purposes
+    let createdUser = null;
 
     try {
- 
 
-      
+
+
       // Create user
       const userData = {
         email: email.toLowerCase().trim(),
@@ -436,9 +438,10 @@ router.post('/', validateUserCreation, async (req, res) => {
       const user = new User(userData);
 
       // Save with session if available
-      
+
         await user.save();
-       
+        createdUser = user; // Track for rollback
+
 
       // Create user in Auth0 - REQUIRED for success
       console.log(`🔐 Creating Auth0 user for: ${email.toLowerCase().trim()}`);
@@ -461,7 +464,7 @@ router.post('/', validateUserCreation, async (req, res) => {
 
       // Store Auth0 user ID in MongoDB
       user.auth0_id = auth0User.user_id;
- 
+
         await user.save();
      
 
@@ -531,18 +534,15 @@ router.post('/', validateUserCreation, async (req, res) => {
       });
 
     } catch (error) {
-       
+
 
       console.error('❌ Error creating user:', error);
 
-      // If Auth0 failed and we're not using transactions, manually delete the MongoDB user
-      if (error.message.includes('Auth0')) {
+      // Rollback: manually delete the MongoDB user if it was created
+      if (createdUser && createdUser._id) {
         try {
-          const userId = error.userId || (error.user && error.user._id);
-          if (userId) {
-            await User.findByIdAndDelete(userId);
-            console.log('⚠️  Rolled back MongoDB user creation after Auth0 failure');
-          }
+          await User.findByIdAndDelete(createdUser._id);
+          console.log(`⚠️  Rolled back MongoDB user creation after Auth0 failure: ${createdUser.email}`);
         } catch (deleteError) {
           console.error('Failed to rollback user creation:', deleteError);
         }
@@ -556,24 +556,28 @@ router.post('/', validateUserCreation, async (req, res) => {
       //   error_message: error.message
       // }, req);
 
-      res.status(400).json({
+      // Check for specific error types and provide user-friendly messages
+      let errorMessage = 'Error creating user';
+      let statusCode = 400;
+
+      if (error.message.includes('PasswordStrengthError') || error.message.includes('Password is too weak')) {
+        errorMessage = 'Password is too weak. Please use a stronger password with at least 8 characters, including uppercase, lowercase, numbers, and special characters.';
+        statusCode = 400;
+      } else if (error.statusCode === 409 || error.message.includes('already exists')) {
+        errorMessage = 'User with this email already exists';
+        statusCode = 409;
+      } else {
+        errorMessage = error.message || 'Error creating user';
+      }
+
+      res.status(statusCode).json({
         success: false,
-        message: 'Error creating user',
-        error: error.message
+        message: errorMessage,
+        error: error.message // Keep original error for debugging
       });
     }
 
   } catch (error) {
-
-    // rollback transaction if using transactions
-    if (useTransaction && session) {
-      try {
-        await session.abortTransaction();
-        session.endSession();
-      } catch (abortError) {
-        console.error('Failed to abort transaction:', abortError);
-      }
-    }
 
     console.error('❌ Outer error creating user:', error);
     res.status(400).json({
@@ -1014,20 +1018,62 @@ router.delete('/:id', async (req, res) => {
     const userName = user.full_name;
     const auth0Id = user.auth0_id;
 
-    // Delete from MongoDB
-    await User.findByIdAndDelete(id);
+    // Log user details for debugging
+    console.log(`🔍 User deletion attempt:`, {
+      mongoId: user._id,
+      email: user.email,
+      auth0Id: auth0Id,
+      auth0IdType: typeof auth0Id,
+      auth0IdValue: JSON.stringify(auth0Id)
+    });
 
-    // Delete from Auth0 (if auth0_id exists)
+    // Delete from Auth0 FIRST (if auth0_id exists)
     let auth0Deleted = false;
     if (auth0Id) {
       try {
-        await deleteAuth0User(auth0Id);
+        // Ensure auth0_id is a string
+        const auth0IdString = typeof auth0Id === 'string' ? auth0Id : String(auth0Id);
+        await deleteAuth0User(auth0IdString);
         auth0Deleted = true;
+        console.log(`✅ Deleted user from Auth0: ${auth0IdString}`);
       } catch (auth0Error) {
-        console.error('Auth0 user deletion failed:', auth0Error.message);
-        // Continue even if Auth0 deletion fails - user deleted from MongoDB
+        console.error('❌ Auth0 user deletion failed:', auth0Error.message);
+
+        // Check for specific Auth0 errors
+        let errorMessage = auth0Error.message;
+        if (auth0Error.message.includes('invalid_uri') || auth0Error.message.includes("didn't pass validation")) {
+          errorMessage = `Invalid Auth0 user ID format. The user may have corrupted data. Auth0 ID: ${JSON.stringify(auth0Id)}`;
+        } else if (auth0Error.message.includes('404') || auth0Error.message.includes('not found')) {
+          // User doesn't exist in Auth0, so we can proceed with MongoDB deletion
+          console.log('⚠️ User not found in Auth0, proceeding with MongoDB deletion');
+          auth0Deleted = false;
+        } else {
+          // Other errors - fail the operation
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to delete user from Auth0. User not deleted from database.',
+            error: errorMessage,
+            auth0_synced: false
+          });
+        }
+
+        // If we reached here and it's a 404, continue with deletion
+        if (!auth0Error.message.includes('404') && !auth0Error.message.includes('not found')) {
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to delete user from Auth0. User not deleted from database.',
+            error: errorMessage,
+            auth0_synced: false
+          });
+        }
       }
+    } else {
+      console.log(`⚠️ User has no auth0_id, skipping Auth0 deletion`);
     }
+
+    // Only delete from MongoDB after Auth0 deletion succeeds
+    await User.findByIdAndDelete(id);
+    console.log(`✅ Deleted user from MongoDB: ${user.email}`);
 
     // Log audit
     // await logAudit({
