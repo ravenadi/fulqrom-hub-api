@@ -66,3 +66,8 @@ MONGODB_CONNECTION=mongodb+srv://connection_string/fulqrom-hub
 - **Australian Standards**: ABN (11 digits), ACN (9 digits), postcodes (4 digits)
 - **Error Responses**: Clear, actionable error messages with field-specific details
 - **Data Sanitization**: Input cleaning and SQL injection prevention
+
+
+## Authentication
+- Auth0 
+- Documentation: https://context7.com/auth0/node-auth0/llms.txt?tokens=10000 
