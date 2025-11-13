@@ -859,6 +859,139 @@ router.put('/:id', checkResourcePermission('asset', 'edit', (req) => req.params.
 });
 
 
+// DELETE /api/assets/bulk - Bulk delete assets
+router.delete('/bulk', checkModulePermission('assets', 'delete'), async (req, res) => {
+  try {
+    // Get tenant_id from authenticated user's context
+    const tenantId = req.tenant?.tenantId;
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required to delete assets'
+      });
+    }
+
+    // Validate request body
+    const { asset_ids } = req.body;
+
+    if (!asset_ids || !Array.isArray(asset_ids)) {
+      return res.status(400).json({
+        success: false,
+        message: 'asset_ids array is required'
+      });
+    }
+
+    if (asset_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'asset_ids array cannot be empty'
+      });
+    }
+
+    // Limit bulk operations to prevent abuse
+    const MAX_BULK_DELETE = 100;
+    if (asset_ids.length > MAX_BULK_DELETE) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete more than ${MAX_BULK_DELETE} assets at once. Provided: ${asset_ids.length}`
+      });
+    }
+
+    // Validate all IDs are valid ObjectIds
+    const invalidIds = asset_ids.filter(id => !mongoose.Types.ObjectId.isValid(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid asset IDs provided',
+        invalid_ids: invalidIds
+      });
+    }
+
+    // Track results
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    // Process each asset individually
+    // Permission is checked at route level via checkModulePermission('assets', 'delete')
+    for (const assetId of asset_ids) {
+      try {
+        // Get asset to check tenant ownership and deletion status
+        const asset = await Asset.findOne({
+          _id: assetId,
+          tenant_id: tenantId
+        });
+
+        if (!asset) {
+          results.failed.push({
+            id: assetId,
+            reason: 'Asset not found or does not belong to your tenant'
+          });
+          continue;
+        }
+
+        // Check if already deleted
+        if (asset.is_delete) {
+          results.failed.push({
+            id: assetId,
+            reason: 'Asset already deleted'
+          });
+          continue;
+        }
+
+        // Soft delete asset
+        await Asset.findByIdAndUpdate(assetId, { is_delete: true });
+
+        // Log audit for asset deletion
+        logDelete({
+          module: 'asset',
+          resourceName: asset.asset_no || asset.category,
+          req,
+          moduleId: asset._id,
+          resource: asset.toObject()
+        });
+
+        // Add to success results
+        results.success.push({
+          id: assetId,
+          asset_no: asset.asset_no,
+          category: asset.category
+        });
+
+      } catch (error) {
+        results.failed.push({
+          id: assetId,
+          reason: error.message || 'Unknown error occurred'
+        });
+      }
+    }
+
+    // Prepare response
+    const totalRequested = asset_ids.length;
+    const totalDeleted = results.success.length;
+    const totalFailed = results.failed.length;
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk delete completed: ${totalDeleted} of ${totalRequested} assets deleted`,
+      data: {
+        total_requested: totalRequested,
+        deleted: totalDeleted,
+        failed: totalFailed,
+        results: results
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error performing bulk delete',
+      error: error.message
+    });
+  }
+});
+
 // DELETE /api/assets/:id - Delete asset
 router.delete('/:id', checkResourcePermission('asset', 'delete', (req) => req.params.id), async (req, res) => {
   try {
