@@ -172,7 +172,7 @@ async function cascadeCustomerDelete(customerId, tenantId) {
 
 /**
  * Cascade soft-delete for Site
- * Site → Buildings → Floors → Assets, BuildingTenants
+ * Site → Buildings → Floors → Assets, BuildingTenants, Documents
  *
  * @param {ObjectId} siteId - Site ID to soft-delete
  * @param {ObjectId} tenantId - Tenant ID for scope
@@ -210,6 +210,43 @@ async function cascadeSiteDelete(siteId, tenantId) {
       { is_delete: true }
     );
     console.log(`    Soft-deleted ${buildingResult.modifiedCount} buildings`);
+
+    // Soft-delete all documents for this site and tag S3 files
+    // NOTE: Document stores site_id as STRING in location.site.site_id
+    const siteIdStr = siteObjectId.toString();
+
+    // Find documents to tag their S3 files before soft-deleting
+    const documents = await Document.find({
+      'location.site.site_id': siteIdStr,
+      tenant_id: tenantObjectId,
+      is_delete: false
+    });
+
+    console.log(`    Found ${documents.length} documents to soft-delete`);
+
+    // Tag S3 files for expiry
+    for (const doc of documents) {
+      if (doc.file && doc.file.file_meta) {
+        const { bucket_name, file_key, file_path } = doc.file.file_meta;
+        const s3Key = file_key || file_path;
+        if (bucket_name && s3Key) {
+          try {
+            await tagS3FileForExpiry(bucket_name, s3Key);
+            console.log(`    Tagged document S3 file for expiry: ${s3Key}`);
+          } catch (error) {
+            console.error(`    Failed to tag document S3 file: ${s3Key}`, error.message);
+          }
+        }
+      }
+    }
+
+    // Soft-delete documents
+    const docResult = await Document.updateMany(
+      { 'location.site.site_id': siteIdStr, tenant_id: tenantObjectId, is_delete: false },
+      { is_delete: true }
+    );
+
+    console.log(`    Soft-deleted ${docResult.modifiedCount} documents`);
   } catch (error) {
     console.error(`❌ Error cascading delete for Site ${siteId}:`, error);
     throw error;
@@ -218,7 +255,7 @@ async function cascadeSiteDelete(siteId, tenantId) {
 
 /**
  * Cascade soft-delete for Building
- * Building → Floors → Assets, BuildingTenants
+ * Building → Floors → Assets, BuildingTenants, Documents
  *
  * @param {ObjectId} buildingId - Building ID to soft-delete
  * @param {ObjectId} tenantId - Tenant ID for scope
@@ -285,6 +322,43 @@ async function cascadeBuildingDelete(buildingId, tenantId) {
   for (const buildingTenant of buildingTenants) {
     await deleteBuildingTenant(buildingTenant._id, tenantObjectId);
   }
+
+  // Soft-delete all documents for this building and tag S3 files
+  // NOTE: Document stores building_id as STRING in location.building.building_id
+  const buildingIdStr = buildingObjectId.toString();
+
+  // Find documents to tag their S3 files before soft-deleting
+  const documents = await Document.find({
+    'location.building.building_id': buildingIdStr,
+    tenant_id: tenantObjectId,
+    is_delete: false
+  });
+
+  console.log(`      Found ${documents.length} documents to soft-delete`);
+
+  // Tag S3 files for expiry
+  for (const doc of documents) {
+    if (doc.file && doc.file.file_meta) {
+      const { bucket_name, file_key, file_path } = doc.file.file_meta;
+      const s3Key = file_key || file_path;
+      if (bucket_name && s3Key) {
+        try {
+          await tagS3FileForExpiry(bucket_name, s3Key);
+          console.log(`      Tagged document S3 file for expiry: ${s3Key}`);
+        } catch (error) {
+          console.error(`      Failed to tag document S3 file: ${s3Key}`, error.message);
+        }
+      }
+    }
+  }
+
+  // Soft-delete documents
+  const docResult = await Document.updateMany(
+    { 'location.building.building_id': buildingIdStr, tenant_id: tenantObjectId, is_delete: false },
+    { is_delete: true }
+  );
+
+  console.log(`      Soft-deleted ${docResult.modifiedCount} documents`);
 }
 
 //delete building tenant
@@ -313,7 +387,7 @@ async function deleteBuildingTenant(buildingTenantObjectId, tenantId) {
 
 /**
  * Cascade soft-delete for Floor
- * Floor → Assets
+ * Floor → Assets, BuildingTenants, Documents
  *
  * @param {ObjectId} floorId - Floor ID to soft-delete
  * @param {ObjectId} tenantId - Tenant ID for scope
@@ -353,6 +427,43 @@ async function cascadeFloorDelete(floorId, tenantId) {
   );
 
   console.log(`        Soft-deleted ${tenantResult.modifiedCount} building tenants on floor`);
+
+  // Soft-delete all documents for this floor and tag S3 files
+  // NOTE: Document stores floor_id as STRING in location.floor.floor_id
+  const floorIdStr = floorObjectId.toString();
+
+  // Find documents to tag their S3 files before soft-deleting
+  const documents = await Document.find({
+    'location.floor.floor_id': floorIdStr,
+    tenant_id: tenantObjectId,
+    is_delete: false
+  });
+
+  console.log(`        Found ${documents.length} documents to soft-delete`);
+
+  // Tag S3 files for expiry
+  for (const doc of documents) {
+    if (doc.file && doc.file.file_meta) {
+      const { bucket_name, file_key, file_path } = doc.file.file_meta;
+      const s3Key = file_key || file_path;
+      if (bucket_name && s3Key) {
+        try {
+          await tagS3FileForExpiry(bucket_name, s3Key);
+          console.log(`        Tagged document S3 file for expiry: ${s3Key}`);
+        } catch (error) {
+          console.error(`        Failed to tag document S3 file: ${s3Key}`, error.message);
+        }
+      }
+    }
+  }
+
+  // Soft-delete documents
+  const docResult = await Document.updateMany(
+    { 'location.floor.floor_id': floorIdStr, tenant_id: tenantObjectId, is_delete: false },
+    { is_delete: true }
+  );
+
+  console.log(`        Soft-deleted ${docResult.modifiedCount} documents`);
 }
 
 module.exports = {
