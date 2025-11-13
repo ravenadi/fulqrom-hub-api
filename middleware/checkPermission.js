@@ -164,6 +164,17 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         };
         const moduleName = moduleNameMap[resourceType] || `${resourceType}s`;
 
+        // Map resource_access field names to role permission field names
+        // Resource access uses: can_view, can_create, can_edit, can_delete
+        // Role permissions use: view, create, edit, delete
+        const rolePermissionFieldMap = {
+          'can_view': 'view',
+          'can_create': 'create',
+          'can_edit': 'edit',
+          'can_delete': 'delete'
+        };
+        const rolePermissionField = rolePermissionFieldMap[permissionField] || permissionField;
+
         for (const role of user.role_ids) {
           if (!role.is_active) continue; // Skip inactive roles
 
@@ -171,7 +182,7 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
             p => p.entity === moduleName
           );
 
-          if (modulePermission && modulePermission[permissionField]) {
+          if (modulePermission && modulePermission[rolePermissionField]) {
             // Permission granted via role
             req.permissionSource = 'role';
             req.roleName = role.name;

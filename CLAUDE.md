@@ -69,5 +69,10 @@ MONGODB_CONNECTION=mongodb+srv://connection_string/fulqrom-hub
 
 
 ## Authentication
-- Auth0 
-- Documentation: https://context7.com/auth0/node-auth0/llms.txt?tokens=10000 
+- Auth0
+- Documentation: https://context7.com/auth0/node-auth0/llms.txt?tokens=10000
+
+## Permission System
+- **Role-based permissions**: Users with role permissions (e.g., Property Manager with "sites:view") can access ALL resources of that type
+- **Resource-specific permissions**: Fine-grained control for individual resources (optional, overrides role permissions)
+- **Fixed issue**: Field name mismatch between resource_access (`can_view`) and role permissions (`view`) preventing role-based access to individual resources 
