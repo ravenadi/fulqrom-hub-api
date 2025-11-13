@@ -76,3 +76,9 @@ MONGODB_CONNECTION=mongodb+srv://connection_string/fulqrom-hub
 - **Role-based permissions**: Users with role permissions (e.g., Property Manager with "sites:view") can access ALL resources of that type
 - **Resource-specific permissions**: Fine-grained control for individual resources (optional, overrides role permissions)
 - **Fixed issue**: Field name mismatch between resource_access (`can_view`) and role permissions (`view`) preventing role-based access to individual resources 
+
+## How Permission System Works Now
+1. User with Role Permission (e.g., Contractor with "buildings:view") → ✅ Can access ALL buildings
+2. User with Resource Permission (e.g., specific site access) → ✅ Can access ONLY that site
+3. User with NO permissions → ❌ Access denied
+
