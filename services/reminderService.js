@@ -107,7 +107,7 @@ class ReminderService {
                 tenantId: doc.tenant_id, // Required for multi-tenancy
                 building: doc.location?.building?.building_name || '',
                 customer: doc.customer?.customer_name || '',
-                actionUrl: `/hub/document/${doc._id}/review`,
+                actionUrl: `/hub/documents/${doc._id}/review`,
                 sendEmail: true,
                 emailTemplate: 'document_update',
                 emailVariables: {
@@ -121,7 +121,7 @@ class ReminderService {
                   reviewer_name: 'System Reminder',
                   review_date_formatted: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
                   comment: `This document will expire in ${days} day${days !== 1 ? 's' : ''} on ${displayExpiryDate}. Please review and renew if necessary.`,
-                  document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/hub/document/${doc._id}/review`
+                  document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/hub/documents/${doc._id}/review`
                 }
               }
             );
@@ -247,7 +247,7 @@ class ReminderService {
                 },
                 building: doc.location?.building?.building_name || '',
                 customer: doc.customer?.customer_name || '',
-                actionUrl: `/hub/document/${doc._id}/review`,
+                actionUrl: `/hub/documents/${doc._id}/review`,
                 sendEmail: true,
                 emailTemplate: 'document_update',
                 emailVariables: {
@@ -261,7 +261,7 @@ class ReminderService {
                   reviewer_name: 'System Reminder',
                   review_date_formatted: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }),
                   comment: message,
-                  document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/hub/document/${doc._id}/review`
+                  document_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/hub/documents/${doc._id}/review`
                 }
               }
             );

@@ -233,7 +233,7 @@ class NotificationService {
   async notifyDocumentApproversAssigned(document, approvers, actor, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
-    const actionUrl = `/hub/document/${documentId}/review`;
+    const actionUrl = `/hub/documents/${documentId}/review`;
 
     // Format date in Australian format
     const formatDate = (date) => {
@@ -306,7 +306,7 @@ class NotificationService {
   async notifyDocumentStatusChanged(document, oldStatus, newStatus, recipients, actor, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
-    const actionUrl = `/hub/document/${documentId}/review`;
+    const actionUrl = `/hub/documents/${documentId}/review`;
 
     const notificationData = {
       title: 'Document Status Changed',
@@ -360,7 +360,7 @@ class NotificationService {
   async notifyDocumentApprovalStatusChanged(document, approvalStatus, recipients, actor, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
-    const actionUrl = `/hub/document/${documentId}/review`;
+    const actionUrl = `/hub/documents/${documentId}/review`;
 
     const isApproved = approvalStatus === 'Approved';
     const isRejected = approvalStatus === 'Rejected';
@@ -414,7 +414,7 @@ class NotificationService {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
     const commentId = comment._id || comment.id;
-    const actionUrl = `/hub/document/${documentId}/review#comment-${commentId}`;
+    const actionUrl = `/hub/documents/${documentId}/review#comment-${commentId}`;
 
     const notificationData = {
       title: 'New Comment on Document',
@@ -466,7 +466,7 @@ class NotificationService {
   async notifyDocumentVersionUploaded(document, newVersion, recipients, actor, tenantId = null) {
     const documentId = document._id || document.id;
     const documentName = document.name || 'Unnamed Document';
-    const actionUrl = `/hub/document/${documentId}/review`;
+    const actionUrl = `/hub/documents/${documentId}/review`;
 
     const notificationData = {
       title: 'New Document Version Uploaded',
