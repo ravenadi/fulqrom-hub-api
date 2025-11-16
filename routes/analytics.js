@@ -55,17 +55,18 @@ router.get('/dashboard', checkModulePermission('analytics', 'view'), applyScopeF
     const isAdmin = isUserAdmin(user);
 
     // Build filter query based on tenant context
-    let filterQuery = {};
-    let documentFilterQuery = {};
+    // NOTE: tenant_id filtering is handled automatically by tenantPlugin via ALS
+    // We only need to add soft-delete filtering and other custom filters here
+    let filterQuery = {
+      is_delete: { $ne: true } // Exclude soft-deleted records
+    };
+    let documentFilterQuery = {
+      is_delete: { $ne: true }
+    };
     let userFilterQuery = {};
-    let assetFilterQuery = {};
-
-    if (tenantId) {
-      filterQuery.tenant_id = tenantId;
-      documentFilterQuery = { tenant_id: tenantId };
-      userFilterQuery = { tenant_id: tenantId };
-      assetFilterQuery = { tenant_id: tenantId };
-    }
+    let assetFilterQuery = {
+      is_delete: { $ne: true }
+    };
 
     // Apply resource-level filtering for non-admin users
     if (!isAdmin) {
@@ -118,6 +119,7 @@ router.get('/dashboard', checkModulePermission('analytics', 'view'), applyScopeF
     }
 
     // Use Promise.all for parallel execution of all stats queries
+    // NOTE: All queries will automatically be filtered by tenant_id via tenantPlugin + ALS
     const [
       totalCustomers,
       totalSites,
@@ -129,13 +131,13 @@ router.get('/dashboard', checkModulePermission('analytics', 'view'), applyScopeF
       totalUsers,
       storageStats
     ] = await Promise.all([
-      // Total Customers/Tenants - for tenant context, count only that tenant
-      Customer.countDocuments(tenantId ? { tenant_id: tenantId } : {}),
+      // Total Customers - filtered by tenant_id automatically via plugin
+      Customer.countDocuments({ is_delete: { $ne: true } }),
 
-      // Total Sites
+      // Total Sites - filtered by tenant_id automatically via plugin
       Site.countDocuments(filterQuery),
 
-      // Total Buildings
+      // Total Buildings - filtered by tenant_id automatically via plugin
       Building.countDocuments(filterQuery),
 
       // Total Floors
