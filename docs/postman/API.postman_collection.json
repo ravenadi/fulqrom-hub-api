@@ -18,14 +18,17 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"// Save the access token to collection variable",
+									"// Save the access token to both collection and environment variables",
 									"if (pm.response.code === 200) {",
 									"    const jsonData = pm.response.json();",
 									"    pm.collectionVariables.set(\"access_token\", jsonData.access_token);",
 									"    pm.collectionVariables.set(\"token_type\", jsonData.token_type);",
+									"    pm.environment.set(\"access_token\", jsonData.access_token);",
+									"    pm.environment.set(\"token_type\", jsonData.token_type);",
 									"    ",
 									"    console.log(\"✓ Access token saved successfully\");",
 									"    console.log(\"Token expires in:\", jsonData.expires_in, \"seconds\");",
+									"    console.log(\"⚠ Now call 'BFF Login' to create session cookies\");",
 									"} else {",
 									"    console.log(\"✗ Authentication failed\");",
 									"}"
@@ -70,9 +73,160 @@
 						"description": "✅ **THIS WORKS!** - Machine-to-machine authentication\n\nUse this for testing the API in Postman. This grant type authenticates as the application itself (not as a specific user).\n\n**What you get:**\n- Valid access token for API calls\n- No user context (no user-specific permissions)\n- Works without any Auth0 setup changes\n\n**Steps:**\n1. Click Send\n2. Token automatically saved\n3. Use any protected endpoint\n\n**Required Variables:**\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq\n- `AUTH0_CLIENT_SECRET`: Your client secret\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au"
 					},
 					"response": []
+				},
+				{
+					"name": "Sync User (Run First Time)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    console.log(\"✓ User synced successfully\");",
+									"    console.log(\"✓ User now exists in database\");",
+									"} else {",
+									"    console.log(\"✗ User sync failed\");",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"auth0_id\": \"auth0|68f0a977ff172d1b1b0f8d5c\",\n  \"email\": \"{{auth0_username}}\",\n  \"full_name\": \"Demo User\",\n  \"phone\": \"+61400000000\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/auth/sync-user",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"sync-user"
+							]
+						},
+						"description": "Sync or create user from Auth0 to MongoDB database. This is a public endpoint that creates the user record if it doesn't exist.\n\n**Run this ONCE before using BFF Login if the user doesn't exist in the database.**\n\nNote: Replace auth0_id with the actual Auth0 user ID from your Auth0 dashboard."
+					},
+					"response": []
+				},
+				{
+					"name": "BFF Login (Create Session)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Session cookies are automatically saved by Postman",
+									"if (pm.response.code === 200) {",
+									"    console.log(\"✓ Session created successfully\");",
+									"    console.log(\"✓ Session cookies (sid, csrf) are now active\");",
+									"    console.log(\"✓ You can now call protected endpoints\");",
+									"} else {",
+									"    console.log(\"✗ Session creation failed\");",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"remember_me\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/auth/login",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Create a server-side session from the Auth0 token. This sets HttpOnly cookies (sid, csrf) that will be used for all subsequent API calls.\n\n**Steps:**\n1. Run \"Auth0 Login\" first to get the access token\n2. Run this endpoint to create session cookies\n3. All other endpoints will use the session cookies automatically\n\n**Response:**\n- Sets `sid` cookie (HttpOnly, session ID)\n- Sets `csrf` cookie (CSRF protection)\n- Returns user information and session metadata"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User (/auth/me)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/auth/me",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"me"
+							]
+						},
+						"description": "Get current authenticated user information. Uses session cookies for authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/auth/logout",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"logout"
+							]
+						},
+						"description": "Invalidate current session and clear cookies."
+					},
+					"response": []
 				}
 			],
-			"description": "Auth0 authentication endpoints for obtaining access tokens."
+			"description": "Auth0 authentication endpoints for obtaining access tokens and BFF session management."
 		},
 		{
 			"name": "Dashboard",
@@ -80,16 +234,6 @@
 				{
 					"name": "Portfolio Map",
 					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
 						"method": "GET",
 						"header": [],
 						"url": {
@@ -112,7 +256,140 @@
 		},
 		{
 			"name": "Customer",
-			"item": []
+			"item": [
+				{
+					"name": "List Customers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/customers?search=&limit=50",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"customers"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"description": "Search term (optional)"
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Maximum number of results (optional, default: 50)"
+								}
+							]
+						},
+						"description": "List all customers with optional search and limit parameters. Results are automatically filtered by tenant."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/customers/:id",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "",
+									"description": "Customer ID"
+								}
+							]
+						},
+						"description": "Get a single customer by ID with full details. Replace :id in the URL with the actual customer ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Customer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"Example Property Management\"\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"trading_name\": \"EPM Properties\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/customers",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"customers"
+							]
+						},
+						"description": "Create a new customer. The organisation_name is required. Business number (ABN) and trading name are optional."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Customer",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"Updated Property Management\"\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"trading_name\": \"Updated Trading Name\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/customers/:id",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "",
+									"description": "Customer ID"
+								}
+							]
+						},
+						"description": "Update an existing customer by ID. Replace :id in the URL with the actual customer ID."
+					},
+					"response": []
+				}
+			]
 		},
 		{
 			"name": "Building",
