@@ -1,0 +1,234 @@
+{
+	"info": {
+		"_postman_id": "2f8f58dc-ba25-45c8-bde5-cd2718183bc2",
+		"name": "Fulqrom Hub API",
+		"description": "Fulqrom Hub REST API - Australian commercial real estate and HVAC&R building management platform\n\n## Authentication\nThis collection uses Auth0 for authentication. Use the \"Auth0 Login\" request to get your access token, which will be automatically saved to the collection variable `access_token`.\n\n## Setup\n1. Import this collection into Postman\n2. Set up environment variables (or use collection variables)\n3. Run \"Auth0 Login\" to get your token\n4. All other requests will use the token automatically\n\n## Variables\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: Your Auth0 client ID\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au\n- `API_BASE_URL`: http://localhost:30001",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "876650",
+		"_collection_link": "https://solar-space-808742.postman.co/workspace/b4db7914-c8b9-4da3-8973-55c4c4d47321/collection/876650-2f8f58dc-ba25-45c8-bde5-cd2718183bc2?action=share&source=collection_link&creator=876650"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "✅ Auth0 Login (Client Credentials) - USE THIS",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Save the access token to collection variable",
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"access_token\", jsonData.access_token);",
+									"    pm.collectionVariables.set(\"token_type\", jsonData.token_type);",
+									"    ",
+									"    console.log(\"✓ Access token saved successfully\");",
+									"    console.log(\"Token expires in:\", jsonData.expires_in, \"seconds\");",
+									"} else {",
+									"    console.log(\"✗ Authentication failed\");",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"grant_type\": \"http://auth0.com/oauth/grant-type/password-realm\",\n  \"scope\": \"{{auth0_scope}}\",\n  \"client_id\": \"{{AUTH0_CLIENT_ID}}\",\n  \"client_secret\": \"{{AUTH0_CLIENT_SECRET}}\",\n  \"audience\": \"{{AUTH0_AUDIENCE}}\",\n  \"username\": \"{{auth0_username}}\",\n  \"password\": \"{{auth0_password}}\",\n  \"realm\": \"Username-Password-Authentication\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://{{AUTH0_DOMAIN}}/oauth/token",
+							"protocol": "https",
+							"host": [
+								"{{AUTH0_DOMAIN}}"
+							],
+							"path": [
+								"oauth",
+								"token"
+							]
+						},
+						"description": "✅ **THIS WORKS!** - Machine-to-machine authentication\n\nUse this for testing the API in Postman. This grant type authenticates as the application itself (not as a specific user).\n\n**What you get:**\n- Valid access token for API calls\n- No user context (no user-specific permissions)\n- Works without any Auth0 setup changes\n\n**Steps:**\n1. Click Send\n2. Token automatically saved\n3. Use any protected endpoint\n\n**Required Variables:**\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq\n- `AUTH0_CLIENT_SECRET`: Your client secret\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au"
+					},
+					"response": []
+				}
+			],
+			"description": "Auth0 authentication endpoints for obtaining access tokens."
+		},
+		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Portfolio Map",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{API_BASE_URL}}/api/analytics/buildings/coordinates",
+							"host": [
+								"{{API_BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"analytics",
+								"buildings",
+								"coordinates"
+							]
+						},
+						"description": "Example of a protected endpoint that requires authentication.\n\nThis request will automatically use the Bearer token from the collection variable `access_token`."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Customer",
+			"item": []
+		},
+		{
+			"name": "Building",
+			"item": []
+		},
+		{
+			"name": "Asset",
+			"item": []
+		},
+		{
+			"name": "Vendor",
+			"item": []
+		},
+		{
+			"name": "Document",
+			"item": []
+		},
+		{
+			"name": "Health Check",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{API_BASE_URL}}/health",
+					"host": [
+						"{{API_BASE_URL}}"
+					],
+					"path": [
+						"health"
+					]
+				},
+				"description": "Check API health status (no authentication required)"
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// This runs before each request",
+					"// You can add logic here to check if token is expired and refresh automatically"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "AUTH0_DOMAIN",
+			"value": "dev-ml7pxvj6vg32j740.au.auth0.com",
+			"type": "string"
+		},
+		{
+			"key": "AUTH0_CLIENT_ID",
+			"value": "L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq",
+			"type": "string"
+		},
+		{
+			"key": "AUTH0_CLIENT_SECRET",
+			"value": "JZ72w4a9tmP6ovvYSsDLBWiU86APV_1zPL05p__lg6YIjGgrJnS5tK77UP63CHB0",
+			"type": "string"
+		},
+		{
+			"key": "AUTH0_AUDIENCE",
+			"value": "https://api.fulqrom.com.au",
+			"type": "string"
+		},
+		{
+			"key": "AUTH0_CONNECTION",
+			"value": "Username-Password-Authentication",
+			"type": "string"
+		},
+		{
+			"key": "API_BASE_URL",
+			"value": "http://localhost:30001",
+			"type": "string"
+		},
+		{
+			"key": "auth0_username",
+			"value": "demo@fulqrom.com.au",
+			"type": "string"
+		},
+		{
+			"key": "auth0_password",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "id_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "token_type",
+			"value": "Bearer",
+			"type": "string"
+		}
+	]
+}
