@@ -12,7 +12,7 @@
       "name": "Authentication",
       "item": [
         {
-          "name": "✅ Auth0 Login (Client Credentials) - USE THIS",
+          "name": "\u2705 Auth0 Login (Client Credentials) - USE THIS",
           "event": [
             {
               "listen": "test",
@@ -26,11 +26,11 @@
                   "    pm.environment.set(\"access_token\", jsonData.access_token);",
                   "    pm.environment.set(\"token_type\", jsonData.token_type);",
                   "    ",
-                  "    console.log(\"✓ Access token saved successfully\");",
+                  "    console.log(\"\u2713 Access token saved successfully\");",
                   "    console.log(\"Token expires in:\", jsonData.expires_in, \"seconds\");",
-                  "    console.log(\"⚠ Now call 'BFF Login' to create session cookies\");",
+                  "    console.log(\"\u26a0 Now call 'BFF Login' to create session cookies\");",
                   "} else {",
-                  "    console.log(\"✗ Authentication failed\");",
+                  "    console.log(\"\u2717 Authentication failed\");",
                   "}"
                 ],
                 "type": "text/javascript",
@@ -62,10 +62,15 @@
             "url": {
               "raw": "https://{{AUTH0_DOMAIN}}/oauth/token",
               "protocol": "https",
-              "host": ["{{AUTH0_DOMAIN}}"],
-              "path": ["oauth", "token"]
+              "host": [
+                "{{AUTH0_DOMAIN}}"
+              ],
+              "path": [
+                "oauth",
+                "token"
+              ]
             },
-            "description": "✅ **THIS WORKS!** - Machine-to-machine authentication\n\nUse this for testing the API in Postman. This grant type authenticates as the application itself (not as a specific user).\n\n**What you get:**\n- Valid access token for API calls\n- No user context (no user-specific permissions)\n- Works without any Auth0 setup changes\n\n**Steps:**\n1. Click Send\n2. Token automatically saved\n3. Use any protected endpoint\n\n**Required Variables:**\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq\n- `AUTH0_CLIENT_SECRET`: Your client secret\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au"
+            "description": "\u2705 **THIS WORKS!** - Machine-to-machine authentication\n\nUse this for testing the API in Postman. This grant type authenticates as the application itself (not as a specific user).\n\n**What you get:**\n- Valid access token for API calls\n- No user context (no user-specific permissions)\n- Works without any Auth0 setup changes\n\n**Steps:**\n1. Click Send\n2. Token automatically saved\n3. Use any protected endpoint\n\n**Required Variables:**\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq\n- `AUTH0_CLIENT_SECRET`: Your client secret\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au"
           },
           "response": []
         },
@@ -77,10 +82,10 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ User synced successfully\");",
-                  "    console.log(\"✓ User now exists in database\");",
+                  "    console.log(\"\u2713 User synced successfully\");",
+                  "    console.log(\"\u2713 User now exists in database\");",
                   "} else {",
-                  "    console.log(\"✗ User sync failed\");",
+                  "    console.log(\"\u2717 User sync failed\");",
                   "}"
                 ],
                 "type": "text/javascript",
@@ -108,8 +113,14 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/auth/sync-user",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "auth", "sync-user"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "sync-user"
+              ]
             },
             "description": "Sync or create user from Auth0 to MongoDB database. This is a public endpoint that creates the user record if it doesn't exist.\n\n**Run this ONCE before using BFF Login if the user doesn't exist in the database.**\n\nNote: Replace auth0_id with the actual Auth0 user ID from your Auth0 dashboard."
           },
@@ -124,11 +135,11 @@
                 "exec": [
                   "// Session cookies are automatically saved by Postman",
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Session created successfully\");",
-                  "    console.log(\"✓ Session cookies (sid, csrf) are now active\");",
-                  "    console.log(\"✓ You can now call protected endpoints\");",
+                  "    console.log(\"\u2713 Session created successfully\");",
+                  "    console.log(\"\u2713 Session cookies (sid, csrf) are now active\");",
+                  "    console.log(\"\u2713 You can now call protected endpoints\");",
                   "} else {",
-                  "    console.log(\"✗ Session creation failed\");",
+                  "    console.log(\"\u2717 Session creation failed\");",
                   "}"
                 ],
                 "type": "text/javascript",
@@ -161,8 +172,14 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/auth/login",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "auth", "login"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
             },
             "description": "Create a server-side session from the Auth0 token. This sets HttpOnly cookies (sid, csrf) that will be used for all subsequent API calls.\n\n**Steps:**\n1. Run \"Auth0 Login\" first to get the access token\n2. Run this endpoint to create session cookies\n3. All other endpoints will use the session cookies automatically\n\n**Response:**\n- Sets `sid` cookie (HttpOnly, session ID)\n- Sets `csrf` cookie (CSRF protection)\n- Returns user information and session metadata"
           },
@@ -175,8 +192,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/auth/me",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "auth", "me"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
             },
             "description": "Get current authenticated user information. Uses session cookies for authentication."
           },
@@ -189,8 +212,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/auth/logout",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "auth", "logout"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
             },
             "description": "Invalidate current session and clear cookies."
           },
@@ -209,8 +238,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/analytics/buildings/coordinates",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "analytics", "buildings", "coordinates"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "analytics",
+                "buildings",
+                "coordinates"
+              ]
             },
             "description": "Example of a protected endpoint that requires authentication.\n\nThis request will automatically use the Bearer token from the collection variable `access_token`."
           },
@@ -229,7 +265,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Customer hierarchy retrieved successfully\");",
+                  "    console.log(\"\u2713 Customer hierarchy retrieved successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -241,8 +277,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/hierarchy/{{customer_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "hierarchy", "{{customer_id}}"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "hierarchy",
+                "{{customer_id}}"
+              ],
               "query": [
                 {
                   "key": "building_id",
@@ -270,7 +312,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Site hierarchy retrieved successfully\");",
+                  "    console.log(\"\u2713 Site hierarchy retrieved successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -282,8 +324,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/hierarchy/site/{{site_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "hierarchy", "site", "{{site_id}}"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "hierarchy",
+                "site",
+                "{{site_id}}"
+              ],
               "query": [
                 {
                   "key": "building_id",
@@ -311,7 +360,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Building hierarchy retrieved successfully\");",
+                  "    console.log(\"\u2713 Building hierarchy retrieved successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -323,8 +372,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/hierarchy/building/{{building_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "hierarchy", "building", "{{building_id}}"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "hierarchy",
+                "building",
+                "{{building_id}}"
+              ],
               "query": [
                 {
                   "key": "floor_id",
@@ -346,7 +402,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Hierarchy statistics retrieved successfully\");",
+                  "    console.log(\"\u2713 Hierarchy statistics retrieved successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -358,8 +414,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/hierarchy/{{customer_id}}/stats",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "hierarchy", "{{customer_id}}", "stats"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "hierarchy",
+                "{{customer_id}}",
+                "stats"
+              ]
             },
             "description": "Get summary statistics for customer's hierarchy (counts of sites, buildings, floors, assets)"
           },
@@ -373,7 +436,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Customer entities retrieved\");",
+                  "    console.log(\"\u2713 Customer entities retrieved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -385,8 +448,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/dropdowns/entities/customers",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "dropdowns", "entities", "customers"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "dropdowns",
+                "entities",
+                "customers"
+              ]
             },
             "description": "Get list of all customers for dropdowns/entity selection"
           },
@@ -400,7 +470,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Site entities retrieved\");",
+                  "    console.log(\"\u2713 Site entities retrieved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -412,8 +482,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/dropdowns/entities/sites?customer_id={{customer_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "dropdowns", "entities", "sites"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "dropdowns",
+                "entities",
+                "sites"
+              ],
               "query": [
                 {
                   "key": "customer_id",
@@ -434,7 +511,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Building entities retrieved\");",
+                  "    console.log(\"\u2713 Building entities retrieved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -446,8 +523,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/dropdowns/entities/buildings?site_id={{site_id}}&customer_id={{customer_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "dropdowns", "entities", "buildings"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "dropdowns",
+                "entities",
+                "buildings"
+              ],
               "query": [
                 {
                   "key": "site_id",
@@ -474,7 +558,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Floor entities retrieved\");",
+                  "    console.log(\"\u2713 Floor entities retrieved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -486,8 +570,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/dropdowns/entities/floors?building_id={{building_id}}&site_id={{site_id}}&customer_id={{customer_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "dropdowns", "entities", "floors"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "dropdowns",
+                "entities",
+                "floors"
+              ],
               "query": [
                 {
                   "key": "building_id",
@@ -520,7 +611,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Asset entities retrieved\");",
+                  "    console.log(\"\u2713 Asset entities retrieved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -532,8 +623,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/dropdowns/entities/assets?building_id={{building_id}}&floor_id={{floor_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "dropdowns", "entities", "assets"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "dropdowns",
+                "entities",
+                "assets"
+              ],
               "query": [
                 {
                   "key": "building_id",
@@ -561,7 +659,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Tenant entities retrieved\");",
+                  "    console.log(\"\u2713 Tenant entities retrieved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -573,8 +671,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/dropdowns/entities/tenants?building_id={{building_id}}&floor_id={{floor_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "dropdowns", "entities", "tenants"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "dropdowns",
+                "entities",
+                "tenants"
+              ],
               "query": [
                 {
                   "key": "building_id",
@@ -602,7 +707,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Vendor entities retrieved\");",
+                  "    console.log(\"\u2713 Vendor entities retrieved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -614,8 +719,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/dropdowns/entities/vendors?category=",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "dropdowns", "entities", "vendors"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "dropdowns",
+                "entities",
+                "vendors"
+              ],
               "query": [
                 {
                   "key": "category",
@@ -647,9 +759,9 @@
                   "        const latestCustomer = jsonData.data[jsonData.data.length - 1];",
                   "        pm.environment.set(\"customer_id\", latestCustomer.id || latestCustomer._id);",
                   "        pm.environment.set(\"customer_version\", latestCustomer.__v || 0);",
-                  "        console.log(\"✓ Saved latest customer_id:\", pm.environment.get(\"customer_id\"));",
-                  "        console.log(\"✓ Saved customer_version:\", pm.environment.get(\"customer_version\"));",
-                  "        console.log(\"✓ Total customers:\", jsonData.data.length);",
+                  "        console.log(\"\u2713 Saved latest customer_id:\", pm.environment.get(\"customer_id\"));",
+                  "        console.log(\"\u2713 Saved customer_version:\", pm.environment.get(\"customer_version\"));",
+                  "        console.log(\"\u2713 Total customers:\", jsonData.data.length);",
                   "    }",
                   "}"
                 ],
@@ -662,22 +774,28 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers?search=&limit=50",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ],
               "query": [
                 {
                   "key": "search",
                   "value": "",
-                  "description": "Search term (optional)"
+                  "description": "Search by organisation name, business number, or trading name",
+                  "disabled": true
                 },
                 {
                   "key": "limit",
                   "value": "50",
-                  "description": "Maximum number of results (optional, default: 50)"
+                  "description": "Maximum number of results to return (default: 50)"
                 }
               ]
             },
-            "description": "List all customers with optional search and limit parameters. Results are automatically filtered by tenant."
+            "description": "List all customers with optional search and limit parameters.\n\n**Query Parameters:**\n- `search`: Filter by organisation name, business number, or trading name\n- `limit`: Maximum number of results (default: 50)\n\n**Examples:**\n- Search: `?search=GKB`\n- Limit: `?limit=20`\n- Combined: `?search=property&limit=10`"
           },
           "response": []
         },
@@ -688,8 +806,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/:id",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", ":id"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                ":id"
+              ],
               "variable": [
                 {
                   "key": "id",
@@ -714,7 +838,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const newCustomer = jsonData.data;",
                   "        pm.environment.set(\"customer_id_for_delete\", newCustomer.id || newCustomer._id);",
-                  "        console.log(\"✓ Saved customer_id_for_delete:\", pm.environment.get(\"customer_id_for_delete\"));",
+                  "        console.log(\"\u2713 Saved customer_id_for_delete:\", pm.environment.get(\"customer_id_for_delete\"));",
                   "    }",
                   "}"
                 ],
@@ -732,7 +856,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"Test Customer for Delete\"\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"trading_name\": \"Test Delete\"\n  }\n}",
+              "raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"GKB Property Management\",\n    \"email_domain\": \"gkbpm.com.au\",\n    \"logo_url\": \"https://example.com/logo.png\",\n    \"building_image\": \"https://example.com/building.jpg\",\n    \"notes\": \"Premier property management firm in Sydney\",\n    \"metadata\": {\n      \"founded\": \"2020\",\n      \"website\": \"https://gkbpm.com.au\"\n    }\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"company_number\": \"123456789\",\n    \"trading_name\": \"GKB PM\",\n    \"industry_type\": \"Property Management\",\n    \"organisation_size\": \"Medium (50-250 employees)\"\n  },\n  \"business_address\": {\n    \"street\": \"123 George Street\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\"\n  },\n  \"postal_address\": {\n    \"street\": \"PO Box 123\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2001\"\n  },\n  \"contact_methods\": [\n    {\n      \"full_name\": \"John Smith\",\n      \"job_title\": \"General Manager\",\n      \"department\": \"Operations\",\n      \"role_type\": \"Primary Contact\",\n      \"contact_type\": \"Business\",\n      \"platform_access\": \"Full Access\",\n      \"is_primary\": true,\n      \"contact_methods\": [\n        {\n          \"method_type\": \"Email\",\n          \"method_value\": \"john.smith@gkbpm.com.au\",\n          \"label\": \"Work Email\",\n          \"is_primary\": true\n        },\n        {\n          \"method_type\": \"Phone\",\n          \"method_value\": \"+61 2 9876 5432\",\n          \"label\": \"Office\",\n          \"is_primary\": false\n        },\n        {\n          \"method_type\": \"Mobile\",\n          \"method_value\": \"+61 412 345 678\",\n          \"label\": \"Mobile\",\n          \"is_primary\": false\n        }\n      ]\n    }\n  ],\n  \"metadata\": [\n    {\n      \"key\": \"preferred_contact_time\",\n      \"value\": \"9am-5pm AEST\"\n    },\n    {\n      \"key\": \"billing_cycle\",\n      \"value\": \"Monthly\"\n    }\n  ],\n  \"is_active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -741,10 +865,15 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ]
             },
-            "description": "Create a new customer. The organisation_name is required. Business number (ABN) and trading name are optional."
+            "description": "Create a new customer with comprehensive details.\n\n**Required Fields:**\n- `organisation.organisation_name` - Organisation name\n\n**Optional Fields:**\n\n**Organisation:**\n- `email_domain` - Company email domain\n- `logo_url` - URL to organisation logo\n- `building_image` - URL to building/office image\n- `notes` - Additional notes about organisation\n- `metadata` - Key-value pairs for custom data\n\n**Company Profile:**\n- `business_number` - ABN (11 digits, Australian Business Number)\n- `company_number` - ACN (9 digits, Australian Company Number)\n- `trading_name` - Trading/DBA name\n- `industry_type` - Industry category\n- `organisation_size` - Company size (e.g., \"Small (1-50)\", \"Medium (50-250)\", \"Large (250+)\")\n\n**Addresses:**\n- `business_address` - Physical business location (street, suburb, state, postcode)\n- `postal_address` - Mailing address (street, suburb, state, postcode)\n\n**Contact Methods:** (Array)\n- `full_name` - Contact person name\n- `job_title` - Position/title\n- `department` - Department name\n- `role_type` - Role category\n- `contact_type` - Contact category\n- `platform_access` - Access level\n- `is_primary` - Mark as primary contact\n- `contact_methods` - Array of contact methods (Email, Phone, Mobile, etc.)\n\n**Metadata:** (Array)\n- Custom key-value pairs for additional data\n\n**System:**\n- `is_active` - Active status (default: true)\n\n**Australian Data:**\n- ABN: 11 digits (business_number)\n- ACN: 9 digits (company_number)\n- States: NSW, VIC, QLD, SA, WA, TAS, NT, ACT\n- Postcodes: 4 digits"
           },
           "response": []
         },
@@ -760,7 +889,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"Updated Property Management\"\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"trading_name\": \"Updated Trading Name\"\n  }\n}",
+              "raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"GKB Property Management (Updated)\",\n    \"email_domain\": \"gkbpm.com.au\",\n    \"logo_url\": \"https://example.com/new-logo.png\",\n    \"building_image\": \"https://example.com/new-building.jpg\",\n    \"notes\": \"Updated notes - Premier property management firm\",\n    \"metadata\": {\n      \"founded\": \"2020\",\n      \"website\": \"https://gkbpm.com.au\",\n      \"last_audit\": \"2025-01-15\"\n    }\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"company_number\": \"123456789\",\n    \"trading_name\": \"GKB PM Updated\",\n    \"industry_type\": \"Property & Facility Management\",\n    \"organisation_size\": \"Large (250+ employees)\"\n  },\n  \"business_address\": {\n    \"street\": \"456 Pitt Street\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\"\n  },\n  \"postal_address\": {\n    \"street\": \"PO Box 456\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2001\"\n  },\n  \"contact_methods\": [\n    {\n      \"full_name\": \"John Smith\",\n      \"job_title\": \"CEO\",\n      \"department\": \"Executive\",\n      \"role_type\": \"Primary Contact\",\n      \"contact_type\": \"Business\",\n      \"platform_access\": \"Full Access\",\n      \"is_primary\": true,\n      \"contact_methods\": [\n        {\n          \"method_type\": \"Email\",\n          \"method_value\": \"john.smith@gkbpm.com.au\",\n          \"label\": \"Work Email\",\n          \"is_primary\": true\n        },\n        {\n          \"method_type\": \"Phone\",\n          \"method_value\": \"+61 2 9876 5432\",\n          \"label\": \"Office Direct\",\n          \"is_primary\": false\n        }\n      ]\n    },\n    {\n      \"full_name\": \"Jane Doe\",\n      \"job_title\": \"Operations Manager\",\n      \"department\": \"Operations\",\n      \"role_type\": \"Secondary Contact\",\n      \"contact_type\": \"Business\",\n      \"platform_access\": \"Standard Access\",\n      \"is_primary\": false,\n      \"contact_methods\": [\n        {\n          \"method_type\": \"Email\",\n          \"method_value\": \"jane.doe@gkbpm.com.au\",\n          \"label\": \"Work Email\",\n          \"is_primary\": true\n        },\n        {\n          \"method_type\": \"Mobile\",\n          \"method_value\": \"+61 423 456 789\",\n          \"label\": \"Mobile\",\n          \"is_primary\": false\n        }\n      ]\n    }\n  ],\n  \"metadata\": [\n    {\n      \"key\": \"preferred_contact_time\",\n      \"value\": \"9am-5pm AEST\"\n    },\n    {\n      \"key\": \"billing_cycle\",\n      \"value\": \"Quarterly\"\n    },\n    {\n      \"key\": \"account_manager\",\n      \"value\": \"Sarah Johnson\"\n    }\n  ],\n  \"is_active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -769,8 +898,14 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/:id",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", ":id"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                ":id"
+              ],
               "variable": [
                 {
                   "key": "id",
@@ -779,7 +914,7 @@
                 }
               ]
             },
-            "description": "Update an existing customer by ID. Replace :id in the URL with the actual customer ID."
+            "description": "Update an existing customer with comprehensive details.\n\n**All fields are optional** - only send fields you want to update.\n\n**Available Fields:**\n\n**Organisation:**\n- `organisation_name` - Organisation name\n- `email_domain` - Company email domain\n- `logo_url` - URL to organisation logo\n- `building_image` - URL to building/office image\n- `notes` - Additional notes\n- `metadata` - Key-value pairs (object)\n\n**Company Profile:**\n- `business_number` - ABN (11 digits)\n- `company_number` - ACN (9 digits)\n- `trading_name` - Trading name\n- `industry_type` - Industry category\n- `organisation_size` - Company size\n\n**Addresses:**\n- `business_address` - Physical location (street, suburb, state, postcode)\n- `postal_address` - Mailing address (street, suburb, state, postcode)\n\n**Contact Methods:** (Array - replaces entire array)\n- Full contact objects with contact_methods array\n\n**Metadata:** (Array - replaces entire array)\n- Custom key-value pairs\n\n**System:**\n- `is_active` - Active status (boolean)\n\n**Headers Required:**\n- `If-Match: W/\"v{{customer_version}}\"` - For optimistic locking\n\n**Note:** This endpoint uses optimistic locking. The version header must match the current version or the update will fail with 409 Conflict."
           },
           "response": []
         },
@@ -791,7 +926,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Customer deleted successfully\");",
+                  "    console.log(\"\u2713 Customer deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -803,8 +938,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id_for_delete}}"
+              ]
             },
             "description": "Delete a customer by ID (soft delete). Uses the ID saved from Create Customer request."
           },
@@ -812,7 +953,7 @@
         }
       ]
     },
-	{
+    {
       "name": "Customer Contacts",
       "item": [
         {
@@ -828,8 +969,8 @@
                   "        const firstContact = jsonData.data[0];",
                   "        pm.environment.set(\"contact_id\", firstContact.id || firstContact._id);",
                   "        pm.environment.set(\"contact_version\", firstContact.__v || 0);",
-                  "        console.log(\"✓ Saved contact_id:\", pm.environment.get(\"contact_id\"));",
-                  "        console.log(\"✓ Saved contact_version:\", pm.environment.get(\"contact_version\"));",
+                  "        console.log(\"\u2713 Saved contact_id:\", pm.environment.get(\"contact_id\"));",
+                  "        console.log(\"\u2713 Saved contact_version:\", pm.environment.get(\"contact_version\"));",
                   "    }",
                   "}"
                 ],
@@ -842,8 +983,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id}}", "contacts"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}",
+                "contacts"
+              ]
             },
             "description": "List all contacts for a specific customer"
           },
@@ -861,7 +1009,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const contact = jsonData.data;",
                   "        pm.environment.set(\"contact_version\", contact.__v || 0);",
-                  "        console.log(\"✓ Updated contact_version:\", pm.environment.get(\"contact_version\"));",
+                  "        console.log(\"\u2713 Updated contact_version:\", pm.environment.get(\"contact_version\"));",
                   "    }",
                   "}"
                 ],
@@ -874,8 +1022,16 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/{{contact_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id}}", "contacts", "{{contact_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}",
+                "contacts",
+                "{{contact_id}}"
+              ]
             },
             "description": "Get a specific contact by ID for a customer"
           },
@@ -893,7 +1049,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const contact = jsonData.data;",
                   "        pm.environment.set(\"primary_contact_id\", contact.id || contact._id);",
-                  "        console.log(\"✓ Saved primary_contact_id:\", pm.environment.get(\"primary_contact_id\"));",
+                  "        console.log(\"\u2713 Saved primary_contact_id:\", pm.environment.get(\"primary_contact_id\"));",
                   "    }",
                   "}"
                 ],
@@ -906,8 +1062,16 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/primary",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id}}", "contacts", "primary"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}",
+                "contacts",
+                "primary"
+              ]
             },
             "description": "Get the primary contact for a customer"
           },
@@ -921,7 +1085,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Contact search completed\");",
+                  "    console.log(\"\u2713 Contact search completed\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -933,8 +1097,16 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/search?q=",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id}}", "contacts", "search"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}",
+                "contacts",
+                "search"
+              ],
               "query": [
                 {
                   "key": "q",
@@ -973,9 +1145,9 @@
                   "        pm.environment.set(\"contact_id\", newContact.id || newContact._id);",
                   "        pm.environment.set(\"contact_version\", newContact.__v || 0);",
                   "        pm.environment.set(\"contact_id_for_delete\", newContact.id || newContact._id);",
-                  "        console.log(\"✓ Saved new contact_id:\", pm.environment.get(\"contact_id\"));",
-                  "        console.log(\"✓ Saved contact_version:\", pm.environment.get(\"contact_version\"));",
-                  "        console.log(\"✓ Saved contact_id_for_delete\");",
+                  "        console.log(\"\u2713 Saved new contact_id:\", pm.environment.get(\"contact_id\"));",
+                  "        console.log(\"\u2713 Saved contact_version:\", pm.environment.get(\"contact_version\"));",
+                  "        console.log(\"\u2713 Saved contact_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -997,8 +1169,15 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id}}", "contacts"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}",
+                "contacts"
+              ]
             },
             "description": "Create a new contact for a customer"
           },
@@ -1016,7 +1195,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const updatedContact = jsonData.data;",
                   "        pm.environment.set(\"contact_version\", updatedContact.__v || 0);",
-                  "        console.log(\"✓ Updated contact_version to:\", pm.environment.get(\"contact_version\"));",
+                  "        console.log(\"\u2713 Updated contact_version to:\", pm.environment.get(\"contact_version\"));",
                   "    }",
                   "}"
                 ],
@@ -1043,8 +1222,16 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/{{contact_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id}}", "contacts", "{{contact_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}",
+                "contacts",
+                "{{contact_id}}"
+              ]
             },
             "description": "Update an existing contact for a customer"
           },
@@ -1058,7 +1245,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Contact set as primary successfully\");",
+                  "    console.log(\"\u2713 Contact set as primary successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1070,8 +1257,17 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/{{contact_id}}/primary",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id}}", "contacts", "{{contact_id}}", "primary"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}",
+                "contacts",
+                "{{contact_id}}",
+                "primary"
+              ]
             },
             "description": "Set a specific contact as the primary contact for the customer"
           },
@@ -1085,7 +1281,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Contact deleted successfully\");",
+                  "    console.log(\"\u2713 Contact deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1097,8 +1293,16 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/{{contact_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "customers", "{{customer_id}}", "contacts", "{{contact_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}",
+                "contacts",
+                "{{contact_id_for_delete}}"
+              ]
             },
             "description": "Delete a contact for a customer (soft delete). Uses the ID saved from Create Contact request."
           },
@@ -1106,7 +1310,7 @@
         }
       ],
       "description": "Customer contact management endpoints"
-	},
+    },
     {
       "name": "Site",
       "item": [
@@ -1123,8 +1327,8 @@
                   "        const firstSite = jsonData.data[0];",
                   "        pm.environment.set(\"site_id\", firstSite.id || firstSite._id);",
                   "        pm.environment.set(\"site_version\", firstSite.__v || 0);",
-                  "        console.log(\"✓ Saved site_id:\", pm.environment.get(\"site_id\"));",
-                  "        console.log(\"✓ Saved site_version:\", pm.environment.get(\"site_version\"));",
+                  "        console.log(\"\u2713 Saved site_id:\", pm.environment.get(\"site_id\"));",
+                  "        console.log(\"\u2713 Saved site_version:\", pm.environment.get(\"site_version\"));",
                   "    }",
                   "}"
                 ],
@@ -1137,17 +1341,34 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/sites?page=1&limit=20",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "sites"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sites"
+              ],
               "query": [
-                { "key": "page", "value": "1", "description": "Page number" },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
                 {
                   "key": "limit",
                   "value": "20",
                   "description": "Items per page"
                 },
-                { "key": "search", "value": "", "disabled": true },
-                { "key": "customer_id", "value": "", "disabled": true }
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "customer_id",
+                  "value": "",
+                  "disabled": true
+                }
               ]
             },
             "description": "List all sites with pagination and filtering"
@@ -1166,8 +1387,8 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const site = jsonData.data;",
                   "        pm.environment.set(\"site_version\", site.__v || 0);",
-                  "        console.log(\"✓ Site retrieved successfully\");",
-                  "        console.log(\"✓ Saved site_version:\", pm.environment.get(\"site_version\"));",
+                  "        console.log(\"\u2713 Site retrieved successfully\");",
+                  "        console.log(\"\u2713 Saved site_version:\", pm.environment.get(\"site_version\"));",
                   "    }",
                   "}"
                 ],
@@ -1180,8 +1401,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/sites/{{site_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "sites", "{{site_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sites",
+                "{{site_id}}"
+              ]
             },
             "description": "Get single site by ID"
           },
@@ -1201,9 +1428,9 @@
                   "        pm.environment.set(\"site_id\", site.id || site._id);",
                   "        pm.environment.set(\"site_version\", site.__v || 0);",
                   "        pm.environment.set(\"site_id_for_delete\", site.id || site._id);",
-                  "        console.log(\"✓ Site created successfully\");",
-                  "        console.log(\"✓ Saved site_id:\", pm.environment.get(\"site_id\"));",
-                  "        console.log(\"✓ Saved site_id_for_delete:\", pm.environment.get(\"site_id_for_delete\"));",
+                  "        console.log(\"\u2713 Site created successfully\");",
+                  "        console.log(\"\u2713 Saved site_id:\", pm.environment.get(\"site_id\"));",
+                  "        console.log(\"\u2713 Saved site_id_for_delete:\", pm.environment.get(\"site_id_for_delete\"));",
                   "    }",
                   "}"
                 ],
@@ -1213,16 +1440,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"site_name\": \"Example Site\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"address\": {\n    \"street\": \"123 Example St\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\",\n    \"country\": \"Australia\"\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/sites",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "sites"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sites"
+              ]
             },
             "description": "Create new site"
           },
@@ -1240,8 +1481,8 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const site = jsonData.data;",
                   "        pm.environment.set(\"site_version\", site.__v || 0);",
-                  "        console.log(\"✓ Site updated successfully\");",
-                  "        console.log(\"✓ Updated site_version to:\", pm.environment.get(\"site_version\"));",
+                  "        console.log(\"\u2713 Site updated successfully\");",
+                  "        console.log(\"\u2713 Updated site_version to:\", pm.environment.get(\"site_version\"));",
                   "    }",
                   "}"
                 ],
@@ -1252,7 +1493,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
               {
                 "key": "If-Match",
                 "value": "W/\"v{{site_version}}\"",
@@ -1262,12 +1506,22 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"site_name\": \"Updated Site Name\",\n  \"address\": {\n    \"street\": \"456 Updated St\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\",\n    \"country\": \"Australia\"\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/sites/{{site_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "sites", "{{site_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sites",
+                "{{site_id}}"
+              ]
             },
             "description": "Update site with version control"
           },
@@ -1281,7 +1535,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Site deleted successfully\");",
+                  "    console.log(\"\u2713 Site deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1293,8 +1547,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/sites/{{site_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "sites", "{{site_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sites",
+                "{{site_id_for_delete}}"
+              ]
             },
             "description": "Delete a site by ID (soft delete). Uses the ID saved from Create Site request."
           },
@@ -1318,8 +1578,8 @@
                   "        const firstBuilding = jsonData.data[0];",
                   "        pm.environment.set(\"building_id\", firstBuilding.id || firstBuilding._id);",
                   "        pm.environment.set(\"building_version\", firstBuilding.__v || 0);",
-                  "        console.log(\"✓ Saved building_id:\", pm.environment.get(\"building_id\"));",
-                  "        console.log(\"✓ Saved building_version:\", pm.environment.get(\"building_version\"));",
+                  "        console.log(\"\u2713 Saved building_id:\", pm.environment.get(\"building_id\"));",
+                  "        console.log(\"\u2713 Saved building_version:\", pm.environment.get(\"building_version\"));",
                   "    }",
                   "}"
                 ],
@@ -1332,13 +1592,32 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/buildings?page=1&per_page=10",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "buildings"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "per_page", "value": "10" },
-                { "key": "search", "value": "", "disabled": true },
-                { "key": "site_id", "value": "", "disabled": true }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "10"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "site_id",
+                  "value": "",
+                  "disabled": true
+                }
               ]
             },
             "description": "List all buildings with pagination"
@@ -1356,7 +1635,7 @@
                   "    const jsonData = pm.response.json();",
                   "    if (jsonData.success && jsonData.data) {",
                   "        pm.environment.set(\"building_version\", jsonData.data.__v || 0);",
-                  "        console.log(\"✓ Building retrieved\");",
+                  "        console.log(\"\u2713 Building retrieved\");",
                   "    }",
                   "}"
                 ],
@@ -1369,8 +1648,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/buildings/{{building_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "buildings", "{{building_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings",
+                "{{building_id}}"
+              ]
             }
           },
           "response": []
@@ -1388,8 +1673,8 @@
                   "        pm.environment.set(\"building_id\", jsonData.data.id || jsonData.data._id);",
                   "        pm.environment.set(\"building_version\", jsonData.data.__v || 0);",
                   "        pm.environment.set(\"building_id_for_delete\", jsonData.data.id || jsonData.data._id);",
-                  "        console.log(\"✓ Building created\");",
-                  "        console.log(\"✓ Saved building_id_for_delete\");",
+                  "        console.log(\"\u2713 Building created\");",
+                  "        console.log(\"\u2713 Saved building_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -1399,16 +1684,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"building_name\": \"Example Building\",\n  \"building_code\": \"BLD-001\",\n  \"site_id\": \"{{site_id}}\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"primary_use\": \"Office\",\n  \"address\": {\n    \"street\": \"123 Example St\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\"\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/buildings",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "buildings"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings"
+              ]
             }
           },
           "response": []
@@ -1424,7 +1723,7 @@
                   "    const jsonData = pm.response.json();",
                   "    if (jsonData.success && jsonData.data) {",
                   "        pm.environment.set(\"building_version\", jsonData.data.__v || 0);",
-                  "        console.log(\"✓ Building updated\");",
+                  "        console.log(\"\u2713 Building updated\");",
                   "    }",
                   "}"
                 ],
@@ -1435,18 +1734,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "If-Match", "value": "W/\"v{{building_version}}\"" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{building_version}}\""
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"building_name\": \"Updated Building Name\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/buildings/{{building_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "buildings", "{{building_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings",
+                "{{building_id}}"
+              ]
             }
           },
           "response": []
@@ -1459,7 +1774,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Building deleted successfully\");",
+                  "    console.log(\"\u2713 Building deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1471,8 +1786,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/buildings/{{building_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "buildings", "{{building_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings",
+                "{{building_id_for_delete}}"
+              ]
             },
             "description": "Delete a building by ID (soft delete). Uses the ID saved from Create Building request."
           },
@@ -1496,7 +1817,7 @@
                   "        const firstFloor = jsonData.data[0];",
                   "        pm.environment.set(\"floor_id\", firstFloor.id || firstFloor._id);",
                   "        pm.environment.set(\"floor_version\", firstFloor.__v || 0);",
-                  "        console.log(\"✓ Saved floor_id:\", pm.environment.get(\"floor_id\"));",
+                  "        console.log(\"\u2713 Saved floor_id:\", pm.environment.get(\"floor_id\"));",
                   "    }",
                   "}"
                 ],
@@ -1509,12 +1830,27 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/floors?page=1&per_page=10",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "floors"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "floors"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "per_page", "value": "10" },
-                { "key": "building_id", "value": "", "disabled": true }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "10"
+                },
+                {
+                  "key": "building_id",
+                  "value": "",
+                  "disabled": true
+                }
               ]
             }
           },
@@ -1543,8 +1879,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/floors/{{floor_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "floors", "{{floor_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "floors",
+                "{{floor_id}}"
+              ]
             }
           },
           "response": []
@@ -1562,7 +1904,7 @@
                   "        pm.environment.set(\"floor_id\", jsonData.data.id || jsonData.data._id);",
                   "        pm.environment.set(\"floor_version\", jsonData.data.__v || 0);",
                   "        pm.environment.set(\"floor_id_for_delete\", jsonData.data.id || jsonData.data._id);",
-                  "        console.log(\"✓ Saved floor_id_for_delete\");",
+                  "        console.log(\"\u2713 Saved floor_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -1572,16 +1914,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"floor_name\": \"Level 1\",\n  \"floor_number\": \"1\",\n  \"building_id\": \"{{building_id}}\",\n  \"floor_type\": \"Office\",\n  \"customer_id\": \"{{customer_id}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/floors",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "floors"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "floors"
+              ]
             }
           },
           "response": []
@@ -1607,18 +1963,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "If-Match", "value": "W/\"v{{floor_version}}\"" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{floor_version}}\""
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"floor_name\": \"Updated Floor Name\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/floors/{{floor_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "floors", "{{floor_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "floors",
+                "{{floor_id}}"
+              ]
             }
           },
           "response": []
@@ -1631,7 +2003,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Floor deleted successfully\");",
+                  "    console.log(\"\u2713 Floor deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1643,8 +2015,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/floors/{{floor_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "floors", "{{floor_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "floors",
+                "{{floor_id_for_delete}}"
+              ]
             },
             "description": "Delete a floor by ID (soft delete). Uses the ID saved from Create Floor request."
           },
@@ -1668,7 +2046,7 @@
                   "        const firstTenant = jsonData.data[0];",
                   "        pm.environment.set(\"tenant_id\", firstTenant.id || firstTenant._id);",
                   "        pm.environment.set(\"tenant_version\", firstTenant.__v || 0);",
-                  "        console.log(\"✓ Saved tenant_id:\", pm.environment.get(\"tenant_id\"));",
+                  "        console.log(\"\u2713 Saved tenant_id:\", pm.environment.get(\"tenant_id\"));",
                   "    }",
                   "}"
                 ],
@@ -1681,12 +2059,27 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/building-tenants?page=1&limit=20",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "building-tenants"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "building-tenants"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "limit", "value": "20" },
-                { "key": "building_id", "value": "", "disabled": true }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "building_id",
+                  "value": "",
+                  "disabled": true
+                }
               ]
             }
           },
@@ -1715,8 +2108,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/building-tenants/{{tenant_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "building-tenants", "{{tenant_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "building-tenants",
+                "{{tenant_id}}"
+              ]
             }
           },
           "response": []
@@ -1734,7 +2133,7 @@
                   "        pm.environment.set(\"tenant_id\", jsonData.data.id || jsonData.data._id);",
                   "        pm.environment.set(\"tenant_version\", jsonData.data.__v || 0);",
                   "        pm.environment.set(\"tenant_id_for_delete\", jsonData.data.id || jsonData.data._id);",
-                  "        console.log(\"✓ Saved tenant_id_for_delete\");",
+                  "        console.log(\"\u2713 Saved tenant_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -1744,16 +2143,30 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"tenant_legal_name\": \"Acme Corporation\",\n  \"building_id\": \"{{building_id}}\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"tenant_trading_name\": \"Acme Corp\",\n  \"abn\": \"12345678901\",\n  \"industry_type\": \"Technology\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/building-tenants",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "building-tenants"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "building-tenants"
+              ]
             }
           },
           "response": []
@@ -1779,18 +2192,34 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "If-Match", "value": "W/\"v{{tenant_version}}\"" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{tenant_version}}\""
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"tenant_legal_name\": \"Updated Tenant Name\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/building-tenants/{{tenant_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "building-tenants", "{{tenant_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "building-tenants",
+                "{{tenant_id}}"
+              ]
             }
           },
           "response": []
@@ -1803,7 +2232,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Building Tenant deleted successfully\");",
+                  "    console.log(\"\u2713 Building Tenant deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1815,8 +2244,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/building-tenants/{{tenant_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "building-tenants", "{{tenant_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "building-tenants",
+                "{{tenant_id_for_delete}}"
+              ]
             },
             "description": "Delete a building tenant by ID (soft delete). Uses the ID saved from Create Building Tenant request."
           },
@@ -1840,8 +2275,8 @@
                   "        const firstAsset = jsonData.data[0];",
                   "        pm.environment.set(\"asset_id\", firstAsset.id || firstAsset._id);",
                   "        pm.environment.set(\"asset_version\", firstAsset.__v || 0);",
-                  "        console.log(\"✓ Saved asset_id:\", pm.environment.get(\"asset_id\"));",
-                  "        console.log(\"✓ Saved asset_version:\", pm.environment.get(\"asset_version\"));",
+                  "        console.log(\"\u2713 Saved asset_id:\", pm.environment.get(\"asset_id\"));",
+                  "        console.log(\"\u2713 Saved asset_version:\", pm.environment.get(\"asset_version\"));",
                   "    }",
                   "}"
                 ],
@@ -1853,20 +2288,196 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{API_BASE_URL}}/api/assets?page=1&limit=20",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "assets"],
+              "raw": "{{API_BASE_URL}}/api/assets?page=1&limit=50",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "assets"
+              ],
               "query": [
                 {
                   "key": "page",
-                  "value": "1"
+                  "value": "1",
+                  "description": "Page number for pagination"
                 },
                 {
                   "key": "limit",
-                  "value": "20"
+                  "value": "50",
+                  "description": "Results per page (default: 50)"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by asset number, make, model, or serial",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": "Filter by asset category (Boiler System, Chiller System, etc.)",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter by status (Active, Inactive)",
+                  "disabled": true
+                },
+                {
+                  "key": "condition",
+                  "value": "",
+                  "description": "Filter by condition (Excellent, Good, Average, Poor, Critical)",
+                  "disabled": true
+                },
+                {
+                  "key": "criticality_level",
+                  "value": "",
+                  "description": "Filter by criticality (Low, Medium, High, Critical)",
+                  "disabled": true
+                },
+                {
+                  "key": "customer_id",
+                  "value": "",
+                  "description": "Filter by customer ID",
+                  "disabled": true
+                },
+                {
+                  "key": "site_id",
+                  "value": "",
+                  "description": "Filter by site ID",
+                  "disabled": true
+                },
+                {
+                  "key": "building_id",
+                  "value": "",
+                  "description": "Filter by building ID",
+                  "disabled": true
+                },
+                {
+                  "key": "floor_id",
+                  "value": "",
+                  "description": "Filter by floor ID",
+                  "disabled": true
+                },
+                {
+                  "key": "make",
+                  "value": "",
+                  "description": "Filter by manufacturer",
+                  "disabled": true
+                },
+                {
+                  "key": "model",
+                  "value": "",
+                  "description": "Filter by model",
+                  "disabled": true
+                },
+                {
+                  "key": "level",
+                  "value": "",
+                  "description": "Filter by level/floor level",
+                  "disabled": true
+                },
+                {
+                  "key": "area",
+                  "value": "",
+                  "description": "Filter by area/location",
+                  "disabled": true
+                },
+                {
+                  "key": "device_id",
+                  "value": "",
+                  "description": "Filter by device ID",
+                  "disabled": true
+                },
+                {
+                  "key": "asset_no",
+                  "value": "",
+                  "description": "Filter by asset number",
+                  "disabled": true
+                },
+                {
+                  "key": "refrigerant",
+                  "value": "",
+                  "description": "Filter by refrigerant type",
+                  "disabled": true
+                },
+                {
+                  "key": "owner",
+                  "value": "",
+                  "description": "Filter by owner",
+                  "disabled": true
+                },
+                {
+                  "key": "service_status",
+                  "value": "",
+                  "description": "Filter by service status",
+                  "disabled": true
+                },
+                {
+                  "key": "age_min",
+                  "value": "",
+                  "description": "Minimum age (years)",
+                  "disabled": true
+                },
+                {
+                  "key": "age_max",
+                  "value": "",
+                  "description": "Maximum age (years)",
+                  "disabled": true
+                },
+                {
+                  "key": "purchase_cost_min",
+                  "value": "",
+                  "description": "Minimum purchase cost (AUD)",
+                  "disabled": true
+                },
+                {
+                  "key": "purchase_cost_max",
+                  "value": "",
+                  "description": "Maximum purchase cost (AUD)",
+                  "disabled": true
+                },
+                {
+                  "key": "current_value_min",
+                  "value": "",
+                  "description": "Minimum current book value (AUD)",
+                  "disabled": true
+                },
+                {
+                  "key": "current_value_max",
+                  "value": "",
+                  "description": "Maximum current book value (AUD)",
+                  "disabled": true
+                },
+                {
+                  "key": "test_result",
+                  "value": "",
+                  "description": "Filter by last test result",
+                  "disabled": true
+                },
+                {
+                  "key": "is_active",
+                  "value": "",
+                  "description": "Filter by active status (true/false)",
+                  "disabled": true
+                },
+                {
+                  "key": "sort_by",
+                  "value": "",
+                  "description": "Sort field (e.g., 'asset_no', 'make', 'installation_date')",
+                  "disabled": true
+                },
+                {
+                  "key": "sort_order",
+                  "value": "",
+                  "description": "Sort direction ('asc' or 'desc')",
+                  "disabled": true
                 }
               ]
-            }
+            },
+            "description": "List all assets with comprehensive filtering, pagination, and sorting.\n\n**Query Parameters:**\n- `page` - Page number (default: 1)\n- `limit` - Results per page (default: 50)\n- `search` - Search by asset number, make, model, or serial\n- `category` - Asset category (Boiler System, Chiller System, Pump System, etc.)\n- `status` - Status (Active, Inactive, Decommissioned)\n- `condition` - Condition (Excellent, Good, Average, Poor, Critical)\n- `criticality_level` - Criticality (Low, Medium, High, Critical)\n- `customer_id` - Filter by customer\n- `site_id` - Filter by site\n- `building_id` - Filter by building\n- `floor_id` - Filter by floor\n- `make` - Filter by manufacturer\n- `model` - Filter by model\n- `level` - Filter by level\n- `area` - Filter by area/location\n- `device_id` - Filter by device ID\n- `asset_no` - Filter by asset number\n- `refrigerant` - Filter by refrigerant type\n- `owner` - Filter by owner\n- `service_status` - Filter by service status\n- `age_min` / `age_max` - Age range filter (years)\n- `purchase_cost_min` / `purchase_cost_max` - Purchase cost range (AUD)\n- `current_value_min` / `current_value_max` - Current value range (AUD)\n- `test_result` - Filter by test result\n- `is_active` - Filter by active status\n- `sort_by` - Sort field\n- `sort_order` - Sort direction (asc, desc)\n\n**Examples:**\n- Search: `?search=Chiller`\n- Filter by category: `?category=Chiller System`\n- Filter by building and condition: `?building_id=123&condition=Good`\n- Age range: `?age_min=5&age_max=10`\n- Cost range: `?purchase_cost_min=10000&purchase_cost_max=50000`\n- Combined: `?category=HVAC&criticality_level=High&is_active=true&sort_by=asset_no`"
           },
           "response": []
         },
@@ -1882,7 +2493,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const asset = jsonData.data;",
                   "        pm.environment.set(\"asset_version\", asset.__v || 0);",
-                  "        console.log(\"✓ Updated asset_version:\", pm.environment.get(\"asset_version\"));",
+                  "        console.log(\"\u2713 Updated asset_version:\", pm.environment.get(\"asset_version\"));",
                   "    }",
                   "}"
                 ],
@@ -1895,8 +2506,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/assets/{{asset_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "assets", "{{asset_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "assets",
+                "{{asset_id}}"
+              ]
             }
           },
           "response": []
@@ -1915,9 +2532,9 @@
                   "        pm.environment.set(\"asset_id\", newAsset.id || newAsset._id);",
                   "        pm.environment.set(\"asset_version\", newAsset.__v || 0);",
                   "        pm.environment.set(\"asset_id_for_delete\", newAsset.id || newAsset._id);",
-                  "        console.log(\"✓ Saved new asset_id:\", pm.environment.get(\"asset_id\"));",
-                  "        console.log(\"✓ Saved asset_version:\", pm.environment.get(\"asset_version\"));",
-                  "        console.log(\"✓ Saved asset_id_for_delete\");",
+                  "        console.log(\"\u2713 Saved new asset_id:\", pm.environment.get(\"asset_id\"));",
+                  "        console.log(\"\u2713 Saved asset_version:\", pm.environment.get(\"asset_version\"));",
+                  "        console.log(\"\u2713 Saved asset_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -1935,13 +2552,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"asset_name\": \"HVAC Unit - Level 3 East\",\n  \"asset_code\": \"HVAC-L3E-001\",\n  \"category\": \"HVAC\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"building_id\": \"{{building_id}}\",\n  \"floor_id\": \"{{floor_id}}\",\n  \"make\": \"Daikin\",\n  \"model\": \"VRV IV\",\n  \"status\": \"operational\"\n}"
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"site_id\": \"{{site_id}}\",\n  \"building_id\": \"{{building_id}}\",\n  \"floor_id\": \"{{floor_id}}\",\n  \"asset_id\": \"AST-2025-001\",\n  \"asset_no\": \"CH-001\",\n  \"device_id\": \"DEV-CH-001\",\n  \"status\": \"Active\",\n  \"category\": \"Chiller System\",\n  \"type\": \"Chiller - Water Cooled\",\n  \"condition\": \"Excellent\",\n  \"criticality_level\": \"High\",\n  \"make\": \"Carrier\",\n  \"model\": \"30XA-302\",\n  \"serial\": \"SN-CH-302-2025\",\n  \"refrigerant\": \"R-134a\",\n  \"refrigerant_capacity\": \"150 kg\",\n  \"refrigerant_consumption\": \"2.5 kg/year\",\n  \"level\": \"Ground Floor\",\n  \"area\": \"Mechanical Plant Room - North\",\n  \"owner\": \"GKB Property Management\",\n  \"da19_life_expectancy\": \"25 years\",\n  \"service_status\": \"Under Warranty\",\n  \"date_of_installation\": \"2025-01-15T00:00:00Z\",\n  \"age\": \"0\",\n  \"last_test_date\": \"2025-01-20T00:00:00Z\",\n  \"last_test_result\": \"Passed - All Systems Normal\",\n  \"purchase_cost_aud\": 125000.0,\n  \"current_book_value_aud\": 125000.0,\n  \"weight_kgs\": \"2500\",\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/assets",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "assets"]
-            }
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "assets"
+              ]
+            },
+            "description": "Create a new asset with comprehensive HVAC/facility details.\n\n**Required Fields:**\n- `customer_id` - Customer ID (required)\n\n**Optional Fields:**\n\n**Hierarchy & Location:**\n- `site_id` - Associated site\n- `building_id` - Associated building\n- `floor_id` - Associated floor\n- `level` - Level/floor level (e.g., \"Ground Floor\", \"Level 2\")\n- `area` - Area/location within floor\n\n**Asset Identification:**\n- `asset_id` - Custom asset ID\n- `asset_no` - Asset number (unique per customer)\n- `device_id` - IoT device ID\n\n**Classification & Status:**\n- `status` - Status (Active, Inactive, Decommissioned)\n- `category` - Category (Boiler System, Chiller System, Pump System, AHU, Fan Coil Unit, Cooling Tower, VRV/VRF System, etc.)\n- `type` - Specific type (e.g., \"Chiller - Water Cooled\", \"Boiler - Gas Fired\")\n- `condition` - Condition (Excellent, Good, Average, Poor, Critical)\n- `criticality_level` - Criticality level (Low, Medium, High, Critical)\n\n**Equipment Details:**\n- `make` - Manufacturer/make\n- `model` - Model number\n- `serial` - Serial number\n\n**HVAC/Refrigerant Information:**\n- `refrigerant` - Refrigerant type (R-134a, R-410A, R-407C, etc.)\n- `refrigerant_capacity` - Refrigerant capacity (e.g., \"150 kg\")\n- `refrigerant_consumption` - Annual consumption (e.g., \"2.5 kg/year\")\n\n**Ownership & Service:**\n- `owner` - Asset owner\n- `da19_life_expectancy` - Expected life (years)\n- `service_status` - Service status (Under Warranty, Maintenance Contract, Ad-hoc)\n\n**Dates & Testing:**\n- `date_of_installation` - Installation date (ISO 8601 or Date object)\n- `age` - Age in years (string)\n- `last_test_date` - Last test/inspection date\n- `last_test_result` - Test result description\n\n**Financial Information:**\n- `purchase_cost_aud` - Purchase cost in AUD\n- `current_book_value_aud` - Current book value in AUD\n- `weight_kgs` - Weight in kilograms\n\n**System:**\n- `is_active` - Active status (default: true)\n\n**Australian Standards:**\n- Currency: AUD (Australian Dollars)\n- Weights: Metric (kg)\n- Refrigerant standards: AS/NZS compliance"
           },
           "response": []
         },
@@ -1957,7 +2585,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const updatedAsset = jsonData.data;",
                   "        pm.environment.set(\"asset_version\", updatedAsset.__v || 0);",
-                  "        console.log(\"✓ Updated asset_version to:\", pm.environment.get(\"asset_version\"));",
+                  "        console.log(\"\u2713 Updated asset_version to:\", pm.environment.get(\"asset_version\"));",
                   "    }",
                   "}"
                 ],
@@ -1980,13 +2608,25 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"asset_name\": \"HVAC Unit - Level 3 East (Updated)\",\n  \"status\": \"maintenance_required\"\n}"
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"site_id\": \"{{site_id}}\",\n  \"building_id\": \"{{building_id}}\",\n  \"floor_id\": \"{{floor_id}}\",\n  \"asset_id\": \"AST-2025-001\",\n  \"asset_no\": \"CH-001-UPDATED\",\n  \"device_id\": \"DEV-CH-001-V2\",\n  \"status\": \"Active\",\n  \"category\": \"Chiller System\",\n  \"type\": \"Chiller - Water Cooled - High Efficiency\",\n  \"condition\": \"Good\",\n  \"criticality_level\": \"High\",\n  \"make\": \"Carrier\",\n  \"model\": \"30XA-302-EE\",\n  \"serial\": \"SN-CH-302-2025\",\n  \"refrigerant\": \"R-134a\",\n  \"refrigerant_capacity\": \"150 kg\",\n  \"refrigerant_consumption\": \"1.8 kg/year\",\n  \"level\": \"Ground Floor\",\n  \"area\": \"Mechanical Plant Room - North (Updated Location)\",\n  \"owner\": \"GKB Property Management Pty Ltd\",\n  \"da19_life_expectancy\": \"25 years\",\n  \"service_status\": \"Maintenance Contract - Annual\",\n  \"date_of_installation\": \"2025-01-15T00:00:00Z\",\n  \"age\": \"0.5\",\n  \"last_test_date\": \"2025-06-15T00:00:00Z\",\n  \"last_test_result\": \"Passed - Performance within specifications\",\n  \"purchase_cost_aud\": 125000.0,\n  \"current_book_value_aud\": 120000.0,\n  \"weight_kgs\": \"2500\",\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/assets/{{asset_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "assets", "{{asset_id}}"]
-            }
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "assets",
+                "{{asset_id}}"
+              ]
+            },
+            "description": "Update an existing asset with comprehensive details.\n\n**All fields are optional** - only send fields you want to update.\n\n**Available Fields:**\n\n**Hierarchy & Location:**\n- `customer_id` - Customer ID\n- `site_id` - Site ID\n- `building_id` - Building ID\n- `floor_id` - Floor ID\n- `level` - Level/floor level\n- `area` - Area/location\n\n**Asset Identification:**\n- `asset_id` - Custom asset ID\n- `asset_no` - Asset number\n- `device_id` - IoT device ID\n\n**Classification & Status:**\n- `status` - Status\n- `category` - Category\n- `type` - Type\n- `condition` - Condition\n- `criticality_level` - Criticality\n\n**Equipment Details:**\n- `make` - Manufacturer\n- `model` - Model number\n- `serial` - Serial number\n\n**HVAC/Refrigerant:**\n- `refrigerant` - Refrigerant type\n- `refrigerant_capacity` - Capacity\n- `refrigerant_consumption` - Annual consumption\n\n**Ownership & Service:**\n- `owner` - Owner\n- `da19_life_expectancy` - Life expectancy\n- `service_status` - Service status\n\n**Dates & Testing:**\n- `date_of_installation` - Installation date\n- `age` - Age (years)\n- `last_test_date` - Last test date\n- `last_test_result` - Test result\n\n**Financial:**\n- `purchase_cost_aud` - Purchase cost (AUD)\n- `current_book_value_aud` - Current value (AUD)\n- `weight_kgs` - Weight (kg)\n\n**System:**\n- `is_active` - Active status\n\n**Headers Required:**\n- `If-Match: W/\"v{{asset_version}}\"` - For optimistic locking\n\n**Note:** This endpoint uses optimistic locking. The version header must match the current version or the update will fail with 409 Conflict."
           },
           "response": []
         },
@@ -1998,7 +2638,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Asset deleted successfully\");",
+                  "    console.log(\"\u2713 Asset deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2010,8 +2650,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/assets/{{asset_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "assets", "{{asset_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "assets",
+                "{{asset_id_for_delete}}"
+              ]
             },
             "description": "Delete an asset by ID (soft delete). Uses the ID saved from Create Asset request."
           },
@@ -2035,8 +2681,8 @@
                   "        const firstVendor = jsonData.data[0];",
                   "        pm.environment.set(\"vendor_id\", firstVendor.id || firstVendor._id);",
                   "        pm.environment.set(\"vendor_version\", firstVendor.__v || 0);",
-                  "        console.log(\"✓ Saved vendor_id:\", pm.environment.get(\"vendor_id\"));",
-                  "        console.log(\"✓ Saved vendor_version:\", pm.environment.get(\"vendor_version\"));",
+                  "        console.log(\"\u2713 Saved vendor_id:\", pm.environment.get(\"vendor_id\"));",
+                  "        console.log(\"\u2713 Saved vendor_version:\", pm.environment.get(\"vendor_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2049,8 +2695,13 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/vendors?page=1&limit=20",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "vendors"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "vendors"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -2077,7 +2728,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const vendor = jsonData.data;",
                   "        pm.environment.set(\"vendor_version\", vendor.__v || 0);",
-                  "        console.log(\"✓ Updated vendor_version:\", pm.environment.get(\"vendor_version\"));",
+                  "        console.log(\"\u2713 Updated vendor_version:\", pm.environment.get(\"vendor_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2090,8 +2741,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/vendors/{{vendor_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "vendors", "{{vendor_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "vendors",
+                "{{vendor_id}}"
+              ]
             }
           },
           "response": []
@@ -2110,9 +2767,9 @@
                   "        pm.environment.set(\"vendor_id\", newVendor.id || newVendor._id);",
                   "        pm.environment.set(\"vendor_version\", newVendor.__v || 0);",
                   "        pm.environment.set(\"vendor_id_for_delete\", newVendor.id || newVendor._id);",
-                  "        console.log(\"✓ Saved new vendor_id:\", pm.environment.get(\"vendor_id\"));",
-                  "        console.log(\"✓ Saved vendor_version:\", pm.environment.get(\"vendor_version\"));",
-                  "        console.log(\"✓ Saved vendor_id_for_delete\");",
+                  "        console.log(\"\u2713 Saved new vendor_id:\", pm.environment.get(\"vendor_id\"));",
+                  "        console.log(\"\u2713 Saved vendor_version:\", pm.environment.get(\"vendor_version\"));",
+                  "        console.log(\"\u2713 Saved vendor_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -2134,8 +2791,13 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/vendors",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "vendors"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "vendors"
+              ]
             }
           },
           "response": []
@@ -2152,7 +2814,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const updatedVendor = jsonData.data;",
                   "        pm.environment.set(\"vendor_version\", updatedVendor.__v || 0);",
-                  "        console.log(\"✓ Updated vendor_version to:\", pm.environment.get(\"vendor_version\"));",
+                  "        console.log(\"\u2713 Updated vendor_version to:\", pm.environment.get(\"vendor_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2179,8 +2841,14 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/vendors/{{vendor_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "vendors", "{{vendor_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "vendors",
+                "{{vendor_id}}"
+              ]
             }
           },
           "response": []
@@ -2193,7 +2861,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Vendor deleted successfully\");",
+                  "    console.log(\"\u2713 Vendor deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2205,8 +2873,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/vendors/{{vendor_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "vendors", "{{vendor_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "vendors",
+                "{{vendor_id_for_delete}}"
+              ]
             },
             "description": "Delete a vendor by ID (soft delete). Uses the ID saved from Create Vendor request."
           },
@@ -2230,8 +2904,8 @@
                   "        const firstDocument = jsonData.data[0];",
                   "        pm.environment.set(\"document_id\", firstDocument.id || firstDocument._id);",
                   "        pm.environment.set(\"document_version\", firstDocument.__v || 0);",
-                  "        console.log(\"✓ Saved document_id:\", pm.environment.get(\"document_id\"));",
-                  "        console.log(\"✓ Saved document_version:\", pm.environment.get(\"document_version\"));",
+                  "        console.log(\"\u2713 Saved document_id:\", pm.environment.get(\"document_id\"));",
+                  "        console.log(\"\u2713 Saved document_version:\", pm.environment.get(\"document_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2244,19 +2918,111 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents?page=1&limit=20",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents"
+              ],
               "query": [
                 {
                   "key": "page",
-                  "value": "1"
+                  "value": "1",
+                  "description": "Page number for pagination"
                 },
                 {
                   "key": "limit",
-                  "value": "20"
+                  "value": "20",
+                  "description": "Results per page (default: 20)"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by document name, description, or tags",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": "Filter by document category",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "",
+                  "description": "Filter by document type",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter by document status",
+                  "disabled": true
+                },
+                {
+                  "key": "customer_id",
+                  "value": "",
+                  "description": "Filter by customer ID",
+                  "disabled": true
+                },
+                {
+                  "key": "site_id",
+                  "value": "",
+                  "description": "Filter by site ID",
+                  "disabled": true
+                },
+                {
+                  "key": "building_id",
+                  "value": "",
+                  "description": "Filter by building ID",
+                  "disabled": true
+                },
+                {
+                  "key": "floor_id",
+                  "value": "",
+                  "description": "Filter by floor ID",
+                  "disabled": true
+                },
+                {
+                  "key": "asset_id",
+                  "value": "",
+                  "description": "Filter by asset ID",
+                  "disabled": true
+                },
+                {
+                  "key": "tenant_id",
+                  "value": "",
+                  "description": "Filter by tenant ID",
+                  "disabled": true
+                },
+                {
+                  "key": "vendor_id",
+                  "value": "",
+                  "description": "Filter by vendor ID",
+                  "disabled": true
+                },
+                {
+                  "key": "tags",
+                  "value": "",
+                  "description": "Filter by tags",
+                  "disabled": true
+                },
+                {
+                  "key": "sort_by",
+                  "value": "",
+                  "description": "Sort field (e.g., 'created_at', 'name')",
+                  "disabled": true
+                },
+                {
+                  "key": "sort_order",
+                  "value": "",
+                  "description": "Sort direction ('asc' or 'desc')",
+                  "disabled": true
                 }
               ]
-            }
+            },
+            "description": "List all documents with comprehensive filtering and pagination.\n\n**Query Parameters:**\n- `page` - Page number for pagination (default: 1)\n- `limit` - Results per page (default: 20)\n- `search` - Search by document name, description, or tags\n- `category` - Filter by document category\n- `type` - Filter by document type\n- `status` - Filter by document status\n- `customer_id` - Filter by customer\n- `site_id` - Filter by site\n- `building_id` - Filter by building\n- `floor_id` - Filter by floor\n- `asset_id` - Filter by asset\n- `tenant_id` - Filter by tenant\n- `vendor_id` - Filter by vendor\n- `tags` - Filter by tags\n- `sort_by` - Sort field (created_at, name, etc.)\n- `sort_order` - Sort direction (asc, desc)\n\n**Examples:**\n- Search: `?search=HVAC`\n- Filter by category: `?category=Drawing Register`\n- Filter by building: `?building_id=123456789`\n- Combined: `?category=Compliance&status=Approved&limit=50`"
           },
           "response": []
         },
@@ -2272,7 +3038,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const document = jsonData.data;",
                   "        pm.environment.set(\"document_version\", document.__v || 0);",
-                  "        console.log(\"✓ Updated document_version:\", pm.environment.get(\"document_version\"));",
+                  "        console.log(\"\u2713 Updated document_version:\", pm.environment.get(\"document_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2285,8 +3051,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}"
+              ]
             }
           },
           "response": []
@@ -2305,9 +3077,9 @@
                   "        pm.environment.set(\"document_id\", newDocument.id || newDocument._id);",
                   "        pm.environment.set(\"document_version\", newDocument.__v || 0);",
                   "        pm.environment.set(\"document_id_for_delete\", newDocument.id || newDocument._id);",
-                  "        console.log(\"✓ Saved new document_id:\", pm.environment.get(\"document_id\"));",
-                  "        console.log(\"✓ Saved document_version:\", pm.environment.get(\"document_version\"));",
-                  "        console.log(\"✓ Saved document_id_for_delete\");",
+                  "        console.log(\"\u2713 Saved new document_id:\", pm.environment.get(\"document_id\"));",
+                  "        console.log(\"\u2713 Saved document_version:\", pm.environment.get(\"document_version\"));",
+                  "        console.log(\"\u2713 Saved document_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -2325,13 +3097,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"document_name\": \"Building Compliance Certificate 2025\",\n  \"document_type\": \"Compliance\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"building_id\": \"{{building_id}}\",\n  \"description\": \"Annual building compliance certificate\",\n  \"status\": \"active\",\n  \"tags\": [\"compliance\", \"certificate\", \"2025\"]\n}"
+              "raw": "{\n  \"name\": \"Building HVAC Compliance Certificate 2025\",\n  \"description\": \"Annual HVAC system compliance certification for main office building\",\n  \"version\": \"1.0\",\n  \"category\": \"Compliance\",\n  \"type\": \"Certificate\",\n  \"engineering_discipline\": \"HVAC\",\n  \"status\": \"Draft\",\n  \"regulatory_framework\": \"AS/NZS 3666.1:2011\",\n  \"certification_number\": \"CERT-2025-001\",\n  \"compliance_framework\": \"Building Code of Australia\",\n  \"compliance_status\": \"Compliant\",\n  \"issue_date\": \"2025-01-15\",\n  \"expiry_date\": \"2026-01-15\",\n  \"review_date\": \"2025-07-15\",\n  \"frequency\": \"annual\",\n  \"file\": {\n    \"file_meta\": {\n      \"file_name\": \"hvac-compliance-2025.pdf\",\n      \"file_size\": 2457600,\n      \"file_type\": \"application/pdf\",\n      \"file_extension\": \"pdf\",\n      \"file_url\": \"https://s3.ap-southeast-2.amazonaws.com/bucket/documents/hvac-compliance-2025.pdf\",\n      \"file_path\": \"documents/hvac-compliance-2025.pdf\",\n      \"file_key\": \"documents/hvac-compliance-2025.pdf\",\n      \"bucket_name\": \"fulqrom-hub-documents\",\n      \"version\": \"1.0\",\n      \"file_mime_type\": \"application/pdf\"\n    }\n  },\n  \"tags\": {\n    \"tags\": [\n      \"HVAC\",\n      \"Compliance\",\n      \"Annual\",\n      \"Certificate\",\n      \"2025\"\n    ]\n  },\n  \"location\": {\n    \"site\": {\n      \"site_id\": \"{{site_id}}\"\n    },\n    \"building\": {\n      \"building_id\": \"{{building_id}}\"\n    },\n    \"floor\": {\n      \"floor_id\": \"{{floor_id}}\"\n    },\n    \"assets\": [\n      {\n        \"asset_id\": \"{{asset_id}}\",\n        \"asset_name\": \"Main Chiller Unit\",\n        \"asset_type\": \"Chiller\"\n      }\n    ]\n  },\n  \"customer\": {\n    \"customer_id\": \"{{customer_id}}\"\n  },\n  \"drawing_info\": {\n    \"date_issued\": \"2025-01-15T00:00:00Z\",\n    \"drawing_status\": \"Approved\",\n    \"prepared_by\": \"John Smith, P.Eng\",\n    \"drawing_scale\": \"1:100\",\n    \"approved_by_user\": \"Jane Doe\",\n    \"related_drawings\": [\n      {\n        \"document_id\": \"67890abcdef\",\n        \"document_name\": \"HVAC System Layout\"\n      }\n    ]\n  },\n  \"access_control\": {\n    \"access_level\": \"internal\",\n    \"access_users\": [\n      \"user1@example.com\",\n      \"user2@example.com\"\n    ]\n  },\n  \"approval_config\": {\n    \"enabled\": true,\n    \"status\": \"Pending\",\n    \"approvers\": [\n      {\n        \"user_id\": \"approver123\",\n        \"user_name\": \"Sarah Johnson\",\n        \"user_email\": \"sarah.johnson@example.com\"\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents"]
-            }
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents"
+              ]
+            },
+            "description": "Create a new document with comprehensive details.\n\n**Required Fields:**\n- `name` - Document name\n- `category` - Document category (e.g., Compliance, Drawing Register, Manual, Report)\n- `type` - Document type (e.g., Certificate, Plan, Procedure)\n- `customer.customer_id` - Customer ID\n\n**Optional Fields:**\n\n**Basic Information:**\n- `description` - Document description\n- `version` - Version number (default: \"1.0\")\n- `engineering_discipline` - Engineering discipline (HVAC, Electrical, Mechanical, etc.)\n- `status` - Document status (Draft, Approved, Archived, etc.)\n\n**Compliance & Regulatory:**\n- `regulatory_framework` - Regulatory standard (e.g., AS/NZS 3666.1:2011)\n- `certification_number` - Certificate/permit number\n- `compliance_framework` - Compliance framework name\n- `compliance_status` - Compliance status\n- `issue_date` - Issue date (YYYY-MM-DD)\n- `expiry_date` - Expiry date (YYYY-MM-DD)\n- `review_date` - Next review date (YYYY-MM-DD)\n- `frequency` - Review frequency (weekly, monthly, quarterly, annual)\n\n**File Information:**\n- `file.file_meta` - File metadata object:\n  - `file_name` - File name\n  - `file_size` - Size in bytes\n  - `file_type` - MIME type\n  - `file_extension` - Extension (pdf, docx, dwg, etc.)\n  - `file_url` - S3 URL\n  - `file_path` - Path in bucket\n  - `file_key` - S3 key\n  - `bucket_name` - S3 bucket name\n  - `version` - File version\n\n**Tags:**\n- `tags.tags` - Array of tags for categorization\n\n**Location & Associations:**\n- `location.site.site_id` - Associated site\n- `location.building.building_id` - Associated building\n- `location.floor.floor_id` - Associated floor\n- `location.assets` - Array of associated assets\n- `location.tenant.tenant_id` - Associated tenant\n- `location.vendor.vendor_id` - Associated vendor\n\n**Drawing Register Information:** (for Drawing Register category)\n- `drawing_info.date_issued` - Issue date\n- `drawing_info.drawing_status` - Drawing status\n- `drawing_info.prepared_by` - Prepared by\n- `drawing_info.drawing_scale` - Scale (e.g., 1:100)\n- `drawing_info.approved_by_user` - Approver name\n- `drawing_info.related_drawings` - Array of related drawing references\n\n**Access Control:**\n- `access_control.access_level` - Access level (internal, confidential, public)\n- `access_control.access_users` - Array of user emails with access\n\n**Approval Workflow:**\n- `approval_config.enabled` - Enable approval workflow (boolean)\n- `approval_config.status` - Approval status (Pending, Approved, Rejected)\n- `approval_config.approvers` - Array of approver objects (user_id, user_name, user_email)\n\n**Australian Standards:**\n- Regulatory frameworks: AS/NZS standards\n- Dates: DD/MM/YYYY or ISO 8601 format"
           },
           "response": []
         },
@@ -2347,7 +3130,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const updatedDocument = jsonData.data;",
                   "        pm.environment.set(\"document_version\", updatedDocument.__v || 0);",
-                  "        console.log(\"✓ Updated document_version to:\", pm.environment.get(\"document_version\"));",
+                  "        console.log(\"\u2713 Updated document_version to:\", pm.environment.get(\"document_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2370,13 +3153,25 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"document_name\": \"Building Compliance Certificate 2025 (Updated)\",\n  \"status\": \"archived\"\n}"
+              "raw": "{\n  \"name\": \"Building HVAC Compliance Certificate 2025 (Updated)\",\n  \"description\": \"Updated annual HVAC system compliance certification - includes new chillers\",\n  \"version\": \"2.0\",\n  \"category\": \"Compliance\",\n  \"type\": \"Certificate\",\n  \"engineering_discipline\": \"HVAC\",\n  \"status\": \"Approved\",\n  \"regulatory_framework\": \"AS/NZS 3666.1:2011 + AS/NZS 3666.2:2011\",\n  \"certification_number\": \"CERT-2025-001-REV2\",\n  \"compliance_framework\": \"Building Code of Australia + NCC 2022\",\n  \"compliance_status\": \"Compliant\",\n  \"issue_date\": \"2025-01-15\",\n  \"expiry_date\": \"2026-01-15\",\n  \"review_date\": \"2025-10-15\",\n  \"frequency\": \"annual\",\n  \"tags\": {\n    \"tags\": [\n      \"HVAC\",\n      \"Compliance\",\n      \"Annual\",\n      \"Certificate\",\n      \"2025\",\n      \"Updated\",\n      \"Approved\"\n    ]\n  },\n  \"location\": {\n    \"site\": {\n      \"site_id\": \"{{site_id}}\"\n    },\n    \"building\": {\n      \"building_id\": \"{{building_id}}\"\n    },\n    \"floor\": {\n      \"floor_id\": \"{{floor_id}}\"\n    },\n    \"assets\": [\n      {\n        \"asset_id\": \"{{asset_id}}\",\n        \"asset_name\": \"Main Chiller Unit\",\n        \"asset_type\": \"Chiller\"\n      },\n      {\n        \"asset_id\": \"asset-002\",\n        \"asset_name\": \"Secondary Chiller Unit\",\n        \"asset_type\": \"Chiller\"\n      }\n    ]\n  },\n  \"customer\": {\n    \"customer_id\": \"{{customer_id}}\"\n  },\n  \"drawing_info\": {\n    \"date_issued\": \"2025-01-20T00:00:00Z\",\n    \"drawing_status\": \"Approved\",\n    \"prepared_by\": \"John Smith, P.Eng\",\n    \"drawing_scale\": \"1:100\",\n    \"approved_by_user\": \"Jane Doe - Chief Engineer\",\n    \"related_drawings\": [\n      {\n        \"document_id\": \"67890abcdef\",\n        \"document_name\": \"HVAC System Layout - Level 1\"\n      },\n      {\n        \"document_id\": \"67890xyz123\",\n        \"document_name\": \"HVAC System Layout - Level 2\"\n      }\n    ]\n  },\n  \"access_control\": {\n    \"access_level\": \"internal\",\n    \"access_users\": [\n      \"user1@example.com\",\n      \"user2@example.com\",\n      \"user3@example.com\"\n    ]\n  },\n  \"approval_config\": {\n    \"enabled\": true,\n    \"status\": \"Approved\",\n    \"approvers\": [\n      {\n        \"user_id\": \"approver123\",\n        \"user_name\": \"Sarah Johnson\",\n        \"user_email\": \"sarah.johnson@example.com\"\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}"]
-            }
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}"
+              ]
+            },
+            "description": "Update an existing document with comprehensive details.\n\n**All fields are optional** - only send fields you want to update.\n\n**Available Fields:**\n\n**Basic Information:**\n- `name` - Document name\n- `description` - Description\n- `version` - Version number\n- `category` - Category\n- `type` - Type\n- `engineering_discipline` - Engineering discipline\n- `status` - Document status\n\n**Compliance & Regulatory:**\n- `regulatory_framework` - Regulatory standard\n- `certification_number` - Certificate number\n- `compliance_framework` - Compliance framework\n- `compliance_status` - Compliance status\n- `issue_date` - Issue date\n- `expiry_date` - Expiry date\n- `review_date` - Review date\n- `frequency` - Review frequency\n\n**Tags:**\n- `tags.tags` - Array of tags (replaces entire array)\n\n**Location & Associations:**\n- `location` - Location object (site, building, floor, assets, tenant, vendor)\n- `customer.customer_id` - Customer ID\n\n**Drawing Info:**\n- `drawing_info` - Drawing information object (for Drawing Register category)\n\n**Access Control:**\n- `access_control.access_level` - Access level\n- `access_control.access_users` - Array of user emails (replaces entire array)\n\n**Approval:**\n- `approval_config` - Approval configuration object\n\n**Headers Required:**\n- `If-Match: W/\"v{{document_version}}\"` - For optimistic locking\n\n**Note:** This endpoint uses optimistic locking. The version header must match the current version or the update will fail with 409 Conflict."
           },
           "response": []
         },
@@ -2388,7 +3183,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Document deleted successfully\");",
+                  "    console.log(\"\u2713 Document deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2400,8 +3195,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id_for_delete}}"
+              ]
             },
             "description": "Delete a document by ID (soft delete). Uses the ID saved from Create Document request."
           },
@@ -2415,7 +3216,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200 || pm.response.code === 201) {",
-                  "    console.log(\"✓ Document approval requested successfully\");",
+                  "    console.log(\"\u2713 Document approval requested successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2436,8 +3237,15 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/request-approval",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}", "request-approval"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "request-approval"
+              ]
             },
             "description": "Request approval for a document from a specific approver"
           },
@@ -2451,7 +3259,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Document approved successfully\");",
+                  "    console.log(\"\u2713 Document approved successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2472,8 +3280,15 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/approve",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}", "approve"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "approve"
+              ]
             },
             "description": "Approve a document that requires approval"
           },
@@ -2487,7 +3302,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Document rejected\");",
+                  "    console.log(\"\u2713 Document rejected\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2508,8 +3323,15 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/reject",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}", "reject"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "reject"
+              ]
             },
             "description": "Reject a document with required comment explaining reason"
           },
@@ -2523,7 +3345,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Document approval revoked\");",
+                  "    console.log(\"\u2713 Document approval revoked\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2544,8 +3366,15 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/revoke-approval",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}", "revoke-approval"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "revoke-approval"
+              ]
             },
             "description": "Revoke a previously granted approval"
           },
@@ -2561,7 +3390,7 @@
                   "if (pm.response.code === 200) {",
                   "    const jsonData = pm.response.json();",
                   "    if (jsonData.success && jsonData.data) {",
-                  "        console.log(\"✓ Pending approvals count:\", jsonData.data.length);",
+                  "        console.log(\"\u2713 Pending approvals count:\", jsonData.data.length);",
                   "    }",
                   "}"
                 ],
@@ -2574,8 +3403,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/pending-approval",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "pending-approval"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "pending-approval"
+              ]
             },
             "description": "Get all documents pending approval for the current user"
           },
@@ -2589,7 +3424,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Approval history retrieved\");",
+                  "    console.log(\"\u2713 Approval history retrieved\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2601,8 +3436,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/approval-history",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}", "approval-history"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "approval-history"
+              ]
             },
             "description": "Get complete approval history for a specific document"
           },
@@ -2618,7 +3460,7 @@
                   "if (pm.response.code === 200) {",
                   "    const jsonData = pm.response.json();",
                   "    if (jsonData.success && jsonData.data) {",
-                  "        console.log(\"✓ Comments count:\", jsonData.data.length);",
+                  "        console.log(\"\u2713 Comments count:\", jsonData.data.length);",
                   "    }",
                   "}"
                 ],
@@ -2631,8 +3473,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/comments",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}", "comments"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "comments"
+              ]
             },
             "description": "Get all comments for a specific document"
           },
@@ -2646,7 +3495,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200 || pm.response.code === 201) {",
-                  "    console.log(\"✓ Review/comment added successfully\");",
+                  "    console.log(\"\u2713 Review/comment added successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2667,8 +3516,15 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/review",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "documents", "{{document_id}}", "review"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "review"
+              ]
             },
             "description": "Add a review or comment to a document with optional rating"
           },
@@ -2686,8 +3542,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/auth/me",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "auth", "me"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
             }
           },
           "response": []
@@ -2710,8 +3572,8 @@
                   "        const firstUser = jsonData.data[0];",
                   "        pm.environment.set(\"user_id\", firstUser.id || firstUser._id);",
                   "        pm.environment.set(\"user_version\", firstUser.__v || 0);",
-                  "        console.log(\"✓ Saved user_id:\", pm.environment.get(\"user_id\"));",
-                  "        console.log(\"✓ Saved user_version:\", pm.environment.get(\"user_version\"));",
+                  "        console.log(\"\u2713 Saved user_id:\", pm.environment.get(\"user_id\"));",
+                  "        console.log(\"\u2713 Saved user_version:\", pm.environment.get(\"user_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2724,8 +3586,13 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/users?page=1&limit=20",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "users"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -2752,7 +3619,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const user = jsonData.data;",
                   "        pm.environment.set(\"user_version\", user.__v || 0);",
-                  "        console.log(\"✓ Updated user_version:\", pm.environment.get(\"user_version\"));",
+                  "        console.log(\"\u2713 Updated user_version:\", pm.environment.get(\"user_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2765,8 +3632,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/users/{{user_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "users", "{{user_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}"
+              ]
             }
           },
           "response": []
@@ -2785,9 +3658,9 @@
                   "        pm.environment.set(\"user_id\", newUser.id || newUser._id);",
                   "        pm.environment.set(\"user_version\", newUser.__v || 0);",
                   "        pm.environment.set(\"user_id_for_delete\", newUser.id || newUser._id);",
-                  "        console.log(\"✓ Saved new user_id:\", pm.environment.get(\"user_id\"));",
-                  "        console.log(\"✓ Saved user_version:\", pm.environment.get(\"user_version\"));",
-                  "        console.log(\"✓ Saved user_id_for_delete\");",
+                  "        console.log(\"\u2713 Saved new user_id:\", pm.environment.get(\"user_id\"));",
+                  "        console.log(\"\u2713 Saved user_version:\", pm.environment.get(\"user_version\"));",
+                  "        console.log(\"\u2713 Saved user_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -2809,8 +3682,13 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/users",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "users"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
             }
           },
           "response": []
@@ -2827,7 +3705,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const updatedUser = jsonData.data;",
                   "        pm.environment.set(\"user_version\", updatedUser.__v || 0);",
-                  "        console.log(\"✓ Updated user_version to:\", pm.environment.get(\"user_version\"));",
+                  "        console.log(\"\u2713 Updated user_version to:\", pm.environment.get(\"user_version\"));",
                   "    }",
                   "}"
                 ],
@@ -2854,8 +3732,14 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/users/{{user_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "users", "{{user_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id}}"
+              ]
             }
           },
           "response": []
@@ -2868,7 +3752,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ User deleted successfully\");",
+                  "    console.log(\"\u2713 User deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -2880,8 +3764,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/users/{{user_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "users", "{{user_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{user_id_for_delete}}"
+              ]
             },
             "description": "Delete a user by ID (soft delete). Uses the ID saved from Create User request."
           },
@@ -2902,11 +3792,11 @@
                   "if (pm.response.code === 200) {",
                   "    const jsonData = pm.response.json();",
                   "    if (jsonData.success && jsonData.data) {",
-                  "        console.log(\"✓ Notifications retrieved:\", jsonData.data.length);",
+                  "        console.log(\"\u2713 Notifications retrieved:\", jsonData.data.length);",
                   "        if (jsonData.data.length > 0) {",
                   "            const firstNotification = jsonData.data[0];",
                   "            pm.environment.set(\"notification_id\", firstNotification.id || firstNotification._id);",
-                  "            console.log(\"✓ Saved notification_id:\", pm.environment.get(\"notification_id\"));",
+                  "            console.log(\"\u2713 Saved notification_id:\", pm.environment.get(\"notification_id\"));",
                   "        }",
                   "    }",
                   "}"
@@ -2920,8 +3810,13 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/notifications?limit=50&unreadOnly=false",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "notifications"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
               "query": [
                 {
                   "key": "limit",
@@ -2979,7 +3874,7 @@
                   "if (pm.response.code === 200) {",
                   "    const jsonData = pm.response.json();",
                   "    if (jsonData.success && jsonData.data) {",
-                  "        console.log(\"✓ Unread notifications count:\", jsonData.data.count || jsonData.data);",
+                  "        console.log(\"\u2713 Unread notifications count:\", jsonData.data.count || jsonData.data);",
                   "    }",
                   "}"
                 ],
@@ -2992,8 +3887,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/notifications/unread-count",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "notifications", "unread-count"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ]
             },
             "description": "Get count of unread notifications for current user"
           },
@@ -3007,7 +3908,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Notification marked as read\");",
+                  "    console.log(\"\u2713 Notification marked as read\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -3019,8 +3920,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/notifications/{{notification_id}}/read",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "notifications", "{{notification_id}}", "read"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notification_id}}",
+                "read"
+              ]
             },
             "description": "Mark a single notification as read by ID"
           },
@@ -3034,7 +3942,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Multiple notifications marked as read\");",
+                  "    console.log(\"\u2713 Multiple notifications marked as read\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -3055,8 +3963,14 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/notifications/mark-read",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "notifications", "mark-read"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "mark-read"
+              ]
             },
             "description": "Mark multiple notifications as read by providing array of notification IDs"
           },
@@ -3070,7 +3984,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ All notifications marked as read\");",
+                  "    console.log(\"\u2713 All notifications marked as read\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -3082,8 +3996,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/notifications/mark-all-read",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "notifications", "mark-all-read"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "mark-all-read"
+              ]
             },
             "description": "Mark all notifications as read for current user"
           },
@@ -3097,7 +4017,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Notification deleted successfully\");",
+                  "    console.log(\"\u2713 Notification deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -3109,8 +4029,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/notifications/{{notification_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "notifications", "{{notification_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{notification_id}}"
+              ]
             },
             "description": "Delete a single notification by ID"
           },
@@ -3124,7 +4050,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ All read notifications deleted successfully\");",
+                  "    console.log(\"\u2713 All read notifications deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -3136,8 +4062,13 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/notifications",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "notifications"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
             },
             "description": "Delete all read notifications for current user"
           },
@@ -3162,8 +4093,8 @@
                   "        const org = jsonData.data;",
                   "        pm.environment.set(\"organisation_id\", org.id || org._id);",
                   "        pm.environment.set(\"organisation_version\", org.__v || 0);",
-                  "        console.log(\"✓ Saved organisation_id:\", pm.environment.get(\"organisation_id\"));",
-                  "        console.log(\"✓ Saved organisation_version:\", pm.environment.get(\"organisation_version\"));",
+                  "        console.log(\"\u2713 Saved organisation_id:\", pm.environment.get(\"organisation_id\"));",
+                  "        console.log(\"\u2713 Saved organisation_version:\", pm.environment.get(\"organisation_version\"));",
                   "    }",
                   "}"
                 ],
@@ -3176,8 +4107,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/organizations/current",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "organizations", "current"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "current"
+              ]
             }
           },
           "response": []
@@ -3194,7 +4131,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const updatedOrg = jsonData.data;",
                   "        pm.environment.set(\"organisation_version\", updatedOrg.__v || 0);",
-                  "        console.log(\"✓ Updated organisation_version to:\", pm.environment.get(\"organisation_version\"));",
+                  "        console.log(\"\u2713 Updated organisation_version to:\", pm.environment.get(\"organisation_version\"));",
                   "    }",
                   "}"
                 ],
@@ -3221,8 +4158,14 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/organizations/{{organisation_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "organizations", "{{organisation_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "organizations",
+                "{{organisation_id}}"
+              ]
             }
           },
           "response": []
@@ -3240,7 +4183,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Retrieved all dropdown values\");",
+                  "    console.log(\"\u2713 Retrieved all dropdown values\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -3252,8 +4195,13 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/dropdowns",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "dropdowns"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "dropdowns"
+              ]
             },
             "description": "Get all dropdown values (static and dynamic) for the tenant"
           },
@@ -3277,7 +4225,7 @@
                   "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
                   "        const firstLog = jsonData.data[0];",
                   "        pm.environment.set(\"audit_log_id\", firstLog.id || firstLog._id);",
-                  "        console.log(\"✓ Saved audit_log_id:\", pm.environment.get(\"audit_log_id\"));",
+                  "        console.log(\"\u2713 Saved audit_log_id:\", pm.environment.get(\"audit_log_id\"));",
                   "    }",
                   "}"
                 ],
@@ -3290,8 +4238,13 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/audit-logs?page=1&limit=50",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "audit-logs"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "audit-logs"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -3318,7 +4271,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const newLog = jsonData.data;",
                   "        pm.environment.set(\"audit_log_id\", newLog.id || newLog._id);",
-                  "        console.log(\"✓ Saved new audit_log_id:\", pm.environment.get(\"audit_log_id\"));",
+                  "        console.log(\"\u2713 Saved new audit_log_id:\", pm.environment.get(\"audit_log_id\"));",
                   "    }",
                   "}"
                 ],
@@ -3340,8 +4293,13 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/audit-logs",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "audit-logs"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "audit-logs"
+              ]
             }
           },
           "response": []
@@ -3364,8 +4322,8 @@
                   "        const firstTenant = jsonData.data[0];",
                   "        pm.environment.set(\"saas_tenant_id\", firstTenant.id || firstTenant._id);",
                   "        pm.environment.set(\"saas_tenant_version\", firstTenant.__v || 0);",
-                  "        console.log(\"✓ Saved saas_tenant_id:\", pm.environment.get(\"saas_tenant_id\"));",
-                  "        console.log(\"✓ Saved saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
+                  "        console.log(\"\u2713 Saved saas_tenant_id:\", pm.environment.get(\"saas_tenant_id\"));",
+                  "        console.log(\"\u2713 Saved saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
                   "    }",
                   "}"
                 ],
@@ -3378,8 +4336,14 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/admin/tenants?page=1&limit=15",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "admin", "tenants"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -3406,7 +4370,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const tenant = jsonData.data;",
                   "        pm.environment.set(\"saas_tenant_version\", tenant.__v || 0);",
-                  "        console.log(\"✓ Updated saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
+                  "        console.log(\"\u2713 Updated saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
                   "    }",
                   "}"
                 ],
@@ -3419,8 +4383,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/admin/tenants/{{saas_tenant_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "admin", "tenants", "{{saas_tenant_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants",
+                "{{saas_tenant_id}}"
+              ]
             }
           },
           "response": []
@@ -3439,9 +4410,9 @@
                   "        pm.environment.set(\"saas_tenant_id\", newTenant.id || newTenant._id);",
                   "        pm.environment.set(\"saas_tenant_version\", newTenant.__v || 0);",
                   "        pm.environment.set(\"saas_tenant_id_for_delete\", newTenant.id || newTenant._id);",
-                  "        console.log(\"✓ Saved new saas_tenant_id:\", pm.environment.get(\"saas_tenant_id\"));",
-                  "        console.log(\"✓ Saved saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
-                  "        console.log(\"✓ Saved saas_tenant_id_for_delete\");",
+                  "        console.log(\"\u2713 Saved new saas_tenant_id:\", pm.environment.get(\"saas_tenant_id\"));",
+                  "        console.log(\"\u2713 Saved saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
+                  "        console.log(\"\u2713 Saved saas_tenant_id_for_delete\");",
                   "    }",
                   "}"
                 ],
@@ -3463,8 +4434,14 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/admin/tenants",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "admin", "tenants"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants"
+              ]
             }
           },
           "response": []
@@ -3481,7 +4458,7 @@
                   "    if (jsonData.success && jsonData.data) {",
                   "        const updatedTenant = jsonData.data;",
                   "        pm.environment.set(\"saas_tenant_version\", updatedTenant.__v || 0);",
-                  "        console.log(\"✓ Updated saas_tenant_version to:\", pm.environment.get(\"saas_tenant_version\"));",
+                  "        console.log(\"\u2713 Updated saas_tenant_version to:\", pm.environment.get(\"saas_tenant_version\"));",
                   "    }",
                   "}"
                 ],
@@ -3508,8 +4485,15 @@
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/admin/tenants/{{saas_tenant_id}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "admin", "tenants", "{{saas_tenant_id}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants",
+                "{{saas_tenant_id}}"
+              ]
             }
           },
           "response": []
@@ -3522,7 +4506,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "    console.log(\"✓ Tenant deleted successfully\");",
+                  "    console.log(\"\u2713 Tenant deleted successfully\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -3534,8 +4518,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/admin/tenants/{{saas_tenant_id_for_delete}}",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "admin", "tenants", "{{saas_tenant_id_for_delete}}"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants",
+                "{{saas_tenant_id_for_delete}}"
+              ]
             },
             "description": "Delete a tenant by ID (soft delete). Uses the ID saved from Create Tenant request."
           },
@@ -3553,8 +4544,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/admin/stats/all",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "admin", "stats", "all"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "stats",
+                "all"
+              ]
             }
           },
           "response": []
@@ -3566,8 +4564,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/admin/analytics/usage?period=30d",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "admin", "analytics", "usage"],
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "analytics",
+                "usage"
+              ],
               "query": [
                 {
                   "key": "period",
@@ -3585,8 +4590,15 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/api/admin/analytics/overview",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["api", "admin", "analytics", "overview"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "analytics",
+                "overview"
+              ]
             }
           },
           "response": []
@@ -3606,8 +4618,12 @@
             "header": [],
             "url": {
               "raw": "{{API_BASE_URL}}/health",
-              "host": ["{{API_BASE_URL}}"],
-              "path": ["health"]
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "health"
+              ]
             },
             "description": "Check API health status (no authentication required)"
           },

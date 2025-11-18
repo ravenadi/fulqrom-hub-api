@@ -49,12 +49,75 @@ All Customer endpoints include automated test scripts that:
 - Get Current User
 - Logout
 
-### Customer CRUD 
-- List Customers (with ID/version extraction)
+### Customer CRUD
+- List Customers (with ID/version extraction and search/filter options)
 - Get Customer (uses dynamic ID)
-- Create Customer (saves new ID/version and ID for delete)
-- Update Customer (with If-Match version header)
+- Create Customer (saves new ID/version and ID for delete, comprehensive schema)
+- Update Customer (with If-Match version header, comprehensive schema)
 - Delete Customer (uses ID from Create Customer)
+
+#### Customer Schema - Complete Fields Reference
+
+**List Customers - Query Parameters:**
+- `search` - Filter by organisation name, business number, or trading name
+- `limit` - Maximum results to return (default: 50)
+
+**Create/Update Customer - Request Body:**
+
+**Organisation** (organisation object):
+- `organisation_name` - Organisation name (required for create)
+- `email_domain` - Company email domain
+- `logo_url` - URL to organisation logo
+- `building_image` - URL to building/office image
+- `notes` - Additional notes about organisation
+- `metadata` - Key-value pairs for custom data (object)
+
+**Company Profile** (company_profile object):
+- `business_number` - ABN (11 digits, Australian Business Number)
+- `company_number` - ACN (9 digits, Australian Company Number)
+- `trading_name` - Trading/DBA name
+- `industry_type` - Industry category
+- `organisation_size` - Company size (e.g., "Small (1-50)", "Medium (50-250)", "Large (250+)")
+
+**Business Address** (business_address object):
+- `street` - Street address
+- `suburb` - Suburb/city
+- `state` - Australian state (NSW, VIC, QLD, SA, WA, TAS, NT, ACT)
+- `postcode` - 4-digit postcode
+
+**Postal Address** (postal_address object):
+- `street` - Mailing street address
+- `suburb` - Suburb/city
+- `state` - Australian state
+- `postcode` - 4-digit postcode
+
+**Contact Methods** (contact_methods array):
+- `full_name` - Contact person name
+- `job_title` - Position/title
+- `department` - Department name
+- `role_type` - Role category
+- `contact_type` - Contact category
+- `platform_access` - Access level
+- `is_primary` - Mark as primary contact (boolean)
+- `contact_methods` - Array of contact methods:
+  - `method_type` - Type (Email, Phone, Mobile, etc.)
+  - `method_value` - Contact value (email address, phone number)
+  - `label` - Display label
+  - `is_primary` - Primary method for this contact (boolean)
+
+**Metadata** (metadata array):
+- `key` - Metadata key
+- `value` - Metadata value
+
+**System Fields:**
+- `is_active` - Active status (boolean, default: true)
+
+**Australian Data Standards:**
+- ABN: 11 digits (business_number)
+- ACN: 9 digits (company_number)
+- States: NSW, VIC, QLD, SA, WA, TAS, NT, ACT
+- Postcodes: 4 digits
+
 
 ### Dashboard 
 - Portfolio Map
@@ -118,11 +181,91 @@ All Customer endpoints include automated test scripts that:
 - Delete Building Tenant (uses ID from Create Building Tenant)
 
 ### Asset CRUD
-- List Assets (with ID/version extraction)
+- List Assets (with ID/version extraction and comprehensive filtering)
 - Get Asset (uses dynamic ID)
-- Create Asset (saves new ID/version and ID for delete)
-- Update Asset (with If-Match version header)
+- Create Asset (saves new ID/version and ID for delete, comprehensive schema)
+- Update Asset (with If-Match version header, comprehensive schema)
 - Delete Asset (uses ID from Create Asset)
+
+#### Asset Schema - Complete Fields Reference
+
+**List Assets - Query Parameters:**
+- `page` - Page number (default: 1)
+- `limit` - Results per page (default: 50)
+- `search` - Search by asset number, make, model, serial
+- `category` - Asset category (Boiler System, Chiller System, Pump System, etc.)
+- `status` - Status (Active, Inactive, Decommissioned)
+- `condition` - Condition (Excellent, Good, Average, Poor, Critical)
+- `criticality_level` - Criticality (Low, Medium, High, Critical)
+- `customer_id`, `site_id`, `building_id`, `floor_id` - Location filters
+- `make`, `model` - Equipment filters
+- `level`, `area` - Location detail filters
+- `device_id`, `asset_no`, `asset_id` - ID filters
+- `refrigerant` - Refrigerant type filter
+- `owner`, `service_status` - Ownership/service filters
+- `age_min`, `age_max` - Age range (years)
+- `purchase_cost_min`, `purchase_cost_max` - Cost range (AUD)
+- `current_value_min`, `current_value_max` - Value range (AUD)
+- `test_result` - Test result filter
+- `is_active` - Active status filter
+- `sort_by`, `sort_order` - Sorting options
+
+**Create/Update Asset - Request Body:**
+
+**Hierarchy & Location:**
+- `customer_id` - Customer ID (required for create)
+- `site_id` - Associated site
+- `building_id` - Associated building
+- `floor_id` - Associated floor
+- `level` - Level/floor level (e.g., "Ground Floor", "Level 2")
+- `area` - Area/location within floor
+
+**Asset Identification:**
+- `asset_id` - Custom asset ID
+- `asset_no` - Asset number (unique per customer)
+- `device_id` - IoT device ID
+
+**Classification & Status:**
+- `status` - Status (Active, Inactive, Decommissioned)
+- `category` - Category (Boiler System, Chiller System, Pump System, AHU, Fan Coil Unit, Cooling Tower, VRV/VRF System, etc.)
+- `type` - Specific type (e.g., "Chiller - Water Cooled", "Boiler - Gas Fired")
+- `condition` - Condition (Excellent, Good, Average, Poor, Critical)
+- `criticality_level` - Criticality level (Low, Medium, High, Critical)
+
+**Equipment Details:**
+- `make` - Manufacturer/make
+- `model` - Model number
+- `serial` - Serial number
+
+**HVAC/Refrigerant Information:**
+- `refrigerant` - Refrigerant type (R-134a, R-410A, R-407C, etc.)
+- `refrigerant_capacity` - Refrigerant capacity (e.g., "150 kg")
+- `refrigerant_consumption` - Annual consumption (e.g., "2.5 kg/year")
+
+**Ownership & Service:**
+- `owner` - Asset owner
+- `da19_life_expectancy` - Expected life (years)
+- `service_status` - Service status (Under Warranty, Maintenance Contract, Ad-hoc)
+
+**Dates & Testing:**
+- `date_of_installation` - Installation date (ISO 8601 or Date object)
+- `age` - Age in years (string)
+- `last_test_date` - Last test/inspection date
+- `last_test_result` - Test result description
+
+**Financial Information:**
+- `purchase_cost_aud` - Purchase cost in AUD
+- `current_book_value_aud` - Current book value in AUD
+- `weight_kgs` - Weight in kilograms
+
+**System:**
+- `is_active` - Active status (default: true)
+
+**Australian Standards:**
+- Currency: AUD (Australian Dollars)
+- Weights: Metric (kg)
+- Refrigerant standards: AS/NZS compliance
+
 
 ### Vendor CRUD
 - List Vendors (with ID/version extraction)
@@ -132,11 +275,87 @@ All Customer endpoints include automated test scripts that:
 - Delete Vendor (uses ID from Create Vendor)
 
 ### Document CRUD
-- List Documents (with ID/version extraction)
+- List Documents (with ID/version extraction and comprehensive filtering)
 - Get Document (uses dynamic ID)
-- Create Document (saves new ID/version and ID for delete)
-- Update Document (with If-Match version header)
+- Create Document (saves new ID/version and ID for delete, comprehensive schema)
+- Update Document (with If-Match version header, comprehensive schema)
 - Delete Document (uses ID from Create Document)
+
+#### Document Schema - Complete Fields Reference
+
+**List Documents - Query Parameters:**
+- `page` - Page number (default: 1)
+- `limit` - Results per page (default: 20)
+- `search` - Search by name, description, tags
+- `category` - Document category filter
+- `type` - Document type filter
+- `status` - Document status filter
+- `customer_id`, `site_id`, `building_id`, `floor_id` - Location filters
+- `asset_id`, `tenant_id`, `vendor_id` - Association filters
+- `tags` - Tag filter
+- `sort_by`, `sort_order` - Sorting options
+
+**Create/Update Document - Request Body:**
+
+**Basic Information:**
+- `name` - Document name (required for create)
+- `description` - Document description
+- `version` - Version number (default: "1.0")
+- `category` - Document category (required for create - Compliance, Drawing Register, Manual, Report, etc.)
+- `type` - Document type (required for create - Certificate, Plan, Procedure, etc.)
+- `engineering_discipline` - Engineering discipline (HVAC, Electrical, Mechanical, etc.)
+- `status` - Document status (Draft, Approved, Archived, etc.)
+
+**Compliance & Regulatory:**
+- `regulatory_framework` - Regulatory standard (e.g., AS/NZS 3666.1:2011)
+- `certification_number` - Certificate/permit number
+- `compliance_framework` - Compliance framework name
+- `compliance_status` - Compliance status
+- `issue_date` - Issue date (YYYY-MM-DD)
+- `expiry_date` - Expiry date (YYYY-MM-DD)
+- `review_date` - Next review date (YYYY-MM-DD)
+- `frequency` - Review frequency (weekly, monthly, quarterly, annual)
+
+**File Information (file.file_meta object):**
+- `file_name` - File name
+- `file_size` - Size in bytes
+- `file_type` - MIME type
+- `file_extension` - Extension (pdf, docx, dwg, etc.)
+- `file_url` - S3 URL
+- `file_path` - Path in bucket
+- `file_key` - S3 key
+- `bucket_name` - S3 bucket name
+- `version` - File version
+
+**Tags:**
+- `tags.tags` - Array of tags for categorization
+
+**Location & Associations:**
+- `location.site.site_id` - Associated site
+- `location.building.building_id` - Associated building
+- `location.floor.floor_id` - Associated floor
+- `location.assets` - Array of associated assets (asset_id, asset_name, asset_type)
+- `location.tenant.tenant_id` - Associated tenant
+- `location.vendor.vendor_id` - Associated vendor
+- `customer.customer_id` - Customer ID (required for create)
+
+**Drawing Register Information (drawing_info object):**
+- `date_issued` - Issue date
+- `drawing_status` - Drawing status
+- `prepared_by` - Prepared by
+- `drawing_scale` - Scale (e.g., 1:100)
+- `approved_by_user` - Approver name
+- `related_drawings` - Array of related drawing references (document_id, document_name)
+
+**Access Control (access_control object):**
+- `access_level` - Access level (internal, confidential, public)
+- `access_users` - Array of user emails with access
+
+**Approval Workflow (approval_config object):**
+- `enabled` - Enable approval workflow (boolean)
+- `status` - Approval status (Pending, Approved, Rejected)
+- `approvers` - Array of approver objects (user_id, user_name, user_email)
+
 
 ### Document Approval Flow
 - Request Approval (request document approval from approver)
