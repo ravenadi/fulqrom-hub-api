@@ -1,511 +1,3285 @@
 {
-	"info": {
-		"_postman_id": "2f8f58dc-ba25-45c8-bde5-cd2718183bc2",
-		"name": "Fulqrom Hub API",
-		"description": "Fulqrom Hub REST API - Australian commercial real estate and HVAC&R building management platform\n\n## Authentication\nThis collection uses Auth0 for authentication. Use the \"Auth0 Login\" request to get your access token, which will be automatically saved to the collection variable `access_token`.\n\n## Setup\n1. Import this collection into Postman\n2. Set up environment variables (or use collection variables)\n3. Run \"Auth0 Login\" to get your token\n4. All other requests will use the token automatically\n\n## Variables\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: Your Auth0 client ID\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au\n- `API_BASE_URL`: http://localhost:30001",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "876650",
-		"_collection_link": "https://solar-space-808742.postman.co/workspace/b4db7914-c8b9-4da3-8973-55c4c4d47321/collection/876650-2f8f58dc-ba25-45c8-bde5-cd2718183bc2?action=share&source=collection_link&creator=876650"
+  "info": {
+    "_postman_id": "2f8f58dc-ba25-45c8-bde5-cd2718183bc2",
+    "name": "Fulqrom Hub API",
+    "description": "Fulqrom Hub REST API - Australian commercial real estate and HVAC&R building management platform\n\n## Authentication\nThis collection uses Auth0 for authentication. Use the \"Auth0 Login\" request to get your access token, which will be automatically saved to the collection variable `access_token`.\n\n## Setup\n1. Import this collection into Postman\n2. Set up environment variables (or use collection variables)\n3. Run \"Auth0 Login\" to get your token\n4. All other requests will use the token automatically\n\n## Variables\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: Your Auth0 client ID\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au\n- `API_BASE_URL`: http://localhost:30001",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "876650",
+    "_collection_link": "https://solar-space-808742.postman.co/workspace/b4db7914-c8b9-4da3-8973-55c4c4d47321/collection/876650-2f8f58dc-ba25-45c8-bde5-cd2718183bc2?action=share&source=collection_link&creator=876650"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "✅ Auth0 Login (Client Credentials) - USE THIS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Save the access token to both collection and environment variables",
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set(\"access_token\", jsonData.access_token);",
+                  "    pm.collectionVariables.set(\"token_type\", jsonData.token_type);",
+                  "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                  "    pm.environment.set(\"token_type\", jsonData.token_type);",
+                  "    ",
+                  "    console.log(\"✓ Access token saved successfully\");",
+                  "    console.log(\"Token expires in:\", jsonData.expires_in, \"seconds\");",
+                  "    console.log(\"⚠ Now call 'BFF Login' to create session cookies\");",
+                  "} else {",
+                  "    console.log(\"✗ Authentication failed\");",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"http://auth0.com/oauth/grant-type/password-realm\",\n  \"scope\": \"{{auth0_scope}}\",\n  \"client_id\": \"{{AUTH0_CLIENT_ID}}\",\n  \"client_secret\": \"{{AUTH0_CLIENT_SECRET}}\",\n  \"audience\": \"{{AUTH0_AUDIENCE}}\",\n  \"username\": \"{{auth0_username}}\",\n  \"password\": \"{{auth0_password}}\",\n  \"realm\": \"Username-Password-Authentication\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://{{AUTH0_DOMAIN}}/oauth/token",
+              "protocol": "https",
+              "host": ["{{AUTH0_DOMAIN}}"],
+              "path": ["oauth", "token"]
+            },
+            "description": "✅ **THIS WORKS!** - Machine-to-machine authentication\n\nUse this for testing the API in Postman. This grant type authenticates as the application itself (not as a specific user).\n\n**What you get:**\n- Valid access token for API calls\n- No user context (no user-specific permissions)\n- Works without any Auth0 setup changes\n\n**Steps:**\n1. Click Send\n2. Token automatically saved\n3. Use any protected endpoint\n\n**Required Variables:**\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq\n- `AUTH0_CLIENT_SECRET`: Your client secret\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au"
+          },
+          "response": []
+        },
+        {
+          "name": "Sync User (Run First Time)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ User synced successfully\");",
+                  "    console.log(\"✓ User now exists in database\");",
+                  "} else {",
+                  "    console.log(\"✗ User sync failed\");",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"auth0_id\": \"auth0|68f0a977ff172d1b1b0f8d5c\",\n  \"email\": \"{{auth0_username}}\",\n  \"full_name\": \"Demo User\",\n  \"phone\": \"+61400000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/auth/sync-user",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "auth", "sync-user"]
+            },
+            "description": "Sync or create user from Auth0 to MongoDB database. This is a public endpoint that creates the user record if it doesn't exist.\n\n**Run this ONCE before using BFF Login if the user doesn't exist in the database.**\n\nNote: Replace auth0_id with the actual Auth0 user ID from your Auth0 dashboard."
+          },
+          "response": []
+        },
+        {
+          "name": "BFF Login (Create Session)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Session cookies are automatically saved by Postman",
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Session created successfully\");",
+                  "    console.log(\"✓ Session cookies (sid, csrf) are now active\");",
+                  "    console.log(\"✓ You can now call protected endpoints\");",
+                  "} else {",
+                  "    console.log(\"✗ Session creation failed\");",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"remember_me\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/auth/login",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Create a server-side session from the Auth0 token. This sets HttpOnly cookies (sid, csrf) that will be used for all subsequent API calls.\n\n**Steps:**\n1. Run \"Auth0 Login\" first to get the access token\n2. Run this endpoint to create session cookies\n3. All other endpoints will use the session cookies automatically\n\n**Response:**\n- Sets `sid` cookie (HttpOnly, session ID)\n- Sets `csrf` cookie (CSRF protection)\n- Returns user information and session metadata"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User (/auth/me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/auth/me",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "Get current authenticated user information. Uses session cookies for authentication."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/auth/logout",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "Invalidate current session and clear cookies."
+          },
+          "response": []
+        }
+      ],
+      "description": "Auth0 authentication endpoints for obtaining access tokens and BFF session management."
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Portfolio Map",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/analytics/buildings/coordinates",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "analytics", "buildings", "coordinates"]
+            },
+            "description": "Example of a protected endpoint that requires authentication.\n\nThis request will automatically use the Bearer token from the collection variable `access_token`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customer",
+      "item": [
+        {
+          "name": "List Customers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const latestCustomer = jsonData.data[jsonData.data.length - 1];",
+                  "        pm.environment.set(\"customer_id\", latestCustomer.id || latestCustomer._id);",
+                  "        pm.environment.set(\"customer_version\", latestCustomer.__v || 0);",
+                  "        console.log(\"✓ Saved latest customer_id:\", pm.environment.get(\"customer_id\"));",
+                  "        console.log(\"✓ Saved customer_version:\", pm.environment.get(\"customer_version\"));",
+                  "        console.log(\"✓ Total customers:\", jsonData.data.length);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers?search=&limit=50",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers"],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search term (optional)"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Maximum number of results (optional, default: 50)"
+                }
+              ]
+            },
+            "description": "List all customers with optional search and limit parameters. Results are automatically filtered by tenant."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/:id",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "",
+                  "description": "Customer ID"
+                }
+              ]
+            },
+            "description": "Get a single customer by ID with full details. Replace :id in the URL with the actual customer ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const newCustomer = jsonData.data;",
+                  "        pm.environment.set(\"customer_id_for_delete\", newCustomer.id || newCustomer._id);",
+                  "        console.log(\"✓ Saved customer_id_for_delete:\", pm.environment.get(\"customer_id_for_delete\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"Test Customer for Delete\"\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"trading_name\": \"Test Delete\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers"]
+            },
+            "description": "Create a new customer. The organisation_name is required. Business number (ABN) and trading name are optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Customer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"Updated Property Management\"\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"trading_name\": \"Updated Trading Name\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/:id",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "",
+                  "description": "Customer ID"
+                }
+              ]
+            },
+            "description": "Update an existing customer by ID. Replace :id in the URL with the actual customer ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Customer deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id_for_delete}}"]
+            },
+            "description": "Delete a customer by ID (soft delete). Uses the ID saved from Create Customer request."
+          },
+          "response": []
+        }
+      ]
+    },
+	{
+      "name": "Customer Contacts",
+      "item": [
+        {
+          "name": "List Contacts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstContact = jsonData.data[0];",
+                  "        pm.environment.set(\"contact_id\", firstContact.id || firstContact._id);",
+                  "        pm.environment.set(\"contact_version\", firstContact.__v || 0);",
+                  "        console.log(\"✓ Saved contact_id:\", pm.environment.get(\"contact_id\"));",
+                  "        console.log(\"✓ Saved contact_version:\", pm.environment.get(\"contact_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id}}", "contacts"]
+            },
+            "description": "List all contacts for a specific customer"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const contact = jsonData.data;",
+                  "        pm.environment.set(\"contact_version\", contact.__v || 0);",
+                  "        console.log(\"✓ Updated contact_version:\", pm.environment.get(\"contact_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/{{contact_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id}}", "contacts", "{{contact_id}}"]
+            },
+            "description": "Get a specific contact by ID for a customer"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Primary Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const contact = jsonData.data;",
+                  "        pm.environment.set(\"primary_contact_id\", contact.id || contact._id);",
+                  "        console.log(\"✓ Saved primary_contact_id:\", pm.environment.get(\"primary_contact_id\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/primary",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id}}", "contacts", "primary"]
+            },
+            "description": "Get the primary contact for a customer"
+          },
+          "response": []
+        },
+        {
+          "name": "Search Contacts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Contact search completed\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/search?q=",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id}}", "contacts", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "description": "Search query"
+                },
+                {
+                  "key": "role_type",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by role type"
+                },
+                {
+                  "key": "contact_type",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by contact type"
+                }
+              ]
+            },
+            "description": "Search contacts for a customer by various criteria"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const newContact = jsonData.data;",
+                  "        pm.environment.set(\"contact_id\", newContact.id || newContact._id);",
+                  "        pm.environment.set(\"contact_version\", newContact.__v || 0);",
+                  "        pm.environment.set(\"contact_id_for_delete\", newContact.id || newContact._id);",
+                  "        console.log(\"✓ Saved new contact_id:\", pm.environment.get(\"contact_id\"));",
+                  "        console.log(\"✓ Saved contact_version:\", pm.environment.get(\"contact_version\"));",
+                  "        console.log(\"✓ Saved contact_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Smith\",\n  \"email\": \"john.smith@example.com.au\",\n  \"phone\": \"+61 3 9876 5432\",\n  \"is_primary\": false\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id}}", "contacts"]
+            },
+            "description": "Create a new contact for a customer"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const updatedContact = jsonData.data;",
+                  "        pm.environment.set(\"contact_version\", updatedContact.__v || 0);",
+                  "        console.log(\"✓ Updated contact_version to:\", pm.environment.get(\"contact_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{contact_version}}\"",
+                "description": "Optimistic locking - version control"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Smith (Updated)\",\n  \"phone\": \"+61 3 9876 5433\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/{{contact_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id}}", "contacts", "{{contact_id}}"]
+            },
+            "description": "Update an existing contact for a customer"
+          },
+          "response": []
+        },
+        {
+          "name": "Set Primary Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Contact set as primary successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/{{contact_id}}/primary",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id}}", "contacts", "{{contact_id}}", "primary"]
+            },
+            "description": "Set a specific contact as the primary contact for the customer"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Contact deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}/contacts/{{contact_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "customers", "{{customer_id}}", "contacts", "{{contact_id_for_delete}}"]
+            },
+            "description": "Delete a contact for a customer (soft delete). Uses the ID saved from Create Contact request."
+          },
+          "response": []
+        }
+      ],
+      "description": "Customer contact management endpoints"
 	},
-	"item": [
-		{
-			"name": "Authentication",
-			"item": [
-				{
-					"name": "✅ Auth0 Login (Client Credentials) - USE THIS",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Save the access token to both collection and environment variables",
-									"if (pm.response.code === 200) {",
-									"    const jsonData = pm.response.json();",
-									"    pm.collectionVariables.set(\"access_token\", jsonData.access_token);",
-									"    pm.collectionVariables.set(\"token_type\", jsonData.token_type);",
-									"    pm.environment.set(\"access_token\", jsonData.access_token);",
-									"    pm.environment.set(\"token_type\", jsonData.token_type);",
-									"    ",
-									"    console.log(\"✓ Access token saved successfully\");",
-									"    console.log(\"Token expires in:\", jsonData.expires_in, \"seconds\");",
-									"    console.log(\"⚠ Now call 'BFF Login' to create session cookies\");",
-									"} else {",
-									"    console.log(\"✗ Authentication failed\");",
-									"}"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "noauth"
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"grant_type\": \"http://auth0.com/oauth/grant-type/password-realm\",\n  \"scope\": \"{{auth0_scope}}\",\n  \"client_id\": \"{{AUTH0_CLIENT_ID}}\",\n  \"client_secret\": \"{{AUTH0_CLIENT_SECRET}}\",\n  \"audience\": \"{{AUTH0_AUDIENCE}}\",\n  \"username\": \"{{auth0_username}}\",\n  \"password\": \"{{auth0_password}}\",\n  \"realm\": \"Username-Password-Authentication\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "https://{{AUTH0_DOMAIN}}/oauth/token",
-							"protocol": "https",
-							"host": [
-								"{{AUTH0_DOMAIN}}"
-							],
-							"path": [
-								"oauth",
-								"token"
-							]
-						},
-						"description": "✅ **THIS WORKS!** - Machine-to-machine authentication\n\nUse this for testing the API in Postman. This grant type authenticates as the application itself (not as a specific user).\n\n**What you get:**\n- Valid access token for API calls\n- No user context (no user-specific permissions)\n- Works without any Auth0 setup changes\n\n**Steps:**\n1. Click Send\n2. Token automatically saved\n3. Use any protected endpoint\n\n**Required Variables:**\n- `AUTH0_DOMAIN`: dev-ml7pxvj6vg32j740.au.auth0.com\n- `AUTH0_CLIENT_ID`: L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq\n- `AUTH0_CLIENT_SECRET`: Your client secret\n- `AUTH0_AUDIENCE`: https://api.fulqrom.com.au"
-					},
-					"response": []
-				},
-				{
-					"name": "Sync User (Run First Time)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 200) {",
-									"    console.log(\"✓ User synced successfully\");",
-									"    console.log(\"✓ User now exists in database\");",
-									"} else {",
-									"    console.log(\"✗ User sync failed\");",
-									"}"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"auth0_id\": \"auth0|68f0a977ff172d1b1b0f8d5c\",\n  \"email\": \"{{auth0_username}}\",\n  \"full_name\": \"Demo User\",\n  \"phone\": \"+61400000000\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/auth/sync-user",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"auth",
-								"sync-user"
-							]
-						},
-						"description": "Sync or create user from Auth0 to MongoDB database. This is a public endpoint that creates the user record if it doesn't exist.\n\n**Run this ONCE before using BFF Login if the user doesn't exist in the database.**\n\nNote: Replace auth0_id with the actual Auth0 user ID from your Auth0 dashboard."
-					},
-					"response": []
-				},
-				{
-					"name": "BFF Login (Create Session)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Session cookies are automatically saved by Postman",
-									"if (pm.response.code === 200) {",
-									"    console.log(\"✓ Session created successfully\");",
-									"    console.log(\"✓ Session cookies (sid, csrf) are now active\");",
-									"    console.log(\"✓ You can now call protected endpoints\");",
-									"} else {",
-									"    console.log(\"✗ Session creation failed\");",
-									"}"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{access_token}}",
-								"type": "text"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"remember_me\": true\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/auth/login",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"auth",
-								"login"
-							]
-						},
-						"description": "Create a server-side session from the Auth0 token. This sets HttpOnly cookies (sid, csrf) that will be used for all subsequent API calls.\n\n**Steps:**\n1. Run \"Auth0 Login\" first to get the access token\n2. Run this endpoint to create session cookies\n3. All other endpoints will use the session cookies automatically\n\n**Response:**\n- Sets `sid` cookie (HttpOnly, session ID)\n- Sets `csrf` cookie (CSRF protection)\n- Returns user information and session metadata"
-					},
-					"response": []
-				},
-				{
-					"name": "Get Current User (/auth/me)",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/auth/me",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"auth",
-								"me"
-							]
-						},
-						"description": "Get current authenticated user information. Uses session cookies for authentication."
-					},
-					"response": []
-				},
-				{
-					"name": "Logout",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/auth/logout",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"auth",
-								"logout"
-							]
-						},
-						"description": "Invalidate current session and clear cookies."
-					},
-					"response": []
-				}
-			],
-			"description": "Auth0 authentication endpoints for obtaining access tokens and BFF session management."
-		},
-		{
-			"name": "Dashboard",
-			"item": [
-				{
-					"name": "Portfolio Map",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/analytics/buildings/coordinates",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"analytics",
-								"buildings",
-								"coordinates"
-							]
-						},
-						"description": "Example of a protected endpoint that requires authentication.\n\nThis request will automatically use the Bearer token from the collection variable `access_token`."
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Customer",
-			"item": [
-				{
-					"name": "List Customers",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/customers?search=&limit=50",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"customers"
-							],
-							"query": [
-								{
-									"key": "search",
-									"value": "",
-									"description": "Search term (optional)"
-								},
-								{
-									"key": "limit",
-									"value": "50",
-									"description": "Maximum number of results (optional, default: 50)"
-								}
-							]
-						},
-						"description": "List all customers with optional search and limit parameters. Results are automatically filtered by tenant."
-					},
-					"response": []
-				},
-				{
-					"name": "Get Customer",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/customers/:id",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"customers",
-								":id"
-							],
-							"variable": [
-								{
-									"key": "id",
-									"value": "",
-									"description": "Customer ID"
-								}
-							]
-						},
-						"description": "Get a single customer by ID with full details. Replace :id in the URL with the actual customer ID."
-					},
-					"response": []
-				},
-				{
-					"name": "Create Customer",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"Example Property Management\"\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"trading_name\": \"EPM Properties\"\n  }\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/customers",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"customers"
-							]
-						},
-						"description": "Create a new customer. The organisation_name is required. Business number (ABN) and trading name are optional."
-					},
-					"response": []
-				},
-				{
-					"name": "Update Customer",
-					"request": {
-						"method": "PUT",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"organisation\": {\n    \"organisation_name\": \"Updated Property Management\"\n  },\n  \"company_profile\": {\n    \"business_number\": \"12345678901\",\n    \"trading_name\": \"Updated Trading Name\"\n  }\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{API_BASE_URL}}/api/customers/:id",
-							"host": [
-								"{{API_BASE_URL}}"
-							],
-							"path": [
-								"api",
-								"customers",
-								":id"
-							],
-							"variable": [
-								{
-									"key": "id",
-									"value": "",
-									"description": "Customer ID"
-								}
-							]
-						},
-						"description": "Update an existing customer by ID. Replace :id in the URL with the actual customer ID."
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Building",
-			"item": []
-		},
-		{
-			"name": "Asset",
-			"item": []
-		},
-		{
-			"name": "Vendor",
-			"item": []
-		},
-		{
-			"name": "Document",
-			"item": []
-		},
-		{
-			"name": "Health Check",
-			"request": {
-				"auth": {
-					"type": "noauth"
-				},
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "{{API_BASE_URL}}/health",
-					"host": [
-						"{{API_BASE_URL}}"
-					],
-					"path": [
-						"health"
-					]
-				},
-				"description": "Check API health status (no authentication required)"
-			},
-			"response": []
-		}
-	],
-	"auth": {
-		"type": "bearer",
-		"bearer": [
-			{
-				"key": "token",
-				"value": "{{access_token}}",
-				"type": "string"
-			}
-		]
-	},
-	"event": [
-		{
-			"listen": "prerequest",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					"// This runs before each request",
-					"// You can add logic here to check if token is expired and refresh automatically"
-				]
-			}
-		}
-	],
-	"variable": [
-		{
-			"key": "AUTH0_DOMAIN",
-			"value": "dev-ml7pxvj6vg32j740.au.auth0.com",
-			"type": "string"
-		},
-		{
-			"key": "AUTH0_CLIENT_ID",
-			"value": "L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq",
-			"type": "string"
-		},
-		{
-			"key": "AUTH0_CLIENT_SECRET",
-			"value": "JZ72w4a9tmP6ovvYSsDLBWiU86APV_1zPL05p__lg6YIjGgrJnS5tK77UP63CHB0",
-			"type": "string"
-		},
-		{
-			"key": "AUTH0_AUDIENCE",
-			"value": "https://api.fulqrom.com.au",
-			"type": "string"
-		},
-		{
-			"key": "AUTH0_CONNECTION",
-			"value": "Username-Password-Authentication",
-			"type": "string"
-		},
-		{
-			"key": "API_BASE_URL",
-			"value": "http://localhost:30001",
-			"type": "string"
-		},
-		{
-			"key": "auth0_username",
-			"value": "demo@fulqrom.com.au",
-			"type": "string"
-		},
-		{
-			"key": "auth0_password",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "access_token",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "id_token",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "token_type",
-			"value": "Bearer",
-			"type": "string"
-		}
-	]
+    {
+      "name": "Site",
+      "item": [
+        {
+          "name": "List Sites",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstSite = jsonData.data[0];",
+                  "        pm.environment.set(\"site_id\", firstSite.id || firstSite._id);",
+                  "        pm.environment.set(\"site_version\", firstSite.__v || 0);",
+                  "        console.log(\"✓ Saved site_id:\", pm.environment.get(\"site_id\"));",
+                  "        console.log(\"✓ Saved site_version:\", pm.environment.get(\"site_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/sites?page=1&limit=20",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "sites"],
+              "query": [
+                { "key": "page", "value": "1", "description": "Page number" },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Items per page"
+                },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "customer_id", "value": "", "disabled": true }
+              ]
+            },
+            "description": "List all sites with pagination and filtering"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Site",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const site = jsonData.data;",
+                  "        pm.environment.set(\"site_version\", site.__v || 0);",
+                  "        console.log(\"✓ Site retrieved successfully\");",
+                  "        console.log(\"✓ Saved site_version:\", pm.environment.get(\"site_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/sites/{{site_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "sites", "{{site_id}}"]
+            },
+            "description": "Get single site by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Site",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const site = jsonData.data;",
+                  "        pm.environment.set(\"site_id\", site.id || site._id);",
+                  "        pm.environment.set(\"site_version\", site.__v || 0);",
+                  "        pm.environment.set(\"site_id_for_delete\", site.id || site._id);",
+                  "        console.log(\"✓ Site created successfully\");",
+                  "        console.log(\"✓ Saved site_id:\", pm.environment.get(\"site_id\"));",
+                  "        console.log(\"✓ Saved site_id_for_delete:\", pm.environment.get(\"site_id_for_delete\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"site_name\": \"Example Site\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"address\": {\n    \"street\": \"123 Example St\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\",\n    \"country\": \"Australia\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/sites",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "sites"]
+            },
+            "description": "Create new site"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Site",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const site = jsonData.data;",
+                  "        pm.environment.set(\"site_version\", site.__v || 0);",
+                  "        console.log(\"✓ Site updated successfully\");",
+                  "        console.log(\"✓ Updated site_version to:\", pm.environment.get(\"site_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{site_version}}\"",
+                "description": "Version control"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"site_name\": \"Updated Site Name\",\n  \"address\": {\n    \"street\": \"456 Updated St\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\",\n    \"country\": \"Australia\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/sites/{{site_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "sites", "{{site_id}}"]
+            },
+            "description": "Update site with version control"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Site",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Site deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/sites/{{site_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "sites", "{{site_id_for_delete}}"]
+            },
+            "description": "Delete a site by ID (soft delete). Uses the ID saved from Create Site request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Building",
+      "item": [
+        {
+          "name": "List Buildings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstBuilding = jsonData.data[0];",
+                  "        pm.environment.set(\"building_id\", firstBuilding.id || firstBuilding._id);",
+                  "        pm.environment.set(\"building_version\", firstBuilding.__v || 0);",
+                  "        console.log(\"✓ Saved building_id:\", pm.environment.get(\"building_id\"));",
+                  "        console.log(\"✓ Saved building_version:\", pm.environment.get(\"building_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings?page=1&per_page=10",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "buildings"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "10" },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "site_id", "value": "", "disabled": true }
+              ]
+            },
+            "description": "List all buildings with pagination"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Building",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"building_version\", jsonData.data.__v || 0);",
+                  "        console.log(\"✓ Building retrieved\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings/{{building_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "buildings", "{{building_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Building",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"building_id\", jsonData.data.id || jsonData.data._id);",
+                  "        pm.environment.set(\"building_version\", jsonData.data.__v || 0);",
+                  "        pm.environment.set(\"building_id_for_delete\", jsonData.data.id || jsonData.data._id);",
+                  "        console.log(\"✓ Building created\");",
+                  "        console.log(\"✓ Saved building_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"building_name\": \"Example Building\",\n  \"building_code\": \"BLD-001\",\n  \"site_id\": \"{{site_id}}\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"primary_use\": \"Office\",\n  \"address\": {\n    \"street\": \"123 Example St\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "buildings"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Building",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"building_version\", jsonData.data.__v || 0);",
+                  "        console.log(\"✓ Building updated\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "If-Match", "value": "W/\"v{{building_version}}\"" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"building_name\": \"Updated Building Name\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings/{{building_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "buildings", "{{building_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Building",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Building deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings/{{building_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "buildings", "{{building_id_for_delete}}"]
+            },
+            "description": "Delete a building by ID (soft delete). Uses the ID saved from Create Building request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Floor",
+      "item": [
+        {
+          "name": "List Floors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstFloor = jsonData.data[0];",
+                  "        pm.environment.set(\"floor_id\", firstFloor.id || firstFloor._id);",
+                  "        pm.environment.set(\"floor_version\", firstFloor.__v || 0);",
+                  "        console.log(\"✓ Saved floor_id:\", pm.environment.get(\"floor_id\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/floors?page=1&per_page=10",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "floors"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "10" },
+                { "key": "building_id", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Floor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"floor_version\", jsonData.data.__v || 0);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/floors/{{floor_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "floors", "{{floor_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Floor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"floor_id\", jsonData.data.id || jsonData.data._id);",
+                  "        pm.environment.set(\"floor_version\", jsonData.data.__v || 0);",
+                  "        pm.environment.set(\"floor_id_for_delete\", jsonData.data.id || jsonData.data._id);",
+                  "        console.log(\"✓ Saved floor_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"floor_name\": \"Level 1\",\n  \"floor_number\": \"1\",\n  \"building_id\": \"{{building_id}}\",\n  \"floor_type\": \"Office\",\n  \"customer_id\": \"{{customer_id}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/floors",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "floors"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Floor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"floor_version\", jsonData.data.__v || 0);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "If-Match", "value": "W/\"v{{floor_version}}\"" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"floor_name\": \"Updated Floor Name\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/floors/{{floor_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "floors", "{{floor_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Floor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Floor deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/floors/{{floor_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "floors", "{{floor_id_for_delete}}"]
+            },
+            "description": "Delete a floor by ID (soft delete). Uses the ID saved from Create Floor request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Building Tenant",
+      "item": [
+        {
+          "name": "List Building Tenants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstTenant = jsonData.data[0];",
+                  "        pm.environment.set(\"tenant_id\", firstTenant.id || firstTenant._id);",
+                  "        pm.environment.set(\"tenant_version\", firstTenant.__v || 0);",
+                  "        console.log(\"✓ Saved tenant_id:\", pm.environment.get(\"tenant_id\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/building-tenants?page=1&limit=20",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "building-tenants"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "building_id", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Building Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"tenant_version\", jsonData.data.__v || 0);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/building-tenants/{{tenant_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "building-tenants", "{{tenant_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Building Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"tenant_id\", jsonData.data.id || jsonData.data._id);",
+                  "        pm.environment.set(\"tenant_version\", jsonData.data.__v || 0);",
+                  "        pm.environment.set(\"tenant_id_for_delete\", jsonData.data.id || jsonData.data._id);",
+                  "        console.log(\"✓ Saved tenant_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_legal_name\": \"Acme Corporation\",\n  \"building_id\": \"{{building_id}}\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"tenant_trading_name\": \"Acme Corp\",\n  \"abn\": \"12345678901\",\n  \"industry_type\": \"Technology\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/building-tenants",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "building-tenants"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Building Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"tenant_version\", jsonData.data.__v || 0);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "If-Match", "value": "W/\"v{{tenant_version}}\"" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_legal_name\": \"Updated Tenant Name\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/building-tenants/{{tenant_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "building-tenants", "{{tenant_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Building Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Building Tenant deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/building-tenants/{{tenant_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "building-tenants", "{{tenant_id_for_delete}}"]
+            },
+            "description": "Delete a building tenant by ID (soft delete). Uses the ID saved from Create Building Tenant request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Asset",
+      "item": [
+        {
+          "name": "List Assets",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstAsset = jsonData.data[0];",
+                  "        pm.environment.set(\"asset_id\", firstAsset.id || firstAsset._id);",
+                  "        pm.environment.set(\"asset_version\", firstAsset.__v || 0);",
+                  "        console.log(\"✓ Saved asset_id:\", pm.environment.get(\"asset_id\"));",
+                  "        console.log(\"✓ Saved asset_version:\", pm.environment.get(\"asset_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/assets?page=1&limit=20",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "assets"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Asset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const asset = jsonData.data;",
+                  "        pm.environment.set(\"asset_version\", asset.__v || 0);",
+                  "        console.log(\"✓ Updated asset_version:\", pm.environment.get(\"asset_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/assets/{{asset_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "assets", "{{asset_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Asset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const newAsset = jsonData.data;",
+                  "        pm.environment.set(\"asset_id\", newAsset.id || newAsset._id);",
+                  "        pm.environment.set(\"asset_version\", newAsset.__v || 0);",
+                  "        pm.environment.set(\"asset_id_for_delete\", newAsset.id || newAsset._id);",
+                  "        console.log(\"✓ Saved new asset_id:\", pm.environment.get(\"asset_id\"));",
+                  "        console.log(\"✓ Saved asset_version:\", pm.environment.get(\"asset_version\"));",
+                  "        console.log(\"✓ Saved asset_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_name\": \"HVAC Unit - Level 3 East\",\n  \"asset_code\": \"HVAC-L3E-001\",\n  \"category\": \"HVAC\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"building_id\": \"{{building_id}}\",\n  \"floor_id\": \"{{floor_id}}\",\n  \"make\": \"Daikin\",\n  \"model\": \"VRV IV\",\n  \"status\": \"operational\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/assets",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "assets"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Asset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const updatedAsset = jsonData.data;",
+                  "        pm.environment.set(\"asset_version\", updatedAsset.__v || 0);",
+                  "        console.log(\"✓ Updated asset_version to:\", pm.environment.get(\"asset_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{asset_version}}\"",
+                "description": "Optimistic locking - version control"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asset_name\": \"HVAC Unit - Level 3 East (Updated)\",\n  \"status\": \"maintenance_required\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/assets/{{asset_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "assets", "{{asset_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Asset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Asset deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/assets/{{asset_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "assets", "{{asset_id_for_delete}}"]
+            },
+            "description": "Delete an asset by ID (soft delete). Uses the ID saved from Create Asset request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Vendor",
+      "item": [
+        {
+          "name": "List Vendors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstVendor = jsonData.data[0];",
+                  "        pm.environment.set(\"vendor_id\", firstVendor.id || firstVendor._id);",
+                  "        pm.environment.set(\"vendor_version\", firstVendor.__v || 0);",
+                  "        console.log(\"✓ Saved vendor_id:\", pm.environment.get(\"vendor_id\"));",
+                  "        console.log(\"✓ Saved vendor_version:\", pm.environment.get(\"vendor_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/vendors?page=1&limit=20",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "vendors"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Vendor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const vendor = jsonData.data;",
+                  "        pm.environment.set(\"vendor_version\", vendor.__v || 0);",
+                  "        console.log(\"✓ Updated vendor_version:\", pm.environment.get(\"vendor_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/vendors/{{vendor_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "vendors", "{{vendor_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vendor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const newVendor = jsonData.data;",
+                  "        pm.environment.set(\"vendor_id\", newVendor.id || newVendor._id);",
+                  "        pm.environment.set(\"vendor_version\", newVendor.__v || 0);",
+                  "        pm.environment.set(\"vendor_id_for_delete\", newVendor.id || newVendor._id);",
+                  "        console.log(\"✓ Saved new vendor_id:\", pm.environment.get(\"vendor_id\"));",
+                  "        console.log(\"✓ Saved vendor_version:\", pm.environment.get(\"vendor_version\"));",
+                  "        console.log(\"✓ Saved vendor_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme HVAC Services\",\n  \"category\": \"HVAC\",\n  \"businessType\": \"Contractor\",\n  \"address\": {\n    \"street_address\": \"123 Service Street\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\",\n    \"country\": \"Australia\"\n  },\n  \"contacts\": [\n    {\n      \"name\": \"John Smith\",\n      \"role\": \"Service Manager\",\n      \"email\": \"john@acmehvac.com.au\",\n      \"phone\": \"+61 2 9876 5432\"\n    }\n  ],\n  \"abn\": \"12345678901\",\n  \"email\": \"info@acmehvac.com.au\",\n  \"phone\": \"+61 2 9876 5432\",\n  \"website\": \"https://acmehvac.com.au\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/vendors",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "vendors"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vendor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const updatedVendor = jsonData.data;",
+                  "        pm.environment.set(\"vendor_version\", updatedVendor.__v || 0);",
+                  "        console.log(\"✓ Updated vendor_version to:\", pm.environment.get(\"vendor_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{vendor_version}}\"",
+                "description": "Optimistic locking - version control"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme HVAC Services (Updated)\",\n  \"phone\": \"+61 2 9876 5433\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/vendors/{{vendor_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "vendors", "{{vendor_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Vendor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Vendor deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/vendors/{{vendor_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "vendors", "{{vendor_id_for_delete}}"]
+            },
+            "description": "Delete a vendor by ID (soft delete). Uses the ID saved from Create Vendor request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Document",
+      "item": [
+        {
+          "name": "List Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstDocument = jsonData.data[0];",
+                  "        pm.environment.set(\"document_id\", firstDocument.id || firstDocument._id);",
+                  "        pm.environment.set(\"document_version\", firstDocument.__v || 0);",
+                  "        console.log(\"✓ Saved document_id:\", pm.environment.get(\"document_id\"));",
+                  "        console.log(\"✓ Saved document_version:\", pm.environment.get(\"document_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents?page=1&limit=20",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const document = jsonData.data;",
+                  "        pm.environment.set(\"document_version\", document.__v || 0);",
+                  "        console.log(\"✓ Updated document_version:\", pm.environment.get(\"document_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const newDocument = jsonData.data;",
+                  "        pm.environment.set(\"document_id\", newDocument.id || newDocument._id);",
+                  "        pm.environment.set(\"document_version\", newDocument.__v || 0);",
+                  "        pm.environment.set(\"document_id_for_delete\", newDocument.id || newDocument._id);",
+                  "        console.log(\"✓ Saved new document_id:\", pm.environment.get(\"document_id\"));",
+                  "        console.log(\"✓ Saved document_version:\", pm.environment.get(\"document_version\"));",
+                  "        console.log(\"✓ Saved document_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_name\": \"Building Compliance Certificate 2025\",\n  \"document_type\": \"Compliance\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"building_id\": \"{{building_id}}\",\n  \"description\": \"Annual building compliance certificate\",\n  \"status\": \"active\",\n  \"tags\": [\"compliance\", \"certificate\", \"2025\"]\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const updatedDocument = jsonData.data;",
+                  "        pm.environment.set(\"document_version\", updatedDocument.__v || 0);",
+                  "        console.log(\"✓ Updated document_version to:\", pm.environment.get(\"document_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{document_version}}\"",
+                "description": "Optimistic locking - version control"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_name\": \"Building Compliance Certificate 2025 (Updated)\",\n  \"status\": \"archived\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Document deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id_for_delete}}"]
+            },
+            "description": "Delete a document by ID (soft delete). Uses the ID saved from Create Document request."
+          },
+          "response": []
+        },
+        {
+          "name": "Request Approval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    console.log(\"✓ Document approval requested successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approver_id\": \"{{user_id}}\",\n  \"comment\": \"Please review this document\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/request-approval",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}", "request-approval"]
+            },
+            "description": "Request approval for a document from a specific approver"
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Document approved successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Approved - looks good\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/approve",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}", "approve"]
+            },
+            "description": "Approve a document that requires approval"
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Document rejected\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Rejected - requires changes\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/reject",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}", "reject"]
+            },
+            "description": "Reject a document with required comment explaining reason"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Approval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Document approval revoked\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Approval revoked due to new information\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/revoke-approval",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}", "revoke-approval"]
+            },
+            "description": "Revoke a previously granted approval"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Pending Approvals",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        console.log(\"✓ Pending approvals count:\", jsonData.data.length);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/pending-approval",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "pending-approval"]
+            },
+            "description": "Get all documents pending approval for the current user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Approval History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Approval history retrieved\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/approval-history",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}", "approval-history"]
+            },
+            "description": "Get complete approval history for a specific document"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Comments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        console.log(\"✓ Comments count:\", jsonData.data.length);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/comments",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}", "comments"]
+            },
+            "description": "Get all comments for a specific document"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Review/Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    console.log(\"✓ Review/comment added successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"This document looks comprehensive\",\n  \"rating\": 5\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/review",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "documents", "{{document_id}}", "review"]
+            },
+            "description": "Add a review or comment to a document with optional rating"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Profile",
+      "item": [
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/auth/me",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "auth", "me"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "List Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstUser = jsonData.data[0];",
+                  "        pm.environment.set(\"user_id\", firstUser.id || firstUser._id);",
+                  "        pm.environment.set(\"user_version\", firstUser.__v || 0);",
+                  "        console.log(\"✓ Saved user_id:\", pm.environment.get(\"user_id\"));",
+                  "        console.log(\"✓ Saved user_version:\", pm.environment.get(\"user_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/users?page=1&limit=20",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const user = jsonData.data;",
+                  "        pm.environment.set(\"user_version\", user.__v || 0);",
+                  "        console.log(\"✓ Updated user_version:\", pm.environment.get(\"user_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/users/{{user_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const newUser = jsonData.data;",
+                  "        pm.environment.set(\"user_id\", newUser.id || newUser._id);",
+                  "        pm.environment.set(\"user_version\", newUser.__v || 0);",
+                  "        pm.environment.set(\"user_id_for_delete\", newUser.id || newUser._id);",
+                  "        console.log(\"✓ Saved new user_id:\", pm.environment.get(\"user_id\"));",
+                  "        console.log(\"✓ Saved user_version:\", pm.environment.get(\"user_version\"));",
+                  "        console.log(\"✓ Saved user_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sarah.johnson@fulqrom.com.au\",\n  \"full_name\": \"Sarah Johnson\",\n  \"role_ids\": [\"property_manager\"],\n  \"phone\": \"+61 3 9876 5432\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/users",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const updatedUser = jsonData.data;",
+                  "        pm.environment.set(\"user_version\", updatedUser.__v || 0);",
+                  "        console.log(\"✓ Updated user_version to:\", pm.environment.get(\"user_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{user_version}}\"",
+                "description": "Optimistic locking - version control"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Sarah Johnson (Updated)\",\n  \"phone\": \"+61 3 9876 5433\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/users/{{user_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ User deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/users/{{user_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "users", "{{user_id_for_delete}}"]
+            },
+            "description": "Delete a user by ID (soft delete). Uses the ID saved from Create User request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notification",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        console.log(\"✓ Notifications retrieved:\", jsonData.data.length);",
+                  "        if (jsonData.data.length > 0) {",
+                  "            const firstNotification = jsonData.data[0];",
+                  "            pm.environment.set(\"notification_id\", firstNotification.id || firstNotification._id);",
+                  "            console.log(\"✓ Saved notification_id:\", pm.environment.get(\"notification_id\"));",
+                  "        }",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/notifications?limit=50&unreadOnly=false",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Number of notifications to retrieve"
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Number of notifications to skip"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": true,
+                  "description": "Offset for pagination"
+                },
+                {
+                  "key": "unreadOnly",
+                  "value": "false",
+                  "description": "Filter to show only unread notifications"
+                },
+                {
+                  "key": "types",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by notification types"
+                },
+                {
+                  "key": "startDate",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter notifications from start date"
+                },
+                {
+                  "key": "endDate",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter notifications to end date"
+                }
+              ]
+            },
+            "description": "Get notifications for current user with filtering and pagination options"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Unread Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        console.log(\"✓ Unread notifications count:\", jsonData.data.count || jsonData.data);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/notifications/unread-count",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "notifications", "unread-count"]
+            },
+            "description": "Get count of unread notifications for current user"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification as Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Notification marked as read\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/notifications/{{notification_id}}/read",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "notifications", "{{notification_id}}", "read"]
+            },
+            "description": "Mark a single notification as read by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Multiple as Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Multiple notifications marked as read\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notification_ids\": [\"{{notification_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/notifications/mark-read",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "notifications", "mark-read"]
+            },
+            "description": "Mark multiple notifications as read by providing array of notification IDs"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All as Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ All notifications marked as read\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/notifications/mark-all-read",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "notifications", "mark-all-read"]
+            },
+            "description": "Mark all notifications as read for current user"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Notification",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Notification deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/notifications/{{notification_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "notifications", "{{notification_id}}"]
+            },
+            "description": "Delete a single notification by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete All Read Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ All read notifications deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/notifications",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "notifications"]
+            },
+            "description": "Delete all read notifications for current user"
+          },
+          "response": []
+        }
+      ],
+      "description": "User notification management endpoints"
+    },
+    {
+      "name": "Organization",
+      "item": [
+        {
+          "name": "Get Current Organisation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const org = jsonData.data;",
+                  "        pm.environment.set(\"organisation_id\", org.id || org._id);",
+                  "        pm.environment.set(\"organisation_version\", org.__v || 0);",
+                  "        console.log(\"✓ Saved organisation_id:\", pm.environment.get(\"organisation_id\"));",
+                  "        console.log(\"✓ Saved organisation_version:\", pm.environment.get(\"organisation_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/organizations/current",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "organizations", "current"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Organisation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const updatedOrg = jsonData.data;",
+                  "        pm.environment.set(\"organisation_version\", updatedOrg.__v || 0);",
+                  "        console.log(\"✓ Updated organisation_version to:\", pm.environment.get(\"organisation_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{organisation_version}}\"",
+                "description": "Optimistic locking - version control"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Organisation Name\",\n  \"phone\": \"+61 2 9876 5432\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/organizations/{{organisation_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "organizations", "{{organisation_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Setting",
+      "item": [
+        {
+          "name": "Get All Dropdowns",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Retrieved all dropdown values\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/dropdowns",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "dropdowns"]
+            },
+            "description": "Get all dropdown values (static and dynamic) for the tenant"
+          },
+          "response": []
+        }
+      ],
+      "description": "Settings and dropdown data endpoints"
+    },
+    {
+      "name": "Activity/Audit Log",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstLog = jsonData.data[0];",
+                  "        pm.environment.set(\"audit_log_id\", firstLog.id || firstLog._id);",
+                  "        console.log(\"✓ Saved audit_log_id:\", pm.environment.get(\"audit_log_id\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/audit-logs?page=1&limit=50",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "audit-logs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Audit Log",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const newLog = jsonData.data;",
+                  "        pm.environment.set(\"audit_log_id\", newLog.id || newLog._id);",
+                  "        console.log(\"✓ Saved new audit_log_id:\", pm.environment.get(\"audit_log_id\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"create\",\n  \"resource_type\": \"building\",\n  \"resource_id\": \"{{building_id}}\",\n  \"details\": {\n    \"description\": \"Created new building via Postman test\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/audit-logs",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "audit-logs"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Saas Tenant",
+      "item": [
+        {
+          "name": "List Tenants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const firstTenant = jsonData.data[0];",
+                  "        pm.environment.set(\"saas_tenant_id\", firstTenant.id || firstTenant._id);",
+                  "        pm.environment.set(\"saas_tenant_version\", firstTenant.__v || 0);",
+                  "        console.log(\"✓ Saved saas_tenant_id:\", pm.environment.get(\"saas_tenant_id\"));",
+                  "        console.log(\"✓ Saved saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/admin/tenants?page=1&limit=15",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "admin", "tenants"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "15"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const tenant = jsonData.data;",
+                  "        pm.environment.set(\"saas_tenant_version\", tenant.__v || 0);",
+                  "        console.log(\"✓ Updated saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/admin/tenants/{{saas_tenant_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "admin", "tenants", "{{saas_tenant_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const newTenant = jsonData.data;",
+                  "        pm.environment.set(\"saas_tenant_id\", newTenant.id || newTenant._id);",
+                  "        pm.environment.set(\"saas_tenant_version\", newTenant.__v || 0);",
+                  "        pm.environment.set(\"saas_tenant_id_for_delete\", newTenant.id || newTenant._id);",
+                  "        console.log(\"✓ Saved new saas_tenant_id:\", pm.environment.get(\"saas_tenant_id\"));",
+                  "        console.log(\"✓ Saved saas_tenant_version:\", pm.environment.get(\"saas_tenant_version\"));",
+                  "        console.log(\"✓ Saved saas_tenant_id_for_delete\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"demo-tenant-xyz\",\n  \"organisation_name\": \"Demo Organisation Pty Ltd\",\n  \"email_domain\": \"demo-org.com.au\",\n  \"business_number\": \"12345678901\",\n  \"status\": \"active\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/admin/tenants",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "admin", "tenants"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const updatedTenant = jsonData.data;",
+                  "        pm.environment.set(\"saas_tenant_version\", updatedTenant.__v || 0);",
+                  "        console.log(\"✓ Updated saas_tenant_version to:\", pm.environment.get(\"saas_tenant_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{saas_tenant_version}}\"",
+                "description": "Optimistic locking - version control"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisation_name\": \"Demo Organisation Pty Ltd (Updated)\",\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/admin/tenants/{{saas_tenant_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "admin", "tenants", "{{saas_tenant_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Tenant deleted successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/admin/tenants/{{saas_tenant_id_for_delete}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "admin", "tenants", "{{saas_tenant_id_for_delete}}"]
+            },
+            "description": "Delete a tenant by ID (soft delete). Uses the ID saved from Create Tenant request."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Saas Dashboard",
+      "item": [
+        {
+          "name": "Get All Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/admin/stats/all",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "admin", "stats", "all"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Usage Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/admin/analytics/usage?period=30d",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "admin", "analytics", "usage"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "30d"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Overview Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/admin/analytics/overview",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "admin", "analytics", "overview"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Guest",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/health",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["health"]
+            },
+            "description": "Check API health status (no authentication required)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// This runs before each request",
+          "// You can add logic here to check if token is expired and refresh automatically"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "AUTH0_DOMAIN",
+      "value": "dev-ml7pxvj6vg32j740.au.auth0.com",
+      "type": "string"
+    },
+    {
+      "key": "AUTH0_CLIENT_ID",
+      "value": "L3JN7NIRm67O9wBfxex1jRQJZwIUt6cq",
+      "type": "string"
+    },
+    {
+      "key": "AUTH0_CLIENT_SECRET",
+      "value": "JZ72w4a9tmP6ovvYSsDLBWiU86APV_1zPL05p__lg6YIjGgrJnS5tK77UP63CHB0",
+      "type": "string"
+    },
+    {
+      "key": "AUTH0_AUDIENCE",
+      "value": "https://api.fulqrom.com.au",
+      "type": "string"
+    },
+    {
+      "key": "AUTH0_CONNECTION",
+      "value": "Username-Password-Authentication",
+      "type": "string"
+    },
+    {
+      "key": "API_BASE_URL",
+      "value": "http://localhost:30001",
+      "type": "string"
+    },
+    {
+      "key": "auth0_username",
+      "value": "demo@fulqrom.com.au",
+      "type": "string"
+    },
+    {
+      "key": "auth0_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "id_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_type",
+      "value": "Bearer",
+      "type": "string"
+    }
+  ]
 }
