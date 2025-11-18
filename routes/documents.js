@@ -138,7 +138,7 @@ async function fetchEntityNames(documentData, currentTenantId) {
 
     // Fetch asset name (legacy single asset) - WITH TENANT FILTERING
     if (assetId) {
-      const asset = await Asset.findById(assetId.toString()).setOptions({ _tenantId: currentTenantId });
+      const asset = await Asset.findOne({ asset_id: assetId }).setOptions({ _tenantId: currentTenantId });
       if (asset) {
         // Build asset name from available fields
         entityNames.asset_name = asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset';
@@ -153,9 +153,9 @@ async function fetchEntityNames(documentData, currentTenantId) {
     const assetIds = documentData.location?.assets?.map(a => a.asset_id) ||
                      (documentData.asset_ids && Array.isArray(documentData.asset_ids) ? documentData.asset_ids : []);
     if (assetIds.length > 0) {
-      const assets = await Asset.find({ _id: { $in: assetIds.map(id => id.toString()) } }).setOptions({ _tenantId: currentTenantId });
+      const assets = await Asset.find({ asset_id: { $in: assetIds } }).setOptions({ _tenantId: currentTenantId });
       entityNames.assets = assets.map(asset => ({
-        asset_id: asset._id.toString(),
+        asset_id: asset.asset_id,
         asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
         asset_type: asset.type || asset.category || '' // Allow empty string if no type
       }));
@@ -228,7 +228,7 @@ async function batchFetchEntityNames(documents, tenantId) {
     siteIds.size > 0 ? Site.find({ _id: { $in: Array.from(siteIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
     buildingIds.size > 0 ? Building.find({ _id: { $in: Array.from(buildingIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
     floorIds.size > 0 ? Floor.find({ _id: { $in: Array.from(floorIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
-    assetIds.size > 0 ? Asset.find({ _id: { $in: Array.from(assetIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
+    assetIds.size > 0 ? Asset.find({ asset_id: { $in: Array.from(assetIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
     tenantIds.size > 0 ? BuildingTenant.find({ _id: { $in: Array.from(tenantIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : [],
     vendorIds.size > 0 ? Vendor.find({ _id: { $in: Array.from(vendorIds) } }).setOptions({ _tenantId: tenantId }).lean().exec() : []
   ]);
@@ -238,7 +238,7 @@ async function batchFetchEntityNames(documents, tenantId) {
   const siteMap = new Map(sites.map(s => [s._id.toString(), s]));
   const buildingMap = new Map(buildings.map(b => [b._id.toString(), b]));
   const floorMap = new Map(floors.map(f => [f._id.toString(), f]));
-  const assetMap = new Map(assets.map(a => [a._id.toString(), a]));
+  const assetMap = new Map(assets.map(a => [a.asset_id, a]));
   const tenantMap = new Map(tenants.map(t => [t._id.toString(), t]));
   const vendorMap = new Map(vendors.map(v => [v._id.toString(), v]));
 
@@ -248,7 +248,7 @@ async function batchFetchEntityNames(documents, tenantId) {
     const site = siteMap.get(doc.location?.site?.site_id?.toString());
     const building = buildingMap.get(doc.location?.building?.building_id?.toString());
     const floor = floorMap.get(doc.location?.floor?.floor_id?.toString());
-    const asset = assetMap.get(doc.location?.asset?.asset_id?.toString());
+    const asset = assetMap.get(doc.location?.asset?.asset_id);
     const tenant = tenantMap.get(doc.location?.tenant?.tenant_id?.toString());
     const vendor = vendorMap.get(doc.location?.vendor?.vendor_id?.toString());
 
@@ -256,10 +256,10 @@ async function batchFetchEntityNames(documents, tenantId) {
     const docAssetIds = doc.location?.assets?.map(a => a.asset_id) || [];
     const populatedAssets = docAssetIds
       .map(assetId => {
-        const assetData = assetMap.get(assetId.toString());
+        const assetData = assetMap.get(assetId);
         if (assetData) {
           return {
-            asset_id: assetData._id.toString(),
+            asset_id: assetData.asset_id,
             asset_name: assetData.asset_no || assetData.device_id || assetData.asset_id || 'Unknown Asset',
             asset_type: assetData.type || assetData.category || ''
           };
@@ -1114,9 +1114,9 @@ router.post('/', checkModulePermission('documents', 'create'), preserveALSContex
     // Handle multiple assets (new feature)
     if (documentData.asset_ids && Array.isArray(documentData.asset_ids) && documentData.asset_ids.length > 0) {
       // Fetch asset details from database
-      const assets = await Asset.find({ _id: { $in: documentData.asset_ids.map(id => id.toString()) } });
+      const assets = await Asset.find({ asset_id: { $in: documentData.asset_ids } });
       documentPayload.location.assets = assets.map(asset => ({
-        asset_id: asset._id.toString(),
+        asset_id: asset.asset_id,
         asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
         asset_type: asset.type || asset.category || '' // Allow empty string if no type
       }));
@@ -1345,9 +1345,9 @@ router.put('/bulk-update', requireIfMatch, async (req, res) => {
     // Handle multiple assets (new feature)
     if (updates.asset_ids && Array.isArray(updates.asset_ids) && updates.asset_ids.length > 0) {
       // Fetch asset details from database
-      const assets = await Asset.find({ _id: { $in: updates.asset_ids.map(id => id.toString()) } }).session(session);
+      const assets = await Asset.find({ asset_id: { $in: updates.asset_ids } }).session(session);
       updateObject['location.assets'] = assets.map(asset => ({
-        asset_id: asset._id.toString(),
+        asset_id: asset.asset_id,
         asset_name: asset.asset_no || asset.device_id || asset.asset_id || 'Unknown Asset',
         asset_type: asset.type || asset.category
       }));
