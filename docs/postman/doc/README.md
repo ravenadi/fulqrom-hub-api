@@ -277,9 +277,31 @@ All Customer endpoints include automated test scripts that:
 ### Document CRUD
 - List Documents (with ID/version extraction and comprehensive filtering)
 - Get Document (uses dynamic ID)
-- Create Document (saves new ID/version and ID for delete, comprehensive schema)
+- Create Document (multipart/form-data with file upload, saves new ID/version and ID for delete)
 - Update Document (with If-Match version header, comprehensive schema)
 - Delete Document (uses ID from Create Document)
+
+### Document Version/History Management
+- Create New Document Version (upload new version with file, maintains history, saves version_id)
+- Get All Document Versions (retrieve complete version history, saves first version_id)
+- Download Specific Version (download any previous version using version_id)
+- Restore Document Version (rollback to previous version)
+
+### Document File Operations
+- Download Document File (download current document file)
+- Preview Document (get preview URL for current file)
+
+### Document Approval Workflow
+- Request Approval (request approval from an approver)
+- Approve Document (approve a pending document)
+- Reject Document (reject a document with comment)
+- Revoke Approval (revoke a previously granted approval)
+- Get Pending Approvals (get all documents pending approval for current user)
+- Get Approval History (get complete approval history for a document)
+
+### Document Comments & Reviews
+- Get Comments (retrieve all comments for a document)
+- Add Review/Comment (add a review or comment to a document)
 
 #### Document Schema - Complete Fields Reference
 
@@ -295,7 +317,20 @@ All Customer endpoints include automated test scripts that:
 - `tags` - Tag filter
 - `sort_by`, `sort_order` - Sorting options
 
-**Create/Update Document - Request Body:**
+**Create Document - Multipart Form Data:**
+- `file` - File to upload (required) - Select file in Postman's Body tab
+- `name` - Document name (required)
+- `category` - Document category (required - Compliance, Drawing Register, Manual, Report, etc.)
+- `type` - Document type (required - Certificate, Plan, Procedure, etc.)
+- `customer_id` - Customer ID (required)
+- `description`, `building_id`, `site_id`, `floor_id`, `tags` - Optional fields
+- **Supported formats:** PDF, DOCX, XLSX, DWG, DXF, JPG, PNG, TXT, ZIP
+- **Content-Type:** multipart/form-data
+- **Returns:** Created document with file metadata (file_name, file_size, file_type, file_url, etc.)
+- **File Storage:** S3 with secure URLs
+- **Note:** File upload is integrated into Create Document endpoint (POST /api/documents)
+
+**Update Document - Request Body (JSON):**
 
 **Basic Information:**
 - `name` - Document name (required for create)

@@ -3096,13 +3096,74 @@
               }
             ],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Building HVAC Compliance Certificate 2025\",\n  \"description\": \"Annual HVAC system compliance certification for main office building\",\n  \"version\": \"1.0\",\n  \"category\": \"Compliance\",\n  \"type\": \"Certificate\",\n  \"engineering_discipline\": \"HVAC\",\n  \"status\": \"Draft\",\n  \"regulatory_framework\": \"AS/NZS 3666.1:2011\",\n  \"certification_number\": \"CERT-2025-001\",\n  \"compliance_framework\": \"Building Code of Australia\",\n  \"compliance_status\": \"Compliant\",\n  \"issue_date\": \"2025-01-15\",\n  \"expiry_date\": \"2026-01-15\",\n  \"review_date\": \"2025-07-15\",\n  \"frequency\": \"annual\",\n  \"file\": {\n    \"file_meta\": {\n      \"file_name\": \"hvac-compliance-2025.pdf\",\n      \"file_size\": 2457600,\n      \"file_type\": \"application/pdf\",\n      \"file_extension\": \"pdf\",\n      \"file_url\": \"https://s3.ap-southeast-2.amazonaws.com/bucket/documents/hvac-compliance-2025.pdf\",\n      \"file_path\": \"documents/hvac-compliance-2025.pdf\",\n      \"file_key\": \"documents/hvac-compliance-2025.pdf\",\n      \"bucket_name\": \"fulqrom-hub-documents\",\n      \"version\": \"1.0\",\n      \"file_mime_type\": \"application/pdf\"\n    }\n  },\n  \"tags\": {\n    \"tags\": [\n      \"HVAC\",\n      \"Compliance\",\n      \"Annual\",\n      \"Certificate\",\n      \"2025\"\n    ]\n  },\n  \"location\": {\n    \"site\": {\n      \"site_id\": \"{{site_id}}\"\n    },\n    \"building\": {\n      \"building_id\": \"{{building_id}}\"\n    },\n    \"floor\": {\n      \"floor_id\": \"{{floor_id}}\"\n    },\n    \"assets\": [\n      {\n        \"asset_id\": \"{{asset_id}}\",\n        \"asset_name\": \"Main Chiller Unit\",\n        \"asset_type\": \"Chiller\"\n      }\n    ]\n  },\n  \"customer\": {\n    \"customer_id\": \"{{customer_id}}\"\n  },\n  \"drawing_info\": {\n    \"date_issued\": \"2025-01-15T00:00:00Z\",\n    \"drawing_status\": \"Approved\",\n    \"prepared_by\": \"John Smith, P.Eng\",\n    \"drawing_scale\": \"1:100\",\n    \"approved_by_user\": \"Jane Doe\",\n    \"related_drawings\": [\n      {\n        \"document_id\": \"67890abcdef\",\n        \"document_name\": \"HVAC System Layout\"\n      }\n    ]\n  },\n  \"access_control\": {\n    \"access_level\": \"internal\",\n    \"access_users\": [\n      \"user1@example.com\",\n      \"user2@example.com\"\n    ]\n  },\n  \"approval_config\": {\n    \"enabled\": true,\n    \"status\": \"Pending\",\n    \"approvers\": [\n      {\n        \"user_id\": \"approver123\",\n        \"user_name\": \"Sarah Johnson\",\n        \"user_email\": \"sarah.johnson@example.com\"\n      }\n    ]\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Document file to upload (PDF, DOCX, DWG, etc.)"
+                },
+                {
+                  "key": "name",
+                  "value": "HVAC Compliance Certificate 2025",
+                  "type": "text",
+                  "description": "Document name"
+                },
+                {
+                  "key": "category",
+                  "value": "Compliance",
+                  "type": "text",
+                  "description": "Document category (required)"
+                },
+                {
+                  "key": "type",
+                  "value": "Certificate",
+                  "type": "text",
+                  "description": "Document type (required)"
+                },
+                {
+                  "key": "customer_id",
+                  "value": "{{customer_id}}",
+                  "type": "text",
+                  "description": "Customer ID (required)"
+                },
+                {
+                  "key": "description",
+                  "value": "Annual HVAC compliance certification",
+                  "type": "text",
+                  "description": "Document description (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "building_id",
+                  "value": "{{building_id}}",
+                  "type": "text",
+                  "description": "Building ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "site_id",
+                  "value": "{{site_id}}",
+                  "type": "text",
+                  "description": "Site ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "floor_id",
+                  "value": "{{floor_id}}",
+                  "type": "text",
+                  "description": "Floor ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "tags",
+                  "value": "HVAC,Compliance,2025",
+                  "type": "text",
+                  "description": "Comma-separated tags (optional)",
+                  "disabled": true
                 }
-              }
+              ]
             },
             "url": {
               "raw": "{{API_BASE_URL}}/api/documents",
@@ -3114,9 +3175,226 @@
                 "documents"
               ]
             },
-            "description": "Create a new document with comprehensive details.\n\n**Required Fields:**\n- `name` - Document name\n- `category` - Document category (e.g., Compliance, Drawing Register, Manual, Report)\n- `type` - Document type (e.g., Certificate, Plan, Procedure)\n- `customer.customer_id` - Customer ID\n\n**Optional Fields:**\n\n**Basic Information:**\n- `description` - Document description\n- `version` - Version number (default: \"1.0\")\n- `engineering_discipline` - Engineering discipline (HVAC, Electrical, Mechanical, etc.)\n- `status` - Document status (Draft, Approved, Archived, etc.)\n\n**Compliance & Regulatory:**\n- `regulatory_framework` - Regulatory standard (e.g., AS/NZS 3666.1:2011)\n- `certification_number` - Certificate/permit number\n- `compliance_framework` - Compliance framework name\n- `compliance_status` - Compliance status\n- `issue_date` - Issue date (YYYY-MM-DD)\n- `expiry_date` - Expiry date (YYYY-MM-DD)\n- `review_date` - Next review date (YYYY-MM-DD)\n- `frequency` - Review frequency (weekly, monthly, quarterly, annual)\n\n**File Information:**\n- `file.file_meta` - File metadata object:\n  - `file_name` - File name\n  - `file_size` - Size in bytes\n  - `file_type` - MIME type\n  - `file_extension` - Extension (pdf, docx, dwg, etc.)\n  - `file_url` - S3 URL\n  - `file_path` - Path in bucket\n  - `file_key` - S3 key\n  - `bucket_name` - S3 bucket name\n  - `version` - File version\n\n**Tags:**\n- `tags.tags` - Array of tags for categorization\n\n**Location & Associations:**\n- `location.site.site_id` - Associated site\n- `location.building.building_id` - Associated building\n- `location.floor.floor_id` - Associated floor\n- `location.assets` - Array of associated assets\n- `location.tenant.tenant_id` - Associated tenant\n- `location.vendor.vendor_id` - Associated vendor\n\n**Drawing Register Information:** (for Drawing Register category)\n- `drawing_info.date_issued` - Issue date\n- `drawing_info.drawing_status` - Drawing status\n- `drawing_info.prepared_by` - Prepared by\n- `drawing_info.drawing_scale` - Scale (e.g., 1:100)\n- `drawing_info.approved_by_user` - Approver name\n- `drawing_info.related_drawings` - Array of related drawing references\n\n**Access Control:**\n- `access_control.access_level` - Access level (internal, confidential, public)\n- `access_control.access_users` - Array of user emails with access\n\n**Approval Workflow:**\n- `approval_config.enabled` - Enable approval workflow (boolean)\n- `approval_config.status` - Approval status (Pending, Approved, Rejected)\n- `approval_config.approvers` - Array of approver objects (user_id, user_name, user_email)\n\n**Australian Standards:**\n- Regulatory frameworks: AS/NZS standards\n- Dates: DD/MM/YYYY or ISO 8601 format"
+            "description": "Create a new document with file upload.\n\n**Endpoint:** POST /api/documents\n\n**Content-Type:** multipart/form-data\n\n**Required Fields:**\n- `file` - Document file (PDF, DOCX, DWG, JPG, PNG, etc.)\n- `name` - Document name\n- `category` - Document category\n- `type` - Document type\n- `customer_id` - Customer ID\n\n**Optional Fields:**\n- `description` - Document description\n- `site_id`, `building_id`, `floor_id` - Location associations\n- `tags` - Comma-separated tags\n- `engineering_discipline` - Engineering discipline\n- `regulatory_framework`, `compliance_status`, etc. - Compliance fields\n\n**How to Use:**\n1. Select file in Body tab \u2192 form-data\n2. Click \"Select Files\" next to the `file` field\n3. Fill in required text fields (name, category, type, customer_id)\n4. Add optional fields as needed\n5. Send request\n\n**Response:**\n- Returns created document with file metadata\n- File uploaded to S3 with secure URL\n- Document ID saved to {{document_id}} for use in other requests"
           },
           "response": []
+        },
+        {
+          "name": "Create New Document Version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const document = jsonData.data;",
+                  "        pm.environment.set(\"document_version\", document.__v || 0);",
+                  "        console.log(\"\u2713 New version created successfully\");",
+                  "        console.log(\"\u2713 Version number:\", document.version_number);",
+                  "        console.log(\"\u2713 Version sequence:\", document.version_sequence);",
+                  "        console.log(\"\u2713 Document version updated:\", pm.environment.get(\"document_version\"));",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "New version of the document file"
+                },
+                {
+                  "key": "comment",
+                  "value": "Updated HVAC compliance certificate with new equipment",
+                  "type": "text",
+                  "description": "Version change notes/comment"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/versions",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "versions"
+              ]
+            },
+            "description": "Create a new version of an existing document with file upload.\n\n**Endpoint:** POST /api/documents/:id/versions\n\n**Content-Type:** multipart/form-data\n\n**Use Case:**\nWhen you need to update a document with a new file version while keeping the history of previous versions.\n\n**Form Data Fields:**\n- `file` - New version file (required)\n- `comment` - Change notes/description (optional)\n\n**Version Management:**\n- Creates new document record with incremented version_sequence\n- Links to original via document_group_id\n- Sets is_current_version = true for new version\n- Previous version marked as is_current_version = false\n- Maintains complete version history\n\n**Response:**\n- Returns new document version with updated file metadata\n- version_number: Incremented version (e.g., \"2.0\", \"3.0\")\n- version_sequence: Numeric sequence counter\n- version_metadata: Uploaded by, timestamp, change notes\n\n**How to Use:**\n1. Have a document_id from Create Document or List Documents\n2. Select new file version in Postman Body tab\n3. Add change comment describing what changed\n4. Send request\n5. New version created and linked to document group"
+          }
+        },
+        {
+          "name": "Get All Document Versions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data && jsonData.data.length > 0) {",
+                  "        const versions = jsonData.data;",
+                  "        const firstVersion = versions[0];",
+                  "        pm.environment.set(\"version_id\", firstVersion.id || firstVersion._id);",
+                  "        console.log(\"\u2713 Retrieved\", versions.length, \"version(s)\");",
+                  "        console.log(\"\u2713 Saved version_id:\", pm.environment.get(\"version_id\"));",
+                  "        versions.forEach((version, index) => {",
+                  "            console.log(`  Version ${index + 1}: v${version.version_number} (${version.is_current_version ? 'CURRENT' : 'archived'})`);",
+                  "        });",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/version-history",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "version-history"
+              ]
+            },
+            "description": "Get version history for a document.\n\n**Endpoint:** GET /api/documents/:id/version-history\n\n**Path Parameters:**\n- `id` - Document ID\n\n**Returns:** Array of all versions for this document"
+          }
+        },
+        {
+          "name": "Download Specific Version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/versions/{{version_id}}/download",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "versions",
+                "{{version_id}}",
+                "download"
+              ]
+            },
+            "description": "Download a specific version of a document.\n\n**Endpoint:** GET /api/documents/versions/:versionId/download\n\n**Path Parameters:**\n- `versionId` - ID of the specific document version to download\n\n**Use Case:**\nDownload an older version of a document for review or recovery.\n\n**Response:**\n- Redirects to S3 signed URL for file download\n- OR returns file stream directly\n- Sets appropriate Content-Disposition header for download\n\n**How to Use:**\n1. Get version ID from \"Get All Document Versions\"\n2. Use that version's _id as versionId\n3. Send request to download that specific version\n4. Browser/Postman will download the file\n\n**Example:**\nIf \"Get All Document Versions\" returns version 2.0 with _id \"abc122\":\nGET /api/documents/versions/abc122/download"
+          }
+        },
+        {
+          "name": "Restore Document Version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        const document = jsonData.data;",
+                  "        pm.environment.set(\"document_id\", document.id || document._id);",
+                  "        pm.environment.set(\"document_version\", document.__v || 0);",
+                  "        console.log(\"\u2713 Document restored to previous version\");",
+                  "        console.log(\"\u2713 New version number:\", document.version_number);",
+                  "        console.log(\"\u2713 Based on version:\", document.version_metadata?.superseded_version);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Restoring to previous version due to errors in current version\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/restore-version",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "restore-version"
+              ]
+            },
+            "description": "Restore a document to a previous version.\n\n**Endpoint:** POST /api/documents/:id/restore-version\n\n**Path Parameters:**\n- `id` - Document ID\n\n**Request Body:**\n```json\n{\n  \"version_sequence\": 2,\n  \"comment\": \"Restoring to version 2\"\n}\n```\n\n**What Happens:**\n- Creates NEW version copying from specified version_sequence\n- Marks new version as current\n- Preserves complete history"
+          }
+        },
+        {
+          "name": "Download Document File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/download",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "download"
+              ]
+            },
+            "description": "Download the current document file.\n\n**Endpoint:** GET /api/documents/:id/download\n\n**Path Parameters:**\n- `id` - Document ID\n\n**Use Case:**\nDownload the current/latest version of a document file.\n\n**Response:**\n- Redirects to S3 signed URL for secure download\n- OR streams file directly\n- Sets Content-Disposition header for file download\n- Filename from file.file_meta.file_name\n\n**How to Use:**\n1. Have document_id in environment variables\n2. Send GET request\n3. File downloads automatically in Postman or browser"
+          }
+        },
+        {
+          "name": "Preview Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/{{document_id}}/preview",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{document_id}}",
+                "preview"
+              ]
+            },
+            "description": "Get preview URL for the current document file.\n\n**Endpoint:** GET /api/documents/:id/preview\n\n**Path Parameters:**\n- `id` - Document ID\n\n**Use Case:**\nGet a signed URL for previewing document in browser without downloading.\n\n**Response:**\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"preview_url\": \"https://s3.amazonaws.com/...\",\n    \"expires_in\": 3600,\n    \"file_type\": \"application/pdf\",\n    \"supports_preview\": true\n  }\n}\n```\n\n**Preview Support:**\n- PDF: Full preview in browser\n- Images (JPG, PNG): Display in browser\n- Office files: May require viewer integration\n- Text files: Direct display\n\n**How to Use:**\n1. Send GET request with document_id\n2. Receive preview_url in response\n3. Use URL in iframe or window.open()\n4. URL expires after specified time (default: 1 hour)"
+          }
         },
         {
           "name": "Update Document",
