@@ -219,6 +219,419 @@
       ]
     },
     {
+      "name": "Hierarchy",
+      "item": [
+        {
+          "name": "Get Customer Hierarchy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Customer hierarchy retrieved successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/hierarchy/{{customer_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "hierarchy", "{{customer_id}}"],
+              "query": [
+                {
+                  "key": "building_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional filter by building"
+                },
+                {
+                  "key": "floor_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional filter by floor"
+                }
+              ]
+            },
+            "description": "Get full hierarchy for customer (sites -> buildings -> floors -> assets)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Site Hierarchy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Site hierarchy retrieved successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/hierarchy/site/{{site_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "hierarchy", "site", "{{site_id}}"],
+              "query": [
+                {
+                  "key": "building_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional filter by building"
+                },
+                {
+                  "key": "floor_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional filter by floor"
+                }
+              ]
+            },
+            "description": "Get hierarchy for specific site (buildings -> floors -> assets)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Building Hierarchy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Building hierarchy retrieved successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/hierarchy/building/{{building_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "hierarchy", "building", "{{building_id}}"],
+              "query": [
+                {
+                  "key": "floor_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional filter by floor"
+                }
+              ]
+            },
+            "description": "Get hierarchy for specific building (floors -> assets)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Hierarchy Statistics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Hierarchy statistics retrieved successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/hierarchy/{{customer_id}}/stats",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "hierarchy", "{{customer_id}}", "stats"]
+            },
+            "description": "Get summary statistics for customer's hierarchy (counts of sites, buildings, floors, assets)"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Customers (Entity)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Customer entities retrieved\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/dropdowns/entities/customers",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "dropdowns", "entities", "customers"]
+            },
+            "description": "Get list of all customers for dropdowns/entity selection"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Sites (Entity)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Site entities retrieved\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/dropdowns/entities/sites?customer_id={{customer_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "dropdowns", "entities", "sites"],
+              "query": [
+                {
+                  "key": "customer_id",
+                  "value": "{{customer_id}}",
+                  "description": "Optional filter by customer"
+                }
+              ]
+            },
+            "description": "Get list of all sites for dropdowns/entity selection, optionally filtered by customer"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Buildings (Entity)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Building entities retrieved\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/dropdowns/entities/buildings?site_id={{site_id}}&customer_id={{customer_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "dropdowns", "entities", "buildings"],
+              "query": [
+                {
+                  "key": "site_id",
+                  "value": "{{site_id}}",
+                  "disabled": true,
+                  "description": "Optional filter by site"
+                },
+                {
+                  "key": "customer_id",
+                  "value": "{{customer_id}}",
+                  "description": "Optional filter by customer"
+                }
+              ]
+            },
+            "description": "Get list of all buildings for dropdowns/entity selection, optionally filtered by site or customer"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Floors (Entity)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Floor entities retrieved\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/dropdowns/entities/floors?building_id={{building_id}}&site_id={{site_id}}&customer_id={{customer_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "dropdowns", "entities", "floors"],
+              "query": [
+                {
+                  "key": "building_id",
+                  "value": "{{building_id}}",
+                  "disabled": true,
+                  "description": "Optional filter by building"
+                },
+                {
+                  "key": "site_id",
+                  "value": "{{site_id}}",
+                  "disabled": true,
+                  "description": "Optional filter by site"
+                },
+                {
+                  "key": "customer_id",
+                  "value": "{{customer_id}}",
+                  "description": "Optional filter by customer"
+                }
+              ]
+            },
+            "description": "Get list of all floors for dropdowns/entity selection, optionally filtered by building, site, or customer"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Assets (Entity)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Asset entities retrieved\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/dropdowns/entities/assets?building_id={{building_id}}&floor_id={{floor_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "dropdowns", "entities", "assets"],
+              "query": [
+                {
+                  "key": "building_id",
+                  "value": "{{building_id}}",
+                  "disabled": true,
+                  "description": "Optional filter by building"
+                },
+                {
+                  "key": "floor_id",
+                  "value": "{{floor_id}}",
+                  "disabled": true,
+                  "description": "Optional filter by floor"
+                }
+              ]
+            },
+            "description": "Get list of all assets for dropdowns/entity selection, optionally filtered by building or floor"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Tenants (Entity)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Tenant entities retrieved\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/dropdowns/entities/tenants?building_id={{building_id}}&floor_id={{floor_id}}",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "dropdowns", "entities", "tenants"],
+              "query": [
+                {
+                  "key": "building_id",
+                  "value": "{{building_id}}",
+                  "disabled": true,
+                  "description": "Optional filter by building"
+                },
+                {
+                  "key": "floor_id",
+                  "value": "{{floor_id}}",
+                  "disabled": true,
+                  "description": "Optional filter by floor"
+                }
+              ]
+            },
+            "description": "Get list of all building tenants for dropdowns/entity selection, optionally filtered by building or floor"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Vendors (Entity)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Vendor entities retrieved\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/dropdowns/entities/vendors?category=",
+              "host": ["{{API_BASE_URL}}"],
+              "path": ["api", "dropdowns", "entities", "vendors"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": "Optional filter by category"
+                }
+              ]
+            },
+            "description": "Get list of all vendors for dropdowns/entity selection, optionally filtered by category"
+          },
+          "response": []
+        }
+      ],
+      "description": "Hierarchical views and entity listings for customer/site/building/floor/asset relationships"
+    },
+    {
       "name": "Customer",
       "item": [
         {

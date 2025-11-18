@@ -60,6 +60,22 @@ All Customer endpoints include automated test scripts that:
 - Portfolio Map
 
 
+
+### Hierarchy
+- Get Customer Hierarchy (full hierarchy: sites -> buildings -> floors -> assets)
+- Get Site Hierarchy (site hierarchy: buildings -> floors -> assets)
+- Get Building Hierarchy (building hierarchy: floors -> assets)
+- Get Hierarchy Statistics (summary statistics for customer hierarchy)
+
+### Entity Lists (for dropdowns/selection)
+- List All Customers (Entity) - all customers for selection
+- List All Sites (Entity) - all sites, optionally filtered by customer
+- List All Buildings (Entity) - all buildings, filtered by site/customer
+- List All Floors (Entity) - all floors, filtered by building/site/customer
+- List All Assets (Entity) - all assets, filtered by building/floor
+- List All Tenants (Entity) - all building tenants, filtered by building/floor
+- List All Vendors (Entity) - all vendors, optionally filtered by category
+
 ### Setting
 - Get All Dropdowns
 
