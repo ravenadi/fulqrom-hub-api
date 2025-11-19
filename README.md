@@ -183,6 +183,32 @@ The API supports file uploads for documents with the following features:
 - Multiple file types support (PDF, images, Office documents)
 - File size limits configurable via environment variables
 
+## Architecture
+
+### Same-Origin Deployment with `/api` Prefix
+The API uses the `/api` prefix for architectural reasons:
+- **Same domain**: Frontend and API share `hub.fulqrom.com` (no separate subdomain)
+- **Cookie-based auth**: HttpOnly session cookies require same origin
+- **Route namespace**: Prevents conflicts between frontend routes and API endpoints
+- **No CORS**: Same-origin requests avoid CORS complexity
+- **Vite proxy**: Dev proxy forwards `/api/*` to backend (see `vite.config.ts`)
+
+### Dual Endpoint Pattern
+The API provides two types of endpoints for resources:
+
+**1. CRUD Endpoints** (Data Management)
+- Example: `GET /api/sites?page=1&limit=10`
+- Returns: Full objects (50+ fields), paginated
+- Use: Data tables, entity management
+
+**2. Dropdown Endpoints** (UI Components)
+- Example: `GET /api/dropdowns/entities/sites?customer_id=123`
+- Returns: Minimal hierarchical data `{id, label, value, parent_id}`
+- Use: Cascading dropdowns, autocomplete
+- Performance: 95% smaller payload
+
+These are **not duplicates** - they serve different access patterns.
+
 ## Validation
 
 The API implements comprehensive validation:

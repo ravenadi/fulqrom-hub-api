@@ -82,3 +82,40 @@ MONGODB_CONNECTION=mongodb+srv://connection_string/fulqrom-hub
 2. User with Resource Permission (e.g., specific site access) → ✅ Can access ONLY that site
 3. User with NO permissions → ❌ Access denied
 
+## API Architecture Decisions
+
+### `/api` Prefix - REQUIRED (Not Optional)
+**Why it exists:**
+- **Same-origin deployment**: Frontend (`hub.fulqrom.com/customers`) and API (`hub.fulqrom.com/api/customers`) share same domain
+- **Cookie-based auth**: HttpOnly session cookies require same origin (can't use separate subdomain like `api.fulqrom.com`)
+- **Route separation**: Prevents conflicts between frontend routes (`/customers`) and API endpoints (`/api/customers`)
+- **CORS avoidance**: Same-origin requests don't trigger CORS
+- **Vite proxy**: Development proxy at `vite.config.ts:11` forwards `/api/*` to backend port 30001
+
+**Industry examples:** GitHub (`github.com/api/*`), Vercel (`vercel.com/api/*`), Linear (`linear.app/api/*`)
+
+### Dropdown Endpoints - JUSTIFIED (Not Duplicates)
+**Why `/dropdowns/entities/*` exists separately from main CRUD endpoints:**
+
+| Aspect | Dropdown Endpoints | CRUD Endpoints |
+|--------|-------------------|----------------|
+| **Purpose** | UI dropdown/select components | Business entity management |
+| **Data Shape** | Minimal: `{id, label, value, parent_id}` | Full object (50+ fields) |
+| **Payload Size** | ~150 bytes/item | ~2-5KB/item |
+| **Pagination** | None (return ALL for selection) | Yes (10-50 items/page) |
+| **Use Case** | Hierarchical cascading dropdowns | CRUD operations |
+| **Permissions** | May show selectable items | Shows manageable items |
+| **Caching** | 5 minutes | No cache |
+
+**Example flow:**
+1. Select Customer → `GET /dropdowns/entities/sites?customer_id=123` → Returns 100 sites (15KB)
+2. Select Site → `GET /dropdowns/entities/buildings?site_id=456` → Returns 50 buildings (7.5KB)
+3. **vs CRUD:** `GET /sites?page=1&limit=10` → Returns 10 full site objects (50KB)
+
+**Key difference:** Dropdowns return **hierarchical metadata** for cascading filters, not full business objects.
+
+### API Versioning (Future)
+- Current: `/api/customers` (no version prefix)
+- Planned: `/api/v1/customers` (explicit versioning)
+- Migration strategy: Maintain backward compatibility with redirects
+

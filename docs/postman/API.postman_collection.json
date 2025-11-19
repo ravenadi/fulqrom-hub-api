@@ -458,7 +458,7 @@
                 "customers"
               ]
             },
-            "description": "Get list of all customers for dropdowns/entity selection"
+            "description": "Get list of all customers for dropdowns/entity selection, Support hierarchical dropdown cascades in the UI"
           },
           "response": []
         },
@@ -495,11 +495,11 @@
                 {
                   "key": "customer_id",
                   "value": "{{customer_id}}",
-                  "description": "Optional filter by customer"
+                  "description": "Optional filter by customer, Support hierarchical dropdown cascades in the UI"
                 }
               ]
             },
-            "description": "Get list of all sites for dropdowns/entity selection, optionally filtered by customer"
+            "description": "Get list of all sites for dropdowns/entity selection, optionally filtered by customer, Support hierarchical dropdown cascades in the UI"
           },
           "response": []
         },
@@ -546,7 +546,7 @@
                 }
               ]
             },
-            "description": "Get list of all buildings for dropdowns/entity selection, optionally filtered by site or customer"
+            "description": "Get list of all buildings for dropdowns/entity selection, optionally filtered by site or customer, Support hierarchical dropdown cascades in the UI"
           },
           "response": []
         },
@@ -599,7 +599,7 @@
                 }
               ]
             },
-            "description": "Get list of all floors for dropdowns/entity selection, optionally filtered by building, site, or customer"
+            "description": "Get list of all floors for dropdowns/entity selection, optionally filtered by building, site, or customer, Support hierarchical dropdown cascades in the UI"
           },
           "response": []
         },
@@ -647,7 +647,7 @@
                 }
               ]
             },
-            "description": "Get list of all assets for dropdowns/entity selection, optionally filtered by building or floor"
+            "description": "Get list of all assets for dropdowns/entity selection, optionally filtered by building or floor, Support hierarchical dropdown cascades in the UI"
           },
           "response": []
         },
@@ -695,7 +695,7 @@
                 }
               ]
             },
-            "description": "Get list of all building tenants for dropdowns/entity selection, optionally filtered by building or floor"
+            "description": "Get list of all building tenants for dropdowns/entity selection, optionally filtered by building or floor, Support hierarchical dropdown cascades in the UI"
           },
           "response": []
         },
@@ -741,7 +741,7 @@
           "response": []
         }
       ],
-      "description": "Hierarchical views and entity listings for customer/site/building/floor/asset relationships"
+      "description": "Hierarchical views and entity listings for customer/site/building/floor/asset relationships, Support hierarchical dropdown cascades in the UI"
     },
     {
       "name": "Customer",
