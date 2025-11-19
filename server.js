@@ -16,6 +16,7 @@ const { asyncLocalStorage } = require('./utils/requestContext');
 const { attachETag, parseIfMatch } = require('./middleware/etagVersion');
 const { optionalCSRF } = require('./middleware/csrf');
 const { initializeSocketIO } = require('./utils/socketManager');
+const { apiLimiter, publicLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 const server = http.createServer(app);
@@ -164,7 +165,7 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Health check endpoint (no authentication required)
-app.get('/health', (req, res) => {
+app.get('/health', publicLimiter, (req, res) => {
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
@@ -174,22 +175,25 @@ app.get('/health', (req, res) => {
 });
 
 // Apply middleware chain to all API routes (order matters!)
-// 1. ETag parsing (for If-Match header on writes)
+// 1. Rate limiting (protect against abuse)
+app.use('/api', apiLimiter);
+
+// 2. ETag parsing (for If-Match header on writes)
 app.use('/api', parseIfMatch);
 
-// 2. Authentication (session or Bearer)
+// 3. Authentication (session or Bearer)
 app.use('/api', authenticate);
 
-// 3. Tenant context (sets ALS tenant context)
+// 4. Tenant context (sets ALS tenant context)
 app.use('/api', tenantContext);
 
-// 4. CSRF protection (optional during migration)
+// 5. CSRF protection (optional during migration)
 app.use('/api', optionalCSRF);
 
-// 5. Authorization (permission checks)
+// 6. Authorization (permission checks)
 app.use('/api', authorize);
 
-// 6. ETag attachment (on responses)
+// 7. ETag attachment (on responses)
 app.use('/api', attachETag);
 
 // Register all API routes

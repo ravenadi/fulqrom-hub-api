@@ -39,6 +39,7 @@ const { checkResourcePermission, checkModulePermission } = require('../middlewar
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { resolveHierarchy } = require('../utils/hierarchyLookup');
+const { uploadLimiter } = require('../middleware/rateLimiter');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -909,7 +910,7 @@ router.get('/:id/preview', validateObjectId, async (req, res) => {
 });
 
 // POST /api/documents - Create new document with file upload
-router.post('/', checkModulePermission('documents', 'create'), preserveALSContext(upload.single('file')), validateCreateDocument, async (req, res) => {
+router.post('/', uploadLimiter, checkModulePermission('documents', 'create'), preserveALSContext(upload.single('file')), validateCreateDocument, async (req, res) => {
   try {
     // Verify tenant context exists
     if (!req.tenant || !req.tenant.tenantId) {
@@ -3411,7 +3412,7 @@ function calculateNextVersion(currentVersion) {
 }
 
 // POST /api/documents/:id/versions - Upload new version of document
-router.post('/:id/versions', preserveALSContext(upload.single('file')), validateObjectId, async (req, res) => {
+router.post('/:id/versions', uploadLimiter, preserveALSContext(upload.single('file')), validateObjectId, async (req, res) => {
   try {
     const { id } = req.params;
 

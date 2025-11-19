@@ -19,6 +19,7 @@ const { generateCSRFToken } = require('../middleware/csrf');
 const { authenticateSession, optionalSession } = require('../middleware/sessionAuth');
 const { requireAuth } = require('../middleware/auth0');
 const { extractDeviceInfo } = require('../utils/deviceFingerprint');
+const { authLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ const SINGLE_SESSION =  true ; // process.env.ALLOW_MULTI_SESSION !== 'true'; //
  * NOTE: This endpoint ALWAYS accepts Bearer tokens for Auth0 validation,
  * regardless of ALLOW_BEARER setting (which only affects other endpoints)
  */
-router.post('/login', requireAuth[0], requireAuth[1], async (req, res) => {
+router.post('/login', authLimiter, requireAuth[0], requireAuth[1], async (req, res) => {
   try {
     // User already validated by requireAuth middleware
     const { userId, email, auth0_id, tenant_id } = req.user;
