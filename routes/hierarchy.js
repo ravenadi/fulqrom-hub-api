@@ -136,27 +136,40 @@ router.get('/:customer_id', async (req, res) => {
       });
     }
 
-    // Build aggregation pipeline for sites
-    const siteMatchQuery = { customer_id: new mongoose.Types.ObjectId(customer_id) };
+    // Build aggregation pipeline for sites - exclude soft-deleted
+    const siteMatchQuery = {
+      customer_id: new mongoose.Types.ObjectId(customer_id),
+      is_delete: { $ne: true }
+    };
     if (site_id && mongoose.Types.ObjectId.isValid(site_id)) {
       siteMatchQuery._id = new mongoose.Types.ObjectId(site_id);
     }
 
-    // First get sites with buildings
+    // First get sites with buildings - exclude soft-deleted buildings
     const sites = await Site.aggregate([
       { $match: siteMatchQuery },
       {
         $lookup: {
           from: 'buildings',
-          localField: '_id',
-          foreignField: 'site_id',
+          let: { siteId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$site_id', '$$siteId'] },
+                is_delete: { $ne: true }
+              }
+            }
+          ],
           as: 'buildings'
         }
       }
     ]);
 
-    // Then get all assets for this customer (since they might not have site_id set)
-    const assetMatchQuery = { customer_id: new mongoose.Types.ObjectId(customer_id) };
+    // Then get all assets for this customer (since they might not have site_id set) - exclude soft-deleted
+    const assetMatchQuery = {
+      customer_id: new mongoose.Types.ObjectId(customer_id),
+      is_delete: { $ne: true }
+    };
     const assets = await Asset.find(assetMatchQuery).lean();
 
     if (sites.length === 0) {
@@ -190,8 +203,11 @@ router.get('/:customer_id', async (req, res) => {
         });
       }
 
-      // Get building information for context
-      const targetBuilding = await Building.findById(building_id)
+      // Get building information for context - exclude soft-deleted
+      const targetBuilding = await Building.findOne({
+        _id: building_id,
+        is_delete: { $ne: true }
+      })
         .populate('site_id', 'site_name address display_address')
         .populate('customer_id', 'organisation.organisation_name');
 
@@ -594,8 +610,11 @@ router.get('/site/:site_id', async (req, res) => {
       });
     }
 
-    // Get site
-    const site = await Site.findById(site_id).lean();
+    // Get site - exclude soft-deleted
+    const site = await Site.findOne({
+      _id: site_id,
+      is_delete: { $ne: true }
+    }).lean();
 
     if (!site) {
       return res.status(404).json({
@@ -604,11 +623,17 @@ router.get('/site/:site_id', async (req, res) => {
       });
     }
 
-    // Get buildings for this site
-    const buildings = await Building.find({ site_id: new mongoose.Types.ObjectId(site_id) }).lean();
+    // Get buildings for this site - exclude soft-deleted
+    const buildings = await Building.find({
+      site_id: new mongoose.Types.ObjectId(site_id),
+      is_delete: { $ne: true }
+    }).lean();
 
-    // Get all assets for this site
-    const assets = await Asset.find({ site_id: new mongoose.Types.ObjectId(site_id) }).lean();
+    // Get all assets for this site - exclude soft-deleted
+    const assets = await Asset.find({
+      site_id: new mongoose.Types.ObjectId(site_id),
+      is_delete: { $ne: true }
+    }).lean();
 
     let totalBuildings = 0;
     let totalAssets = 0;
@@ -853,8 +878,11 @@ router.get('/building/:building_id', async (req, res) => {
       });
     }
 
-    // Get building with site information
-    const building = await Building.findById(building_id)
+    // Get building with site information - exclude soft-deleted
+    const building = await Building.findOne({
+      _id: building_id,
+      is_delete: { $ne: true }
+    })
       .populate('site_id', 'site_name address display_address')
       .populate('customer_id', 'organisation.organisation_name')
       .lean();
@@ -866,8 +894,11 @@ router.get('/building/:building_id', async (req, res) => {
       });
     }
 
-    // Get all assets for this building
-    const assets = await Asset.find({ building_id: new mongoose.Types.ObjectId(building_id) }).lean();
+    // Get all assets for this building - exclude soft-deleted
+    const assets = await Asset.find({
+      building_id: new mongoose.Types.ObjectId(building_id),
+      is_delete: { $ne: true }
+    }).lean();
 
     let totalAssets = 0;
 
@@ -1012,10 +1043,15 @@ router.get('/:customer_id/stats', async (req, res) => {
 
     const customerObjectId = new mongoose.Types.ObjectId(customer_id);
 
-    // Get counts using aggregation for better performance
+    // Get counts using aggregation for better performance - exclude soft-deleted
     const [siteStats, buildingStats, assetStats] = await Promise.all([
       Site.aggregate([
-        { $match: { customer_id: customerObjectId } },
+        {
+          $match: {
+            customer_id: customerObjectId,
+            is_delete: { $ne: true }
+          }
+        },
         {
           $group: {
             _id: null,
@@ -1027,7 +1063,12 @@ router.get('/:customer_id/stats', async (req, res) => {
         }
       ]),
       Building.aggregate([
-        { $match: { customer_id: customerObjectId } },
+        {
+          $match: {
+            customer_id: customerObjectId,
+            is_delete: { $ne: true }
+          }
+        },
         {
           $group: {
             _id: null,
@@ -1039,7 +1080,12 @@ router.get('/:customer_id/stats', async (req, res) => {
         }
       ]),
       Asset.aggregate([
-        { $match: { customer_id: customerObjectId } },
+        {
+          $match: {
+            customer_id: customerObjectId,
+            is_delete: { $ne: true }
+          }
+        },
         {
           $group: {
             _id: null,

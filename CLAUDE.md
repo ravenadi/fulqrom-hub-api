@@ -114,6 +114,20 @@ MONGODB_CONNECTION=mongodb+srv://connection_string/fulqrom-hub
 
 **Key difference:** Dropdowns return **hierarchical metadata** for cascading filters, not full business objects.
 
+### Rate Limiting
+**Status:** ✅ Implemented using `express-rate-limit`
+
+| Tier | Limit | Window | Applied To |
+|------|-------|--------|------------|
+| General API | 100 req | 15 min | All `/api/*` endpoints |
+| Authentication | 5 req | 15 min | `/api/auth/login` |
+| File Uploads | 50 req | 1 hour | Document uploads |
+| Public | 30 req | 15 min | `/health`, registration |
+| Critical Ops | 3 req | 1 hour | Sensitive operations |
+
+**Admin bypass:** Admins automatically bypass general API limits
+**Documentation:** See `docs/RATE_LIMITING.md`
+
 ### API Versioning (Future)
 - Current: `/api/customers` (no version prefix)
 - Planned: `/api/v1/customers` (explicit versioning)

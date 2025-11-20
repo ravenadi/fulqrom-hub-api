@@ -100,7 +100,8 @@ const DROPDOWN_CONSTANTS = {
   },
 
   // Building module dropdowns
-  // Loaded from: GET /api/dropdowns (flattened as building_types, building_statuses)
+  // Loaded from: GET /api/dropdowns (flattened as building_types)
+  // Note: Building status is now handled by is_active boolean field (consistent with Customer)
   building: {
     types: [
       'Office',
@@ -111,13 +112,6 @@ const DROPDOWN_CONSTANTS = {
       'Data Centre',
       'Healthcare',
       'Educational'
-    ],
-    statuses: [
-      'Active',
-      'Under Construction',
-      'Renovation',
-      'Vacant',
-      'Demolished'
     ]
   },
 

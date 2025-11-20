@@ -919,6 +919,118 @@
           "response": []
         },
         {
+          "name": "Update Customer - Mark as Inactive",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"customer_version\", jsonData.data.__v || 0);",
+                  "        console.log(\"✓ Customer updated - marked as inactive\");",
+                  "        console.log(\"Status:\", jsonData.data.is_active ? 'Active' : 'Inactive');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{customer_version}}\""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false,\n  \"__v\": {{customer_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}"
+              ]
+            },
+            "description": "Example: Update customer to mark as inactive using the general PUT endpoint.\n\n**This is the same endpoint as 'Update Customer'** - you can update any allowed fields.\n\n**Allowed Fields:** organisation, company_profile, business_address, postal_address, contact_methods, metadata, is_active\n\n**Important:**\n- Uses optimistic locking via If-Match header\n- Only sends fields you want to update (partial update)\n- `__v` must match current version or update fails with 409 Conflict\n- Inactive customers remain visible (different from soft delete)"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Customer - Mark as Active",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"customer_version\", jsonData.data.__v || 0);",
+                  "        console.log(\"✓ Customer updated - marked as active\");",
+                  "        console.log(\"Status:\", jsonData.data.is_active ? 'Active' : 'Inactive');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{customer_version}}\""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"__v\": {{customer_version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/customers/{{customer_id}}",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customer_id}}"
+              ]
+            },
+            "description": "Example: Update customer to mark as active using the general PUT endpoint.\n\n**This is the same endpoint as 'Update Customer'** - you can update any allowed fields.\n\n**Allowed Fields:** organisation, company_profile, business_address, postal_address, contact_methods, metadata, is_active\n\n**Important:**\n- Uses optimistic locking via If-Match header\n- Only sends fields you want to update (partial update)\n- `__v` must match current version or update fails with 409 Conflict\n- Use to reactivate an inactive customer"
+          },
+          "response": []
+        },
+        {
           "name": "Delete Customer",
           "event": [
             {
@@ -1611,16 +1723,138 @@
                 {
                   "key": "search",
                   "value": "",
-                  "disabled": true
+                  "disabled": true,
+                  "description": "Search by building name, code, or address"
                 },
                 {
                   "key": "site_id",
                   "value": "",
-                  "disabled": true
+                  "disabled": true,
+                  "description": "Filter by site ID"
+                },
+                {
+                  "key": "customer_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by customer ID"
+                },
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "disabled": true,
+                  "description": "Filter by active status (true/false)"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by operational status"
+                },
+                {
+                  "key": "building_type",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by building type"
                 }
               ]
             },
-            "description": "List all buildings with pagination"
+            "description": "List all buildings with pagination and filtering.\n\n**Query Parameters:**\n- `page`: Page number (default: 1)\n- `per_page`: Results per page (default: 10)\n- `search`: Search by building name, code, suburb, or tags\n- `customer_id`: Filter by customer ID\n- `site_id`: Filter by site ID\n- `building_type`: Filter by building type\n- `status`: Filter by operational status\n- `is_active`: Filter by active status (true/false) - Shows both active and inactive by default\n- `sort_by`: Sort field (createdAt, building_name, building_code, etc.)\n- `sort_order`: Sort direction (asc/desc)\n\n**Examples:**\n- All buildings: `?page=1&per_page=10`\n- Only active: `?is_active=true`\n- Only inactive: `?is_active=false`\n- By customer: `?customer_id=123456`\n- Combined: `?customer_id=123456&is_active=true`"
+          },
+          "response": []
+        },
+        {
+          "name": "List Active Buildings Only",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    console.log(\"✓ Active buildings:\", jsonData.data?.length || 0);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings?is_active=true&page=1&per_page=10",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings"
+              ],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "true",
+                  "description": "Show only active buildings"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Get only active buildings. Use this to filter out inactive buildings from the list."
+          },
+          "response": []
+        },
+        {
+          "name": "List Inactive Buildings Only",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    console.log(\"✓ Inactive buildings:\", jsonData.data?.length || 0);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings?is_active=false&page=1&per_page=10",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings"
+              ],
+              "query": [
+                {
+                  "key": "is_active",
+                  "value": "false",
+                  "description": "Show only inactive buildings"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Get only inactive buildings. Use this to see buildings that have been marked as inactive."
           },
           "response": []
         },
@@ -1692,7 +1926,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"building_name\": \"Example Building\",\n  \"building_code\": \"BLD-001\",\n  \"site_id\": \"{{site_id}}\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"primary_use\": \"Office\",\n  \"address\": {\n    \"street\": \"123 Example St\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\"\n  }\n}",
+              "raw": "{\n  \"building_name\": \"Example Building\",\n  \"building_code\": \"BLD-001\",\n  \"site_id\": \"{{site_id}}\",\n  \"customer_id\": \"{{customer_id}}\",\n  \"building_type\": \"Commercial\",\n  \"primary_use\": \"Office\",\n  \"number_of_floors\": 5,\n  \"status\": \"Active\",\n  \"is_active\": true,\n  \"address\": {\n    \"street\": \"123 Example St\",\n    \"suburb\": \"Sydney\",\n    \"state\": \"NSW\",\n    \"postcode\": \"2000\"\n  },\n  \"total_area\": 5000,\n  \"year_built\": 2020,\n  \"nabers_rating\": 4,\n  \"parking_spaces\": 50\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1745,7 +1979,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"building_name\": \"Updated Building Name\"\n}",
+              "raw": "{\n  \"building_name\": \"Updated Building Name\",\n  \"is_active\": false,\n  \"__v\": 0\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1763,6 +1997,118 @@
                 "{{building_id}}"
               ]
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Building as Inactive",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"building_version\", jsonData.data.__v || 0);",
+                  "        console.log(\"✓ Building marked as inactive\");",
+                  "        console.log(\"Status:\", jsonData.data.is_active ? 'Active' : 'Inactive');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{building_version}}\""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false,\n  \"__v\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings/{{building_id}}",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings",
+                "{{building_id}}"
+              ]
+            },
+            "description": "Mark a building as inactive. The building will still appear in lists but with inactive status.\n\n**Note:** This is different from soft delete (`is_delete`). Inactive buildings are still visible in the system."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Building as Active",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data) {",
+                  "        pm.environment.set(\"building_version\", jsonData.data.__v || 0);",
+                  "        console.log(\"✓ Building marked as active\");",
+                  "        console.log(\"Status:\", jsonData.data.is_active ? 'Active' : 'Inactive');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"v{{building_version}}\""
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true,\n  \"__v\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/buildings/{{building_id}}",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "buildings",
+                "{{building_id}}"
+              ]
+            },
+            "description": "Mark a building as active. Use this to reactivate an inactive building."
           },
           "response": []
         },

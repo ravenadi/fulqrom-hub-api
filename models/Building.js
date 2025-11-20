@@ -193,14 +193,6 @@ const BuildingSchema = new mongoose.Schema({
     }
   },
 
-  // Status (matching form payload)
-  status: {
-    type: String,
-    default: 'Active',
-    required: true
-  },
-
-
   // Additional Information (DEPRECATED - use tags instead)
   metadata: [BuildingMetadataSchema],
 
@@ -288,7 +280,6 @@ BuildingSchema.index({ building_code: 1 });
 BuildingSchema.index({ site_id: 1 });
 BuildingSchema.index({ customer_id: 1 });
 BuildingSchema.index({ building_type: 1 });
-BuildingSchema.index({ status: 1 });
 BuildingSchema.index({ is_active: 1 });
 BuildingSchema.index({ primary_use: 1 });
 BuildingSchema.index({ last_inspection_date: 1 });
@@ -299,8 +290,8 @@ BuildingSchema.index({ 'address.suburb': 1 });
 
 // Compound indexes
 BuildingSchema.index({ customer_id: 1, site_id: 1 });
-BuildingSchema.index({ site_id: 1, status: 1 });
-BuildingSchema.index({ building_type: 1, status: 1 });
+BuildingSchema.index({ site_id: 1, is_active: 1 });
+BuildingSchema.index({ building_type: 1, is_active: 1 });
 BuildingSchema.index({ tenant_id: 1, is_delete: 1 });
 
 // Ensure virtual fields are serialized and preserve unpopulated IDs

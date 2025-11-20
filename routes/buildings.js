@@ -120,17 +120,15 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
       filterQuery.tags = { $in: tagsList };
     }
 
-    // Filter by status (support both operational_status and status) (multi-select support)
-    const statusFilter = operational_status || status;
-    if (statusFilter) {
-      const statuses = statusFilter.includes(',')
-        ? statusFilter.split(',').map(s => s.trim())
-        : statusFilter;
-      filterQuery.status = Array.isArray(statuses) ? { $in: statuses } : statuses;
-    }
-
-    if (is_active !== undefined) {
-      filterQuery.is_active = is_active === 'true';
+    // Filter by is_active (backward compatibility with status/operational_status query params)
+    const activeFilter = is_active || operational_status || status;
+    if (activeFilter !== undefined) {
+      // Convert 'Active'/'Inactive' string values to boolean for is_active field
+      if (activeFilter === 'true' || activeFilter === 'Active') {
+        filterQuery.is_active = true;
+      } else if (activeFilter === 'false' || activeFilter === 'Inactive') {
+        filterQuery.is_active = false;
+      }
     }
 
     // Pagination
@@ -138,7 +136,7 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
     const skip = (parseInt(page) - 1) * limit;
 
     // Sort configuration
-    const sortField = ['createdAt', 'updatedAt', 'building_name', 'building_code', 'building_type', 'status', 'number_of_floors'].includes(sort_by) ? sort_by : 'createdAt';
+    const sortField = ['createdAt', 'updatedAt', 'building_name', 'building_code', 'building_type', 'is_active', 'number_of_floors'].includes(sort_by) ? sort_by : 'createdAt';
     const sortDirection = sort_order === 'desc' ? -1 : 1;
 
     // Get total count for pagination
@@ -272,19 +270,7 @@ router.get('/', checkModulePermission('buildings', 'view'), async (req, res) => 
           parking_spaces: { $ifNull: ['$parking_spaces', 0] },
           year_built: { $ifNull: ['$year_built', null] },
           manager: { $ifNull: ['$manager', {}] },
-          onboarding_status: {
-            $cond: {
-              if: { $eq: ['$status', 'Active'] },
-              then: 'Active',
-              else: {
-                $cond: {
-                  if: { $eq: ['$status', 'Under Construction'] },
-                  then: 'Development',
-                  else: '$status'
-                }
-              }
-            }
-          },
+          is_active: { $ifNull: ['$is_active', true] },
           total_floor_area: '$total_area'
         }
       },
@@ -351,7 +337,7 @@ router.get('/:id', checkResourcePermission('building', 'view', (req) => req.para
       is_delete: { $ne: true }  // Exclude soft-deleted records
     })
       .populate('customer_id', 'organisation.organisation_name company_profile.business_number')
-      .populate('site_id', 'site_name address status');
+      .populate('site_id', 'site_name address is_active');
 
     if (!building) {
       return res.status(404).json({
@@ -732,11 +718,13 @@ router.put('/:id', checkResourcePermission('building', 'edit', (req) => req.para
       'parking_spaces', 'latitude', 'longitude', 'manager', 'metadata', 'tags'];
     const atomicUpdate = {};
     Object.keys(updateData).forEach(key => {
-      if (updateData[key] !== undefined && updateData[key] !== null && allowedFields.includes(key)) {
+      // Include field if it's in allowed list AND value is not undefined/null
+      // This correctly handles false, 0, and empty string values
+      if (allowedFields.includes(key) && updateData[key] !== undefined && updateData[key] !== null) {
         atomicUpdate[key] = updateData[key];
       }
     });
-    
+
     // Add updated_at
     atomicUpdate.updated_at = new Date().toISOString();
 
