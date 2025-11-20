@@ -232,23 +232,22 @@
       "name": "Dashboard",
       "item": [
         {
-          "name": "Portfolio Map",
+          "name": "Portfolio Map (Site Coordinates)",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{API_BASE_URL}}/api/analytics/buildings/coordinates",
+              "raw": "{{API_BASE_URL}}/api/analytics/coordinates",
               "host": [
                 "{{API_BASE_URL}}"
               ],
               "path": [
                 "api",
                 "analytics",
-                "buildings",
                 "coordinates"
               ]
             },
-            "description": "Example of a protected endpoint that requires authentication.\n\nThis request will automatically use the Bearer token from the collection variable `access_token`."
+            "description": "Get site coordinates for portfolio map visualization.\n\n**Permission Filtering:**\n- Admin users: Get all sites in tenant\n- Non-admin with resource-level site access: Only assigned sites\n- Non-admin with module-level access: All sites in tenant\n- No access: Empty array\n\n**Response includes:**\n- Site ID, name, address\n- Customer reference\n- Excludes soft-deleted sites and sites with deleted customers"
           },
           "response": []
         }
