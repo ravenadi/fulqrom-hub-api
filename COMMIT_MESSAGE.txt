@@ -1,0 +1,47 @@
+feat: Add permission-based filtering to audit logs
+
+Implemented comprehensive role and resource-based permission filtering
+for the Activity Timeline (Audit Logs) to ensure users only see activities
+for resources they have explicit access to.
+
+BREAKING: None - Fully backward compatible
+SECURITY: Critical fixes - Prevents unauthorized data access
+
+Critical Bugs Fixed:
+1. Users could see activities without proper role permission
+2. Users with role permissions couldn't see ALL activities when
+   resource_access existed for other module types
+
+Key Changes:
+- Add permission filtering to GET /api/audit-logs endpoint
+- Add permission filtering to GET /api/audit-logs/stats endpoint
+- Add resource-specific ID fields to audit log response
+- Fix per-module resource restriction logic
+- Increase rate limit from 100 to 1000 requests/15min for development
+
+Permission Logic (Per Module):
+- If user has role permission + resource_access for module: Show ONLY those resources
+- If user has role permission + NO resource_access: Show ALL resources
+- If user has NO role permission: Block all activities (even with resource_access)
+- Super Admin & Admin: Bypass all filters
+
+Files Modified:
+- routes/auditLogs.js - Core implementation
+- middleware/rateLimiter.js - Rate limit increase
+
+Files Added:
+- CHANGELOG_AUDIT_LOGS.md - Release notes
+- PRODUCTION_RELEASE_SUMMARY.md - Deployment guide
+- docs/AUDIT_LOGS_PERMISSIONS.md - Implementation guide
+- docs/AUDIT_LOGS_PERMISSION_FIX.md - Verification guide
+
+Test Coverage:
+✅ Super Admin access
+✅ Admin role access
+✅ Role-based module permissions
+✅ Resource-specific permissions (customer, site, building, floor, asset)
+✅ Document category/discipline filtering
+✅ Permission denial for unauthorized access
+
+🤖 Generated with Claude Code
+Co-Authored-By: Claude <noreply@anthropic.com>

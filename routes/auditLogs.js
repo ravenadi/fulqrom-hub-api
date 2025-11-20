@@ -1,6 +1,8 @@
 const express = require('express');
 const AuditLog = require('../models/AuditLog');
 const { checkModulePermission } = require('../middleware/checkPermission');
+const { applyResourceFilter, getAccessibleResourceIds } = require('../utils/resourceFilter');
+const User = require('../models/User');
 
 const router = express.Router();
 
@@ -16,6 +18,115 @@ async function logAudit(logData, req) {
   } catch (error) {
     console.error('Error logging audit entry:', error);
   }
+}
+
+/**
+ * Build permission-based filters for audit logs
+ *
+ * PERMISSION LOGIC (PER MODULE):
+ * - User has role permission + resource_access for module → Show ONLY those resources
+ * - User has role permission + NO resource_access → Show ALL resources
+ * - User has NO role permission → Block all (even with resource_access)
+ *
+ * EXAMPLE: Tenant role with buildings:view, floors:view + resource_access=[building#123]
+ *   → Buildings: Show ONLY #123 (restricted)
+ *   → Floors: Show ALL (unrestricted)
+ */
+async function buildPermissionFilters(user) {
+  const mongoose = require('mongoose');
+  const filters = { $or: [] };
+
+  // Map audit log module names → role permission entity names
+  const moduleMap = {
+    'customer': 'customers', 'site': 'sites', 'building': 'buildings',
+    'floor': 'floors', 'tenant': 'tenants', 'building_tenant': 'tenants',
+    'document': 'documents', 'asset': 'assets', 'vendor': 'vendors',
+    'contact': 'contacts', 'user': 'users', 'auth': 'auth'
+  };
+
+  // Step 1: Extract role permissions (e.g., customers:view, sites:view)
+  const allowedModules = [];
+  if (user.role_ids && user.role_ids.length > 0) {
+    for (const role of user.role_ids) {
+      if (!role.is_active) continue;
+
+      if (role.permissions && role.permissions.length > 0) {
+        for (const permission of role.permissions) {
+          if (permission.view) {
+            allowedModules.push(permission.entity);
+          }
+        }
+      }
+    }
+  }
+
+  // Step 2: Convert to audit log module names (customers → customer)
+  const allowedAuditModules = [];
+  for (const [auditModule, permModule] of Object.entries(moduleMap)) {
+    if (allowedModules.includes(permModule)) {
+      allowedAuditModules.push(auditModule);
+    }
+  }
+
+  // Step 3: Group resource_access by type (e.g., {customer: [id1], building: [id2, id3]})
+  const resourceAccess = user.resource_access || [];
+  const resourcesByType = {};
+  for (const ra of resourceAccess) {
+    if (ra.permissions?.can_view) {
+      if (!resourcesByType[ra.resource_type]) {
+        resourcesByType[ra.resource_type] = [];
+      }
+      const resourceId = mongoose.Types.ObjectId.isValid(ra.resource_id)
+        ? new mongoose.Types.ObjectId(ra.resource_id)
+        : ra.resource_id;
+      resourcesByType[ra.resource_type].push(resourceId);
+    }
+  }
+
+  // Step 4: Build filters per module - CRITICAL LOGIC
+  // For each module user has role permission for:
+  //   - Has resource_access for module? Show ONLY those resources
+  //   - NO resource_access for module? Show ALL resources
+  for (const auditModule of allowedAuditModules) {
+    if (resourcesByType[auditModule] && resourcesByType[auditModule].length > 0) {
+      // Restricted: Show only specific resources
+      filters.$or.push({
+        module: auditModule,
+        module_id: { $in: resourcesByType[auditModule] }
+      });
+    } else {
+      // Unrestricted: Show all resources
+      filters.$or.push({
+        module: auditModule
+      });
+    }
+  }
+
+  // Step 5: Document filters (only if has documents:view permission)
+  const hasDocumentsPermission = allowedModules.includes('documents');
+
+  if (hasDocumentsPermission) {
+    if (user.document_categories && user.document_categories.length > 0) {
+      filters.$or.push({
+        module: 'document',
+        'detail.category': { $in: user.document_categories }
+      });
+    }
+
+    if (user.engineering_disciplines && user.engineering_disciplines.length > 0) {
+      filters.$or.push({
+        module: 'document',
+        'detail.discipline': { $in: user.engineering_disciplines }
+      });
+    }
+  }
+
+  // No permissions? Block all access
+  if (filters.$or.length === 0) {
+    return { _id: { $exists: false } };
+  }
+
+  return filters;
 }
 
 // GET /api/audit-logs - Get audit logs with tenant filtering
@@ -98,6 +209,37 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // PERMISSION-BASED FILTERING
+    // Apply resource-level filtering based on user's permissions
+    const mongoose = require('mongoose');
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+
+    // Fetch user to check permissions (skip for super admin and Admin role)
+    let currentUser = null;
+    if (userId && !isSuperAdmin) {
+      if (mongoose.Types.ObjectId.isValid(userId)) {
+        currentUser = await User.findById(userId).populate('role_ids');
+      } else {
+        currentUser = await User.findOne({ auth0_id: userId }).populate('role_ids');
+      }
+
+      // Check if user has Admin role (bypass filtering)
+      const isAdmin = currentUser?.role_ids?.some(role =>
+        role.is_active && (role.name === 'Admin' || role.name === 'admin' || role.name === 'ADMIN')
+      );
+
+      if (!isAdmin && currentUser) {
+        // Build permission-based filters
+        const permissionFilters = await buildPermissionFilters(currentUser);
+
+        if (permissionFilters && Object.keys(permissionFilters).length > 0) {
+          // Apply permission filters using $or logic (user can see activities for any allowed resource)
+          filterQuery.$and = filterQuery.$and || [];
+          filterQuery.$and.push(permissionFilters);
+        }
+      }
+    }
+
     // Pagination
     const pageNum = parseInt(page);
     const limitNum = Math.min(parseInt(limit), 200); // Cap at 200
@@ -107,7 +249,7 @@ router.get('/', async (req, res) => {
     // Default: Sort by created_at descending (newest first)
     const sortOrder = req.query.sort_order === 'asc' ? 1 : -1;
     const sortField = req.query.sort_by || 'created_at';
-    
+
     const [auditLogs, totalLogs] = await Promise.all([
       AuditLog.find(filterQuery)
         .sort({ [sortField]: sortOrder })
@@ -118,20 +260,66 @@ router.get('/', async (req, res) => {
       AuditLog.countDocuments(filterQuery)
     ]);
 
+    // Enrich audit logs with resource information
+    const enrichedLogs = auditLogs.map(log => {
+      // Add resource-specific ID fields based on module type
+      const resourceInfo = {};
+
+      if (log.module_id) {
+        switch (log.module) {
+          case 'customer':
+            resourceInfo.customer_id = log.module_id;
+            break;
+          case 'site':
+            resourceInfo.site_id = log.module_id;
+            break;
+          case 'building':
+            resourceInfo.building_id = log.module_id;
+            break;
+          case 'floor':
+            resourceInfo.floor_id = log.module_id;
+            break;
+          case 'asset':
+            resourceInfo.asset_id = log.module_id;
+            break;
+          case 'document':
+            resourceInfo.document_id = log.module_id;
+            break;
+          case 'vendor':
+            resourceInfo.vendor_id = log.module_id;
+            break;
+          case 'user':
+            resourceInfo.user_id = log.module_id;
+            break;
+          case 'tenant':
+          case 'building_tenant':
+            resourceInfo.tenant_id = log.module_id;
+            break;
+          case 'contact':
+            resourceInfo.contact_id = log.module_id;
+            break;
+        }
+      }
+
+      return {
+        ...log,
+        resource: resourceInfo
+      };
+    });
+
     // Get tenant information for response metadata
     const Tenant = require('../models/Tenant');
-    const mongoose = require('mongoose');
     const tenantInfo = await Tenant.findById(new mongoose.Types.ObjectId(tenantId))
       .select('tenant_name status')
       .lean();
 
     res.status(200).json({
       success: true,
-      count: auditLogs.length,
+      count: enrichedLogs.length,
       total: totalLogs,
       page: pageNum,
       pages: Math.ceil(totalLogs / limitNum),
-      data: auditLogs,
+      data: enrichedLogs,
       // Metadata for super admin
       tenant: {
         id: tenantId,
@@ -179,11 +367,40 @@ router.get('/stats', async (req, res) => {
       });
     }
 
-    console.log(`📊 Fetching audit log stats for tenant: ${tenantId}`);
-
     const mongoose = require('mongoose');
+
+    // Build base filter query
+    let matchFilter = { tenant_id: new mongoose.Types.ObjectId(tenantId) };
+
+    // PERMISSION-BASED FILTERING
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+    let currentUser = null;
+
+    if (userId && !isSuperAdmin) {
+      if (mongoose.Types.ObjectId.isValid(userId)) {
+        currentUser = await User.findById(userId).populate('role_ids');
+      } else {
+        currentUser = await User.findOne({ auth0_id: userId }).populate('role_ids');
+      }
+
+      // Check if user has Admin role (bypass filtering)
+      const isAdmin = currentUser?.role_ids?.some(role =>
+        role.is_active && (role.name === 'Admin' || role.name === 'admin' || role.name === 'ADMIN')
+      );
+
+      if (!isAdmin && currentUser) {
+        // Build permission-based filters
+        const permissionFilters = await buildPermissionFilters(currentUser);
+
+        if (permissionFilters && Object.keys(permissionFilters).length > 0) {
+          // Merge permission filters with tenant filter
+          matchFilter = { $and: [matchFilter, permissionFilters] };
+        }
+      }
+    }
+
     const stats = await AuditLog.aggregate([
-      { $match: { tenant_id: new mongoose.Types.ObjectId(tenantId) } },
+      { $match: matchFilter },
       {
         $facet: {
           // Activity by action type
