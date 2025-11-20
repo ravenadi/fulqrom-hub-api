@@ -133,3 +133,5 @@ MONGODB_CONNECTION=mongodb+srv://connection_string/fulqrom-hub
 - Planned: `/api/v1/customers` (explicit versioning)
 - Migration strategy: Maintain backward compatibility with redirects
 
+### Response Summarization
+- always give summarized concise output to save tokens
