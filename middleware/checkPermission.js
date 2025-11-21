@@ -112,7 +112,9 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         'edit': 'can_edit',
         'update': 'can_edit',
         'delete': 'can_delete',
-        'remove': 'can_delete'
+        'remove': 'can_delete',
+        'export': 'can_export',
+        'download': 'can_export'
       };
       const permissionField = permissionMap[action.toLowerCase()];
 
@@ -165,13 +167,14 @@ const checkResourcePermission = (resourceType, action, getResourceId) => {
         const moduleName = moduleNameMap[resourceType] || `${resourceType}s`;
 
         // Map resource_access field names to role permission field names
-        // Resource access uses: can_view, can_create, can_edit, can_delete
-        // Role permissions use: view, create, edit, delete
+        // Resource access uses: can_view, can_create, can_edit, can_delete, can_export
+        // Role permissions use: view, create, edit, delete, export
         const rolePermissionFieldMap = {
           'can_view': 'view',
           'can_create': 'create',
           'can_edit': 'edit',
-          'can_delete': 'delete'
+          'can_delete': 'delete',
+          'can_export': 'export'
         };
         const rolePermissionField = rolePermissionFieldMap[permissionField] || permissionField;
 
@@ -280,7 +283,7 @@ const checkModulePermission = (moduleName, action) => {
         }
       }
 
-      // Map action to permission field (using v2 schema: view, create, edit, delete)
+      // Map action to permission field (using v2 schema: view, create, edit, delete, export)
       const permissionMap = {
         'view': 'view',
         'read': 'view',
@@ -289,7 +292,9 @@ const checkModulePermission = (moduleName, action) => {
         'edit': 'edit',
         'update': 'edit',
         'delete': 'delete',
-        'remove': 'delete'
+        'remove': 'delete',
+        'export': 'export',
+        'download': 'export'
       };
       const permissionField = permissionMap[action.toLowerCase()];
 

@@ -4152,6 +4152,48 @@
             "description": "Add a review or comment to a document with optional rating"
           },
           "response": []
+        },
+        {
+          "name": "Export Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Documents exported successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"site_id\": \"all\",\n  \"building_id\": \"all\",\n  \"floor_id\": \"all\",\n  \"tenant_id\": \"all\",\n  \"category\": \"all\",\n  \"type\": \"all\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/documents/export",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "export"
+              ]
+            },
+            "description": "Export documents to CSV based on filters. Set filters to 'all' to include all values, or provide specific IDs to filter.\n\n**Endpoint:** POST /api/documents/export\n\n**Request Body:**\n- `customer_id` - Filter by customer ID (or 'all')\n- `site_id` - Filter by site ID (or 'all')\n- `building_id` - Filter by building ID (or 'all')\n- `floor_id` - Filter by floor ID (or 'all')\n- `tenant_id` - Filter by tenant ID (or 'all')\n- `category` - Filter by category (or 'all')\n- `type` - Filter by document type (or 'all')\n\n**Returns:** CSV file with document data\n\n**Permission:** Requires 'documents:export' permission"
+          },
+          "response": []
         }
       ]
     },

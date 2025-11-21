@@ -4825,4 +4825,133 @@ router.get('/:id/download', validateObjectId, async (req, res) => {
   }
 });
 
+// Export documents to CSV and upload to S3
+const { Parser } = require('json2csv');
+
+router.post('/export', checkModulePermission('documents', 'export'), async (req, res) => {
+  try {
+    const { customer_id, site_id, building_id, floor_id, tenant_id, category, type } = req.body;
+
+    // Build filter query (ignore 'all' values)
+    const filter = {};
+    if (customer_id && customer_id !== 'all') filter['customer.customer_id'] = customer_id;
+    if (site_id && site_id !== 'all') filter['location.site.site_id'] = site_id;
+    if (building_id && building_id !== 'all') filter['location.building.building_id'] = building_id;
+    if (floor_id && floor_id !== 'all') filter['location.floor.floor_id'] = floor_id;
+    if (tenant_id && tenant_id !== 'all') filter['location.tenant.tenant_id'] = tenant_id;
+    if (category && category !== 'all') filter.category = category;
+    if (type && type !== 'all') filter.type = type;
+
+    // Fetch documents
+    const documents = await Document.find(filter)
+      .select('name category type file location customer tags approval_status approval_config created_at updated_at')
+      .lean();
+
+    // Check if there are documents to export
+    if (!documents || documents.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No documents found to export',
+        data: { total_records: 0 }
+      });
+    }
+
+    // Populate entity names (customer, site, building, floor, tenant, assets, vendor)
+    const enrichedDocuments = await batchFetchEntityNames(documents, req.tenant.tenantId);
+
+    // Transform data for CSV
+    const csvData = enrichedDocuments.map(doc => ({
+      'Document Name': doc.name || '',
+      'Category': doc.category || '',
+      'Type': doc.type || '',
+      'File Type': doc.file?.file_meta?.file_extension || '',
+      'File Size (bytes)': doc.file?.file_meta?.file_size || 0,
+      'Customer': doc.customer?.customer_name || '',
+      'Site': doc.location?.site?.site_name || '',
+      'Building': doc.location?.building?.building_name || '',
+      'Floor': doc.location?.floor?.floor_name || '',
+      'Tenant': doc.location?.tenant?.tenant_name || '',
+      'Assets': doc.location?.assets?.map(a => a.asset_name || a.asset_id).filter(Boolean).join(', ') || '',
+      'Vendor': doc.location?.vendor?.vendor_name || '',
+      'Approval Status': doc.approval_config?.status || doc.approval_status || '',
+      'Approvers': doc.approval_config?.approvers?.map(a => a.user_name || a.user_email).filter(Boolean).join(', ') || '',
+      'Tags': doc.tags?.tags?.join(', ') || '',
+      'Created Date': doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-AU') : '',
+      'Updated Date': doc.updated_at ? new Date(doc.updated_at).toLocaleDateString('en-AU') : ''
+    }));
+
+    // Define CSV fields to ensure consistent column headers
+    const fields = [
+      'Document Name',
+      'Category',
+      'Type',
+      'File Type',
+      'File Size (bytes)',
+      'Customer',
+      'Site',
+      'Building',
+      'Floor',
+      'Tenant',
+      'Assets',
+      'Vendor',
+      'Approval Status',
+      'Approvers',
+      'Tags',
+      'Created Date',
+      'Updated Date'
+    ];
+
+    // Generate CSV with explicit field definitions
+    const parser = new Parser({ fields });
+    const csv = parser.parse(csvData);
+
+    // Upload CSV to S3
+    const timestamp = Date.now();
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `exports/documents_export_${timestamp}_${date}.csv`;
+    const csvBuffer = Buffer.from(csv, 'utf-8');
+
+    // Create a file object compatible with uploadFileToS3
+    const csvFile = {
+      buffer: csvBuffer,
+      originalname: filename.split('/').pop(),
+      mimetype: 'text/csv',
+      size: csvBuffer.length
+    };
+
+    const s3Result = await uploadFileToS3(csvFile, 'exports', `exports`);
+
+    if (!s3Result.success) {
+      throw new Error('Failed to upload CSV to S3: ' + s3Result.error);
+    }
+
+    // Generate presigned URL for download (expires in 1 hour)
+    const { generatePresignedUrl } = require('../utils/s3Upload');
+    const presignedUrlResult = await generatePresignedUrl(s3Result.data.file_meta.file_key, 3600);
+
+    if (!presignedUrlResult.success) {
+      throw new Error('Failed to generate presigned URL: ' + presignedUrlResult.error);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully exported ${enrichedDocuments.length} documents`,
+      data: {
+        file_url: presignedUrlResult.url,
+        file_name: filename.split('/').pop(),
+        total_records: enrichedDocuments.length,
+        generated_at: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Document export error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export documents',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
