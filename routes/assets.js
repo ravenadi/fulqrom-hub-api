@@ -3,12 +3,19 @@ const mongoose = require('mongoose');
 const Asset = require('../models/Asset');
 const Document = require('../models/Document');
 const Customer = require('../models/Customer');
+const Site = require('../models/Site');
+const Building = require('../models/Building');
+const Floor = require('../models/Floor');
+const Tenant = require('../models/Tenant');
+const Vendor = require('../models/Vendor');
 const { validateCreateAsset, validateUpdateAsset } = require('../middleware/assetValidation');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 const { resolveHierarchy } = require('../utils/hierarchyLookup');
 const { applyResourceFilter } = require('../utils/resourceFilter');
+const { uploadFileToS3, generatePresignedUrl } = require('../utils/s3Upload');
+const { Parser } = require('json2csv');
 
 const router = express.Router();
 
@@ -1316,6 +1323,242 @@ router.get('/summary/stats', checkModulePermission('assets', 'view'), async (req
     res.status(500).json({
       success: false,
       message: 'Error fetching asset statistics',
+      error: error.message
+    });
+  }
+});
+
+// Helper function to batch fetch entity names for assets
+async function batchFetchEntityNames(assets, tenantId) {
+  if (!assets || assets.length === 0) {
+    return [];
+  }
+
+  // Step 1: Collect all unique IDs from all assets
+  const customerIds = new Set();
+  const siteIds = new Set();
+  const buildingIds = new Set();
+  const floorIds = new Set();
+
+  assets.forEach(asset => {
+    if (asset.customer_id) customerIds.add(asset.customer_id.toString());
+    if (asset.site_id) siteIds.add(asset.site_id.toString());
+    if (asset.building_id) buildingIds.add(asset.building_id.toString());
+    if (asset.floor_id) floorIds.add(asset.floor_id.toString());
+  });
+
+  // Step 2: Batch fetch all entities
+  const [customers, sites, buildings, floors] = await Promise.all([
+    customerIds.size > 0
+      ? Customer.find({ _id: { $in: Array.from(customerIds) }, tenant_id: tenantId })
+          .select('_id customer_name')
+          .lean()
+      : [],
+    siteIds.size > 0
+      ? Site.find({ _id: { $in: Array.from(siteIds) }, tenant_id: tenantId })
+          .select('_id site_name')
+          .lean()
+      : [],
+    buildingIds.size > 0
+      ? Building.find({ _id: { $in: Array.from(buildingIds) }, tenant_id: tenantId })
+          .select('_id building_name')
+          .lean()
+      : [],
+    floorIds.size > 0
+      ? Floor.find({ _id: { $in: Array.from(floorIds) }, tenant_id: tenantId })
+          .select('_id floor_name')
+          .lean()
+      : []
+  ]);
+
+  // Step 3: Create lookup maps
+  const customerMap = new Map(customers.map(c => [c._id.toString(), c.customer_name]));
+  const siteMap = new Map(sites.map(s => [s._id.toString(), s.site_name]));
+  const buildingMap = new Map(buildings.map(b => [b._id.toString(), b.building_name]));
+  const floorMap = new Map(floors.map(f => [f._id.toString(), f.floor_name]));
+
+  // Step 4: Enrich each asset with entity names
+  return assets.map(asset => ({
+    ...asset,
+    customer_name: asset.customer_id ? customerMap.get(asset.customer_id.toString()) : null,
+    site_name: asset.site_id ? siteMap.get(asset.site_id.toString()) : null,
+    building_name: asset.building_id ? buildingMap.get(asset.building_id.toString()) : null,
+    floor_name: asset.floor_id ? floorMap.get(asset.floor_id.toString()) : null
+  }));
+}
+
+// POST /api/assets/export - Export assets to CSV
+router.post('/export', checkModulePermission('assets', 'export'), async (req, res) => {
+  try {
+    const {
+      customer_id,
+      site_id,
+      building_id,
+      floor_id,
+      category,
+      status,
+      condition,
+      criticality_level,
+      service_status
+    } = req.body;
+
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Build filter query with mandatory tenant filter (ignore 'all' values)
+    let filterQuery = {
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }
+    };
+
+    // Apply resource-level filtering based on user's permissions
+    const filteredQuery = await applyResourceFilter(req, filterQuery, 'asset');
+
+    if (customer_id && customer_id !== 'all') filteredQuery.customer_id = customer_id;
+    if (site_id && site_id !== 'all') filteredQuery.site_id = site_id;
+    if (building_id && building_id !== 'all') filteredQuery.building_id = building_id;
+    if (floor_id && floor_id !== 'all') filteredQuery.floor_id = floor_id;
+    if (category && category !== 'all') filteredQuery.category = category;
+    if (status && status !== 'all') filteredQuery.status = status;
+    if (condition && condition !== 'all') filteredQuery.condition = condition;
+    if (criticality_level && criticality_level !== 'all') filteredQuery.criticality_level = criticality_level;
+    if (service_status && service_status !== 'all') filteredQuery.service_status = service_status;
+
+    // Fetch assets
+    const assets = await Asset.find(filteredQuery)
+      .select('asset_id asset_no device_id category type status condition criticality_level make model serial refrigerant level area owner service_status date_of_installation age last_test_date last_test_result purchase_cost_aud current_book_value_aud weight_kgs customer_id site_id building_id floor_id createdAt updatedAt')
+      .lean();
+
+    // Check if there are assets to export
+    if (!assets || assets.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No assets found to export',
+        data: { total_records: 0 }
+      });
+    }
+
+    // Populate entity names
+    const enrichedAssets = await batchFetchEntityNames(assets, req.tenant.tenantId);
+
+    // Transform data for CSV
+    const csvData = enrichedAssets.map(asset => ({
+      'Asset ID': asset.asset_id || '',
+      'Asset No': asset.asset_no || '',
+      'Device ID': asset.device_id || '',
+      'Category': asset.category || '',
+      'Type': asset.type || '',
+      'Status': asset.status || '',
+      'Condition': asset.condition || '',
+      'Criticality Level': asset.criticality_level || '',
+      'Make': asset.make || '',
+      'Model': asset.model || '',
+      'Serial': asset.serial || '',
+      'Refrigerant': asset.refrigerant || '',
+      'Level': asset.level || '',
+      'Area': asset.area || '',
+      'Owner': asset.owner || '',
+      'Service Status': asset.service_status || '',
+      'Installation Date': asset.date_of_installation ? new Date(asset.date_of_installation).toLocaleDateString('en-AU') : '',
+      'Age': asset.age || '',
+      'Last Test Date': asset.last_test_date ? new Date(asset.last_test_date).toLocaleDateString('en-AU') : '',
+      'Last Test Result': asset.last_test_result || '',
+      'Purchase Cost (AUD)': asset.purchase_cost_aud || 0,
+      'Current Book Value (AUD)': asset.current_book_value_aud || 0,
+      'Weight (kg)': asset.weight_kgs || '',
+      'Customer': asset.customer_name || '',
+      'Site': asset.site_name || '',
+      'Building': asset.building_name || '',
+      'Floor': asset.floor_name || '',
+      'Created Date': asset.createdAt ? new Date(asset.createdAt).toLocaleDateString('en-AU') : '',
+      'Updated Date': asset.updatedAt ? new Date(asset.updatedAt).toLocaleDateString('en-AU') : ''
+    }));
+
+    // Define CSV fields to ensure consistent column headers
+    const fields = [
+      'Asset ID',
+      'Asset No',
+      'Device ID',
+      'Category',
+      'Type',
+      'Status',
+      'Condition',
+      'Criticality Level',
+      'Make',
+      'Model',
+      'Serial',
+      'Refrigerant',
+      'Level',
+      'Area',
+      'Owner',
+      'Service Status',
+      'Installation Date',
+      'Age',
+      'Last Test Date',
+      'Last Test Result',
+      'Purchase Cost (AUD)',
+      'Current Book Value (AUD)',
+      'Weight (kg)',
+      'Customer',
+      'Site',
+      'Building',
+      'Floor',
+      'Created Date',
+      'Updated Date'
+    ];
+
+    // Generate CSV with explicit field definitions
+    const parser = new Parser({ fields });
+    const csv = parser.parse(csvData);
+
+    // Upload CSV to S3
+    const timestamp = Date.now();
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `exports/assets_export_${timestamp}_${date}.csv`;
+    const csvBuffer = Buffer.from(csv, 'utf-8');
+
+    // Create a file object compatible with uploadFileToS3
+    const csvFile = {
+      buffer: csvBuffer,
+      originalname: filename.split('/').pop(),
+      mimetype: 'text/csv',
+      size: csvBuffer.length
+    };
+
+    const s3Result = await uploadFileToS3(csvFile, 'exports', `exports`);
+
+    if (!s3Result.success) {
+      throw new Error('Failed to upload CSV to S3: ' + s3Result.error);
+    }
+
+    // Generate presigned URL for download (expires in 1 hour)
+    const presignedUrlResult = await generatePresignedUrl(s3Result.data.file_meta.file_key, 3600);
+
+    if (!presignedUrlResult.success) {
+      throw new Error('Failed to generate presigned URL: ' + presignedUrlResult.error);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully exported ${enrichedAssets.length} assets`,
+      data: {
+        file_url: presignedUrlResult.url,
+        file_name: filename.split('/').pop(),
+        total_records: enrichedAssets.length,
+        generated_at: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Asset export error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export assets',
       error: error.message
     });
   }

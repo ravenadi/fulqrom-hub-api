@@ -3,11 +3,14 @@ const mongoose = require('mongoose');
 const Floor = require('../models/Floor');
 const Customer = require('../models/Customer');
 const Site = require('../models/Site');
+const Building = require('../models/Building');
 const { checkResourcePermission, checkModulePermission } = require('../middleware/checkPermission');
 const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 const { requireIfMatch, sendVersionConflict } = require('../middleware/etagVersion');
 const { resolveHierarchy } = require('../utils/hierarchyLookup');
 const { applyResourceFilter } = require('../utils/resourceFilter');
+const { uploadFileToS3, generatePresignedUrl } = require('../utils/s3Upload');
+const { Parser } = require('json2csv');
 
 const router = express.Router();
 
@@ -753,6 +756,213 @@ router.get('/by-type', checkModulePermission('floors', 'view'), async (req, res)
     res.status(500).json({
       success: false,
       message: 'Error fetching floor type statistics',
+      error: error.message
+    });
+  }
+});
+
+// Helper function to batch fetch entity names for floors
+async function batchFetchEntityNames(floors, tenantId) {
+  if (!floors || floors.length === 0) {
+    return [];
+  }
+
+  // Step 1: Collect all unique IDs from all floors
+  const customerIds = new Set();
+  const siteIds = new Set();
+  const buildingIds = new Set();
+
+  floors.forEach(floor => {
+    if (floor.customer_id) customerIds.add(floor.customer_id.toString());
+    if (floor.site_id) siteIds.add(floor.site_id.toString());
+    if (floor.building_id) buildingIds.add(floor.building_id.toString());
+  });
+
+  // Step 2: Batch fetch all entities
+  const [customers, sites, buildings] = await Promise.all([
+    customerIds.size > 0
+      ? Customer.find({ _id: { $in: Array.from(customerIds) }, tenant_id: tenantId })
+          .select('_id customer_name')
+          .lean()
+      : [],
+    siteIds.size > 0
+      ? Site.find({ _id: { $in: Array.from(siteIds) }, tenant_id: tenantId })
+          .select('_id site_name')
+          .lean()
+      : [],
+    buildingIds.size > 0
+      ? Building.find({ _id: { $in: Array.from(buildingIds) }, tenant_id: tenantId })
+          .select('_id building_name')
+          .lean()
+      : []
+  ]);
+
+  // Step 3: Create lookup maps
+  const customerMap = new Map(customers.map(c => [c._id.toString(), c.customer_name]));
+  const siteMap = new Map(sites.map(s => [s._id.toString(), s.site_name]));
+  const buildingMap = new Map(buildings.map(b => [b._id.toString(), b.building_name]));
+
+  // Step 4: Enrich each floor with entity names
+  return floors.map(floor => ({
+    ...floor,
+    customer_name: floor.customer_id ? customerMap.get(floor.customer_id.toString()) : null,
+    site_name: floor.site_id ? siteMap.get(floor.site_id.toString()) : null,
+    building_name: floor.building_id ? buildingMap.get(floor.building_id.toString()) : null
+  }));
+}
+
+// POST /api/floors/export - Export floors to CSV
+router.post('/export', checkModulePermission('floors', 'export'), async (req, res) => {
+  try {
+    const {
+      customer_id,
+      site_id,
+      building_id,
+      floor_type,
+      status,
+      occupancy_type
+    } = req.body;
+
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Build filter query with mandatory tenant filter (ignore 'all' values)
+    let filterQuery = {
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }
+    };
+
+    // Apply resource-level filtering based on user's permissions
+    const filteredQuery = await applyResourceFilter(req, filterQuery, 'floor');
+
+    if (customer_id && customer_id !== 'all') filteredQuery.customer_id = customer_id;
+    if (site_id && site_id !== 'all') filteredQuery.site_id = site_id;
+    if (building_id && building_id !== 'all') filteredQuery.building_id = building_id;
+    if (floor_type && floor_type !== 'all') filteredQuery.floor_type = floor_type;
+    if (status && status !== 'all') filteredQuery.status = status;
+    if (occupancy_type && occupancy_type !== 'all') filteredQuery.occupancy_type = occupancy_type;
+
+    // Fetch floors
+    const floors = await Floor.find(filteredQuery)
+      .select('floor_name floor_number floor_type maximum_occupancy occupancy_type access_control fire_compartment hvac_zones special_features area_number area_unit floor_area floor_area_unit ceiling_height ceiling_height_unit status assets_count customer_id site_id building_id createdAt updatedAt')
+      .lean();
+
+    // Check if there are floors to export
+    if (!floors || floors.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No floors found to export',
+        data: { total_records: 0 }
+      });
+    }
+
+    // Populate entity names
+    const enrichedFloors = await batchFetchEntityNames(floors, req.tenant.tenantId);
+
+    // Transform data for CSV
+    const csvData = enrichedFloors.map(floor => ({
+      'Floor Name': floor.floor_name || '',
+      'Floor Number': floor.floor_number || '',
+      'Floor Type': floor.floor_type || '',
+      'Maximum Occupancy': floor.maximum_occupancy || 0,
+      'Occupancy Type': floor.occupancy_type || '',
+      'Access Control': floor.access_control || '',
+      'Fire Compartment': floor.fire_compartment || '',
+      'HVAC Zones': floor.hvac_zones || '',
+      'Special Features': Array.isArray(floor.special_features) ? floor.special_features.join(', ') : '',
+      'Area Number': floor.area_number || '',
+      'Area Unit': floor.area_unit || '',
+      'Floor Area': floor.floor_area || '',
+      'Floor Area Unit': floor.floor_area_unit || '',
+      'Ceiling Height': floor.ceiling_height || '',
+      'Ceiling Height Unit': floor.ceiling_height_unit || '',
+      'Status': floor.status || '',
+      'Assets Count': floor.assets_count || 0,
+      'Customer': floor.customer_name || '',
+      'Site': floor.site_name || '',
+      'Building': floor.building_name || '',
+      'Created Date': floor.createdAt ? new Date(floor.createdAt).toLocaleDateString('en-AU') : '',
+      'Updated Date': floor.updatedAt ? new Date(floor.updatedAt).toLocaleDateString('en-AU') : ''
+    }));
+
+    // Define CSV fields to ensure consistent column headers
+    const fields = [
+      'Floor Name',
+      'Floor Number',
+      'Floor Type',
+      'Maximum Occupancy',
+      'Occupancy Type',
+      'Access Control',
+      'Fire Compartment',
+      'HVAC Zones',
+      'Special Features',
+      'Area Number',
+      'Area Unit',
+      'Floor Area',
+      'Floor Area Unit',
+      'Ceiling Height',
+      'Ceiling Height Unit',
+      'Status',
+      'Assets Count',
+      'Customer',
+      'Site',
+      'Building',
+      'Created Date',
+      'Updated Date'
+    ];
+
+    // Generate CSV with explicit field definitions
+    const parser = new Parser({ fields });
+    const csv = parser.parse(csvData);
+
+    // Upload CSV to S3
+    const timestamp = Date.now();
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `exports/floors_export_${timestamp}_${date}.csv`;
+    const csvBuffer = Buffer.from(csv, 'utf-8');
+
+    // Create a file object compatible with uploadFileToS3
+    const csvFile = {
+      buffer: csvBuffer,
+      originalname: filename.split('/').pop(),
+      mimetype: 'text/csv',
+      size: csvBuffer.length
+    };
+
+    const s3Result = await uploadFileToS3(csvFile, 'exports', `exports`);
+
+    if (!s3Result.success) {
+      throw new Error('Failed to upload CSV to S3: ' + s3Result.error);
+    }
+
+    // Generate presigned URL for download (expires in 1 hour)
+    const presignedUrlResult = await generatePresignedUrl(s3Result.data.file_meta.file_key, 3600);
+
+    if (!presignedUrlResult.success) {
+      throw new Error('Failed to generate presigned URL: ' + presignedUrlResult.error);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully exported ${enrichedFloors.length} floors`,
+      data: {
+        file_url: presignedUrlResult.url,
+        file_name: filename.split('/').pop(),
+        total_records: enrichedFloors.length,
+        generated_at: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Floor export error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export floors',
       error: error.message
     });
   }

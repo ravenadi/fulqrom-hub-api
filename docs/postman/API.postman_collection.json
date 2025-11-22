@@ -2372,6 +2372,48 @@
             "description": "Delete a floor by ID (soft delete). Uses the ID saved from Create Floor request."
           },
           "response": []
+        },
+        {
+          "name": "Export Floors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Floors exported successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"site_id\": \"all\",\n  \"building_id\": \"all\",\n  \"floor_type\": \"all\",\n  \"status\": \"all\",\n  \"occupancy_type\": \"all\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/floors/export",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "floors",
+                "export"
+              ]
+            },
+            "description": "Export floors to CSV based on filters. Set filters to 'all' to include all values, or provide specific IDs to filter.\n\n**Endpoint:** POST /api/floors/export\n\n**Request Body:**\n- `customer_id` - Filter by customer ID (or 'all')\n- `site_id` - Filter by site ID (or 'all')\n- `building_id` - Filter by building ID (or 'all')\n- `floor_type` - Filter by floor type (or 'all')\n- `status` - Filter by status (or 'all')\n- `occupancy_type` - Filter by occupancy type (or 'all')\n\n**Returns:** CSV file with floor data including:\n- Floor details (name, number, type, occupancy)\n- Specifications (area, ceiling height, HVAC zones)\n- Features (access control, fire compartment, special features)\n- Location hierarchy (customer, site, building)\n- Counts (assets count)\n- Timestamps (created, updated)\n\n**Permission:** Requires 'floors:export' permission"
+          },
+          "response": []
         }
       ]
     },
@@ -3005,6 +3047,48 @@
               ]
             },
             "description": "Delete an asset by ID (soft delete). Uses the ID saved from Create Asset request."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Assets",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    console.log(\"✓ Assets exported successfully\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"site_id\": \"all\",\n  \"building_id\": \"all\",\n  \"floor_id\": \"all\",\n  \"category\": \"all\",\n  \"status\": \"all\",\n  \"condition\": \"all\",\n  \"criticality_level\": \"all\",\n  \"service_status\": \"all\"\n}"
+            },
+            "url": {
+              "raw": "{{API_BASE_URL}}/api/assets/export",
+              "host": [
+                "{{API_BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "assets",
+                "export"
+              ]
+            },
+            "description": "Export assets to CSV based on filters. Set filters to 'all' to include all values, or provide specific IDs to filter.\n\n**Endpoint:** POST /api/assets/export\n\n**Request Body:**\n- `customer_id` - Filter by customer ID (or 'all')\n- `site_id` - Filter by site ID (or 'all')\n- `building_id` - Filter by building ID (or 'all')\n- `floor_id` - Filter by floor ID (or 'all')\n- `category` - Filter by asset category (or 'all')\n- `status` - Filter by status (or 'all')\n- `condition` - Filter by condition (or 'all')\n- `criticality_level` - Filter by criticality level (or 'all')\n- `service_status` - Filter by service status (or 'all')\n\n**Returns:** CSV file with asset data including:\n- Asset details (ID, number, device ID, category, type, etc.)\n- Technical specs (make, model, serial, refrigerant)\n- Location (level, area, customer, site, building, floor)\n- Status & dates (installation date, age, test results)\n- Financial (purchase cost, current value, weight)\n\n**Permission:** Requires 'assets:export' permission"
           },
           "response": []
         }
