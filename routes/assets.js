@@ -1767,6 +1767,25 @@ router.post('/import', checkModulePermission('assets', 'create'), upload.single(
           }
         });
 
+        // Check for duplicate asset_no among active (non-deleted) assets only
+        if (assetData.asset_no) {
+          const existingAsset = await Asset.findOne({
+            customer_id: customer_id,
+            asset_no: assetData.asset_no,
+            is_active: true,
+            is_delete: { $ne: true }
+          });
+
+          if (existingAsset) {
+            results.failed.push({
+              row: rowNumber,
+              data: row,
+              error: `Duplicate Asset No: "${assetData.asset_no}" already exists for this customer`
+            });
+            continue;
+          }
+        }
+
         // Create asset
         const asset = new Asset(assetData);
         await asset.save();
