@@ -16,8 +16,24 @@ const { resolveHierarchy } = require('../utils/hierarchyLookup');
 const { applyResourceFilter } = require('../utils/resourceFilter');
 const { uploadFileToS3, generatePresignedUrl } = require('../utils/s3Upload');
 const { Parser } = require('json2csv');
+const multer = require('multer');
+const csvParser = require('csv-parser');
+const { Readable } = require('stream');
 
 const router = express.Router();
+
+// Configure multer for CSV file uploads (memory storage)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'));
+    }
+  }
+});
 
 // GET /api/assets - List all assets
 router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
@@ -1559,6 +1575,256 @@ router.post('/export', checkModulePermission('assets', 'export'), async (req, re
     res.status(500).json({
       success: false,
       message: 'Failed to export assets',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/assets/import - Import assets from CSV
+router.post('/import', checkModulePermission('assets', 'create'), upload.single('file'), async (req, res) => {
+  try {
+    // Verify tenant context exists
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found. User must be associated with a tenant.'
+      });
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No CSV file uploaded. Please upload a file with the field name "file".'
+      });
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+      total: 0
+    };
+
+    // Parse CSV from buffer
+    const csvRows = [];
+    const bufferStream = Readable.from(req.file.buffer.toString());
+
+    await new Promise((resolve, reject) => {
+      bufferStream
+        .pipe(csvParser())
+        .on('data', (row) => csvRows.push(row))
+        .on('end', resolve)
+        .on('error', reject);
+    });
+
+    results.total = csvRows.length;
+
+    if (csvRows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'CSV file is empty or invalid',
+        data: results
+      });
+    }
+
+    // Build entity name lookup maps for the tenant
+    const customers = await Customer.find({
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }
+    }).select('_id organisation.organisation_name').lean();
+
+    const sites = await Site.find({
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }
+    }).select('_id site_name').lean();
+
+    const buildings = await Building.find({
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }
+    }).select('_id building_name').lean();
+
+    const floors = await Floor.find({
+      tenant_id: req.tenant.tenantId,
+      is_delete: { $ne: true }
+    }).select('_id floor_name').lean();
+
+    // Create name-to-ID lookup maps
+    const customerMap = new Map(
+      customers.map(c => [c.organisation?.organisation_name?.toLowerCase().trim(), c._id.toString()])
+    );
+    const siteMap = new Map(
+      sites.map(s => [s.site_name?.toLowerCase().trim(), s._id.toString()])
+    );
+    const buildingMap = new Map(
+      buildings.map(b => [b.building_name?.toLowerCase().trim(), b._id.toString()])
+    );
+    const floorMap = new Map(
+      floors.map(f => [f.floor_name?.toLowerCase().trim(), f._id.toString()])
+    );
+
+    // Helper function to parse Australian date format (DD/MM/YYYY)
+    const parseAustralianDate = (dateStr) => {
+      if (!dateStr || dateStr.trim() === '') return null;
+
+      const parts = dateStr.trim().split('/');
+      if (parts.length !== 3) return null;
+
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1; // JavaScript months are 0-indexed
+      const year = parseInt(parts[2]);
+
+      if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+
+      const date = new Date(year, month, day);
+      return isNaN(date.getTime()) ? null : date;
+    };
+
+    // Process each row
+    for (let i = 0; i < csvRows.length; i++) {
+      const row = csvRows[i];
+      const rowNumber = i + 2; // +2 because CSV header is row 1, data starts at row 2
+
+      try {
+        // Resolve entity names to IDs
+        const customerName = row['Customer']?.toLowerCase().trim();
+        const siteName = row['Site']?.toLowerCase().trim();
+        const buildingName = row['Building']?.toLowerCase().trim();
+        const floorName = row['Floor']?.toLowerCase().trim();
+
+        const customer_id = customerName ? customerMap.get(customerName) : null;
+        const site_id = siteName ? siteMap.get(siteName) : null;
+        const building_id = buildingName ? buildingMap.get(buildingName) : null;
+        const floor_id = floorName ? floorMap.get(floorName) : null;
+
+        // Validate required customer_id
+        if (!customer_id) {
+          results.failed.push({
+            row: rowNumber,
+            data: row,
+            error: `Customer "${row['Customer']}" not found. Please ensure the customer exists in the system.`
+          });
+          continue;
+        }
+
+        // Parse dates
+        const installation_date = parseAustralianDate(row['Installation Date']);
+        const last_test_date = parseAustralianDate(row['Last Test Date']);
+
+        // Build asset data object
+        const assetData = {
+          tenant_id: req.tenant.tenantId,
+          customer_id: customer_id,
+          site_id: site_id || null,
+          building_id: building_id || null,
+          floor_id: floor_id || null,
+
+          // Primary Information
+          asset_id: row['Asset ID']?.trim() || undefined,
+          asset_no: row['Asset No']?.trim() || undefined,
+          device_id: row['Device ID']?.trim() || undefined,
+
+          // Classification & Status
+          category: row['Category']?.trim() || undefined,
+          type: row['Type']?.trim() || undefined,
+          status: row['Status']?.trim() || undefined,
+          condition: row['Condition']?.trim() || undefined,
+          criticality_level: row['Criticality Level']?.trim() || undefined,
+
+          // Details
+          make: row['Make']?.trim() || undefined,
+          model: row['Model']?.trim() || undefined,
+          serial: row['Serial']?.trim() || undefined,
+
+          // HVAC/Refrigerant
+          refrigerant: row['Refrigerant']?.trim() || undefined,
+
+          // Location
+          level: row['Level']?.trim() || undefined,
+          area: row['Area']?.trim() || undefined,
+
+          // Ownership & Service
+          owner: row['Owner']?.trim() || undefined,
+          service_status: row['Service Status']?.trim() || undefined,
+
+          // Dates & Testing
+          date_of_installation: installation_date,
+          age: row['Age']?.trim() || undefined,
+          last_test_date: last_test_date,
+          last_test_result: row['Last Test Result']?.trim() || undefined,
+
+          // Financial Information
+          purchase_cost_aud: row['Purchase Cost (AUD)'] ? parseFloat(row['Purchase Cost (AUD)']) : undefined,
+          current_book_value_aud: row['Current Book Value (AUD)'] ? parseFloat(row['Current Book Value (AUD)']) : undefined,
+          weight_kgs: row['Weight (kg)']?.trim() || undefined,
+
+          is_active: true
+        };
+
+        // Remove undefined fields
+        Object.keys(assetData).forEach(key => {
+          if (assetData[key] === undefined) {
+            delete assetData[key];
+          }
+        });
+
+        // Create asset
+        const asset = new Asset(assetData);
+        await asset.save();
+
+        // Log audit for asset creation
+        logCreate({
+          module: 'asset',
+          resourceName: asset.asset_no || asset.category || 'Imported Asset',
+          req,
+          moduleId: asset._id,
+          resource: asset.toObject()
+        });
+
+        results.success.push({
+          row: rowNumber,
+          asset_no: asset.asset_no,
+          asset_id: asset._id.toString()
+        });
+
+      } catch (error) {
+        // Handle duplicate asset_no error
+        if (error.code === 11000 && error.keyPattern?.asset_no) {
+          results.failed.push({
+            row: rowNumber,
+            data: row,
+            error: `Duplicate Asset No: "${row['Asset No']}" already exists for this customer`
+          });
+        } else {
+          results.failed.push({
+            row: rowNumber,
+            data: row,
+            error: error.message || 'Unknown error occurred'
+          });
+        }
+      }
+    }
+
+    // Prepare response
+    const successCount = results.success.length;
+    const failedCount = results.failed.length;
+
+    res.status(200).json({
+      success: true,
+      message: `Import completed: ${successCount} assets created, ${failedCount} failed`,
+      data: {
+        total_rows: results.total,
+        imported: successCount,
+        failed: failedCount,
+        success_records: results.success,
+        failed_records: results.failed
+      }
+    });
+
+  } catch (error) {
+    console.error('Asset import error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to import assets',
       error: error.message
     });
   }
