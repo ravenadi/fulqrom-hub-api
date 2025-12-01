@@ -13,6 +13,7 @@ const Vendor = require('../models/Vendor');
 const { uploadFileToS3, generatePresignedUrl, generatePreviewUrl, deleteFileFromS3 } = require('../utils/s3Upload');
 const TenantS3Service = require('../services/tenantS3Service');
 const Tenant = require('../models/Tenant');
+const Organization = require('../models/Organization');
 const {
   validateCreateDocument,
   validateUpdateDocument,
@@ -928,6 +929,23 @@ router.post('/', uploadLimiter, checkModulePermission('documents', 'create'), pr
       });
     }
 
+    // Check storage limit before uploading
+    if (req.tenant?.tenantId) {
+      const organization = await Organization.findOne({ tenant_id: req.tenant.tenantId });
+      if (organization && !organization.canAddStorage(req.file.size)) {
+        const usedGB = (organization.current_usage?.storage_bytes || 0) / (1024 * 1024 * 1024);
+        return res.status(403).json({
+          success: false,
+          error: 'STORAGE_LIMIT_REACHED',
+          message: `Storage limit reached. Your plan allows ${organization.limits.storage_gb} GB.`,
+          limit_gb: organization.limits.storage_gb,
+          used_gb: parseFloat(usedGB.toFixed(2)),
+          file_size_bytes: req.file.size,
+          unit: 'gb'
+        });
+      }
+    }
+
     // Use validated data from middleware
     let documentData = req.validatedData;
 
@@ -1083,12 +1101,12 @@ router.post('/', uploadLimiter, checkModulePermission('documents', 'create'), pr
       // Tenant ID for multi-tenancy
       tenant_id: req.tenant.tenantId,
 
-      // Audit fields - use provided created_by or set from authenticated user
-      created_by: documentData.created_by || (currentUser && currentUser.userEmail ? {
+      // Audit fields - always use authenticated user (ignore request body created_by)
+      created_by: currentUser && currentUser.userEmail ? {
         user_id: currentUser.userId,
         ...(currentUser.userName && { user_name: currentUser.userName }),
         email: currentUser.userEmail
-      } : undefined),
+      } : undefined,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -1159,6 +1177,26 @@ router.post('/', uploadLimiter, checkModulePermission('documents', 'create'), pr
 
     await document.save();
 
+    // Update storage usage in organization
+    if (req.tenant?.tenantId && req.file?.size) {
+      try {
+        const organization = await Organization.findOne({ tenant_id: req.tenant.tenantId });
+        if (organization) {
+          const newStorageBytes = (organization.current_usage?.storage_bytes || 0) + req.file.size;
+          await organization.updateUsage('storage_bytes', newStorageBytes);
+          organization.storage_cache = {
+            last_synced: new Date(),
+            source: 'db'
+          };
+          await organization.save();
+          console.log(`📊 Storage updated for tenant ${req.tenant.tenantId}: +${(req.file.size / (1024 * 1024)).toFixed(2)} MB`);
+        }
+      } catch (storageError) {
+        console.error('Failed to update storage usage:', storageError.message);
+        // Don't fail document creation if storage update fails
+      }
+    }
+
     // Log audit for document creation
     const documentName = document.name || document.file?.file_meta?.file_name || 'New Document';
     logCreate({ module: 'document', resourceName: documentName, req, moduleId: document._id, resource: document.toObject() });
@@ -1212,7 +1250,7 @@ router.post('/', uploadLimiter, checkModulePermission('documents', 'create'), pr
         category: document.category,
         type: document.type,
         status: documentData.approval_config.status || 'Pending Approval',
-        uploadedBy: documentData.created_by?.user_name || documentData.created_by?.email || 'Unknown',
+        uploadedBy: currentUser?.userName || currentUser?.userEmail || 'Unknown',
         uploadedDate: new Date(),
         description: document.description
       };
@@ -1238,9 +1276,9 @@ router.post('/', uploadLimiter, checkModulePermission('documents', 'create'), pr
           document,
           documentData.approval_config.approvers,
           {
-            userId: documentData.created_by?.user_id || req.user?.id,
-            userName: documentData.created_by?.user_name || req.user?.firstName + ' ' + req.user?.lastName,
-            userEmail: documentData.created_by?.email || req.user?.email
+            userId: currentUser?.userId || req.user?.id,
+            userName: currentUser?.userName || req.user?.firstName + ' ' + req.user?.lastName,
+            userEmail: currentUser?.userEmail || req.user?.email
           },
           req.tenant?.tenantId
         ),
@@ -2078,9 +2116,28 @@ router.delete('/:id', checkModulePermission('documents', 'delete'), async (req, 
     // Soft delete document (S3 files kept for now, will be purged later)
     await Document.findByIdAndUpdate(req.params.id, { is_delete: true });
 
-    // TODO: archieve all s3 files for this document
+    // Decrement storage usage in organization
+    const fileSize = document.file?.file_meta?.file_size || 0;
+    if (tenantId && fileSize > 0) {
+      try {
+        const organization = await Organization.findOne({ tenant_id: tenantId });
+        if (organization) {
+          const newStorageBytes = Math.max(0, (organization.current_usage?.storage_bytes || 0) - fileSize);
+          await organization.updateUsage('storage_bytes', newStorageBytes);
+          organization.storage_cache = {
+            last_synced: new Date(),
+            source: 'db'
+          };
+          await organization.save();
+          console.log(`📊 Storage updated for tenant ${tenantId}: -${(fileSize / (1024 * 1024)).toFixed(2)} MB`);
+        }
+      } catch (storageError) {
+        console.error('Failed to update storage usage:', storageError.message);
+        // Don't fail deletion if storage update fails
+      }
+    }
 
-    // write code here...
+    // TODO: archieve all s3 files for this document
 
     // Log audit for document deletion
     logDelete({ module: 'document', resourceName: document.name || 'Document', req, moduleId: document._id, resource: document.toObject() });

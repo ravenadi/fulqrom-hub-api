@@ -91,17 +91,9 @@ const createDocumentSchema = Joi.object({
 
   // Vendor association
   vendor_id: Joi.string().optional(),
-  vendor_name: Joi.string().optional(),
+  vendor_name: Joi.string().optional()
 
-  // Audit fields - accept both string (legacy) and object (new format)
-  created_by: Joi.alternatives().try(
-    Joi.string().trim(),
-    Joi.object({
-      user_id: Joi.string().required().trim(),
-      user_name: Joi.string().required().trim(),
-      email: Joi.string().email({ tlds: false }).required().trim()
-    })
-  ).optional()
+  // Note: created_by is intentionally not validated here - it's set from authenticated user
 }).custom((value, helpers) => {
   // Custom validation: Require either customer_id OR building_id
   const hasCustomerId = value.customer_id && value.customer_id !== '';
@@ -184,17 +176,9 @@ const updateDocumentSchema = Joi.object({
     expiry_date: Joi.string().optional().isoDate().allow(''),
     review_date: Joi.string().optional().isoDate().allow(''),
     frequency: Joi.string().optional().trim().valid('weekly', 'monthly', 'quarterly', 'annual').allow('', null)
-  }).optional(),
+  }).optional()
 
-  // Audit fields - accept both string (legacy) and object (new format)
-  created_by: Joi.alternatives().try(
-    Joi.string().trim(),
-    Joi.object({
-      user_id: Joi.string().required().trim(),
-      user_name: Joi.string().required().trim(),
-      email: Joi.string().email({ tlds: false }).required().trim()
-    })
-  ).optional()
+  // Note: created_by is intentionally not validated here - it's set from authenticated user
 }).min(1); // At least one field must be provided for update
 
 // Query parameters validation for GET requests
