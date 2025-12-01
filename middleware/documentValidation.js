@@ -71,7 +71,7 @@ const createDocumentSchema = Joi.object({
       Joi.object({
         user_id: Joi.string().optional(),
         user_name: Joi.string().optional().trim().allow(''),
-        user_email: Joi.string().email().required()
+        user_email: Joi.string().email({ tlds: false }).required()
       })
     ).optional(),
     approval_history: Joi.array().optional()
@@ -99,7 +99,7 @@ const createDocumentSchema = Joi.object({
     Joi.object({
       user_id: Joi.string().required().trim(),
       user_name: Joi.string().required().trim(),
-      email: Joi.string().email().required().trim()
+      email: Joi.string().email({ tlds: false }).required().trim()
     })
   ).optional()
 }).custom((value, helpers) => {
@@ -192,7 +192,7 @@ const updateDocumentSchema = Joi.object({
     Joi.object({
       user_id: Joi.string().required().trim(),
       user_name: Joi.string().required().trim(),
-      email: Joi.string().email().required().trim()
+      email: Joi.string().email({ tlds: false }).required().trim()
     })
   ).optional()
 }).min(1); // At least one field must be provided for update
