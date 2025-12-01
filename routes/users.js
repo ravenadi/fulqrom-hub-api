@@ -15,6 +15,7 @@ const {
 const { validateUserCreation, validateUserElevation, getAccessibleResources } = require('../middleware/authorizationRules');
 const { checkModulePermission } = require('../middleware/checkPermission');
 const emailService = require('../utils/emailService');
+const tenantRestrictionService = require('../services/tenantRestrictionService');
 
 const router = express.Router();
 
@@ -305,6 +306,25 @@ router.post('/', validateUserCreation, async (req, res) => {
         success: false,
         message: 'One or more role IDs are invalid'
       });
+    }
+
+    // Check user limit for tenant using tenantRestrictionService (reads from Plan)
+    if (req.tenant?.tenantId) {
+      try {
+        await tenantRestrictionService.checkCanCreateUser(req.tenant.tenantId);
+      } catch (limitError) {
+        // Get current count for error response
+        const plan = await tenantRestrictionService.getTenantPlan(req.tenant.tenantId);
+        const currentUsers = await User.countDocuments({ tenant_id: req.tenant.tenantId });
+        return res.status(403).json({
+          success: false,
+          error: 'USER_LIMIT_REACHED',
+          message: limitError.message,
+          limit: plan?.max_users || 0,
+          current: currentUsers,
+          unit: 'users'
+        });
+      }
     }
 
     // Validate resource_access if provided

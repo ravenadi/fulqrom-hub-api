@@ -1,4 +1,4 @@
-const Customer = require('../models/Customer');
+const Tenant = require('../models/Tenant');
 const Plan = require('../models/Plan');
 const User = require('../models/User');
 const Document = require('../models/Document');
@@ -10,19 +10,26 @@ const Vendor = require('../models/Vendor');
 
 /**
  * Tenant Restriction Service
- * Matches Laravel DR TenantRestrictionService functionality
+ * Enforces plan limits for tenant resources (users, documents, storage, etc.)
  */
 class TenantRestrictionService {
   /**
-   * Get tenant's active plan (simplified)
+   * Get tenant's active plan
+   * @param {string} tenantId - The tenant ID (from req.tenant.tenantId)
    */
   async getTenantPlan(tenantId) {
-    const tenant = await Customer.findById(tenantId).populate('plan_id');
+    // Use skipTenantFilter since we're looking up the Tenant itself, not a tenant-scoped resource
+    const tenant = await Tenant.findById(tenantId).populate('plan_id');
 
-    // Check if tenant is active and not expired
-    if (tenant && tenant.plan_id && tenant.is_active) {
+    // Check if tenant exists and has a plan
+    if (tenant && tenant.plan_id) {
+      // Check if tenant is active (not suspended/inactive)
+      if (tenant.status === 'suspended' || tenant.status === 'inactive') {
+        return null; // Tenant is not active
+      }
+
       // Check if plan has expired (if plan_end_date is set)
-      if (tenant.plan_end_date && tenant.plan_end_date < new Date()) {
+      if (tenant.plan_status?.plan_end_date && tenant.plan_status.plan_end_date < new Date()) {
         return null; // Plan expired
       }
 
@@ -56,15 +63,16 @@ class TenantRestrictionService {
     const plan = await this.getTenantPlan(tenantId);
 
     // If no plan or unlimited users (null means unlimited), allow creation
-    if (!plan || plan.features.max_users === null) {
+    // Plan has max_users at top level, not in features
+    if (!plan || plan.max_users === null || plan.max_users === undefined) {
       return true;
     }
 
     const currentUsers = await this.getUsersCount(tenantId);
 
-    if (currentUsers >= plan.features.max_users) {
+    if (currentUsers >= plan.max_users) {
       throw new Error(
-        `Plan Limit hit. Please upgrade your plan to add more users. Current: ${currentUsers}/${plan.features.max_users}`
+        `Plan limit reached. Your plan allows ${plan.max_users} users. Current: ${currentUsers}/${plan.max_users}. Please upgrade your plan to add more users.`
       );
     }
 
@@ -79,15 +87,16 @@ class TenantRestrictionService {
     const plan = await this.getTenantPlan(tenantId);
 
     // If no plan or unlimited documents (null means unlimited), allow creation
-    if (!plan || plan.features.max_documents === null) {
+    // Plan has max_documents at top level, not in features
+    if (!plan || plan.max_documents === null || plan.max_documents === undefined) {
       return true;
     }
 
     const currentDocuments = await this.getDocumentsCount(tenantId);
 
-    if (currentDocuments >= plan.features.max_documents) {
+    if (currentDocuments >= plan.max_documents) {
       throw new Error(
-        `Plan Restriction Error - You have reached the maximum number of documents (${currentDocuments}/${plan.features.max_documents}). Please upgrade your plan to upload more documents.`
+        `Plan limit reached. Your plan allows ${plan.max_documents} documents. Current: ${currentDocuments}/${plan.max_documents}. Please upgrade your plan to upload more documents.`
       );
     }
 
@@ -102,16 +111,17 @@ class TenantRestrictionService {
     const plan = await this.getTenantPlan(tenantId);
 
     // If no plan or unlimited storage (null means unlimited), allow upload
-    if (!plan || plan.features.max_storage_gb === null) {
+    // Plan has max_storage_gb at top level, not in features
+    if (!plan || plan.max_storage_gb === null || plan.max_storage_gb === undefined) {
       return true;
     }
 
     const currentStorageGB = await this.getStorageUsage(tenantId);
     const projectedStorageGB = currentStorageGB + fileSizeGB;
 
-    if (projectedStorageGB > plan.features.max_storage_gb) {
+    if (projectedStorageGB > plan.max_storage_gb) {
       throw new Error(
-        `Plan Restriction Error - This upload would exceed your storage limit (${projectedStorageGB}GB/${plan.features.max_storage_gb}GB). Please upgrade your plan or delete some files to free up space.`
+        `Plan limit reached. This upload would exceed your storage limit (${projectedStorageGB.toFixed(2)}GB/${plan.max_storage_gb}GB). Please upgrade your plan or delete some files.`
       );
     }
 
@@ -125,15 +135,17 @@ class TenantRestrictionService {
   async checkCanCreateSite(tenantId) {
     const plan = await this.getTenantPlan(tenantId);
 
-    if (!plan || plan.features.max_sites === null) {
+    // Note: max_sites might be in features object for custom plans
+    const maxSites = plan?.features?.max_sites ?? null;
+    if (!plan || maxSites === null || maxSites === undefined) {
       return true;
     }
 
     const currentSites = await this.getSitesCount(tenantId);
 
-    if (currentSites >= plan.features.max_sites) {
+    if (currentSites >= maxSites) {
       throw new Error(
-        `Plan Limit hit. Please upgrade your plan to add more sites. Current: ${currentSites}/${plan.features.max_sites}`
+        `Plan limit reached. Your plan allows ${maxSites} sites. Current: ${currentSites}/${maxSites}. Please upgrade your plan to add more sites.`
       );
     }
 
@@ -147,15 +159,17 @@ class TenantRestrictionService {
   async checkCanCreateBuilding(tenantId) {
     const plan = await this.getTenantPlan(tenantId);
 
-    if (!plan || plan.features.max_buildings === null) {
+    // Note: max_buildings might be in features object for custom plans
+    const maxBuildings = plan?.features?.max_buildings ?? null;
+    if (!plan || maxBuildings === null || maxBuildings === undefined) {
       return true;
     }
 
     const currentBuildings = await this.getBuildingsCount(tenantId);
 
-    if (currentBuildings >= plan.features.max_buildings) {
+    if (currentBuildings >= maxBuildings) {
       throw new Error(
-        `Plan Limit hit. Please upgrade your plan to add more buildings. Current: ${currentBuildings}/${plan.features.max_buildings}`
+        `Plan limit reached. Your plan allows ${maxBuildings} buildings. Current: ${currentBuildings}/${maxBuildings}. Please upgrade your plan to add more buildings.`
       );
     }
 
@@ -165,37 +179,39 @@ class TenantRestrictionService {
   // Private helper methods
 
   async getUsersCount(tenantId) {
-    return await User.countDocuments({ customer_id: tenantId });
+    // Count users by tenant_id (multi-tenant isolation field)
+    return await User.countDocuments({ tenant_id: tenantId });
   }
 
   async getDocumentsCount(tenantId) {
-    return await Document.countDocuments({ customer_id: tenantId });
+    return await Document.countDocuments({ tenant_id: tenantId });
   }
 
   async getSitesCount(tenantId) {
-    return await Site.countDocuments({ customer_id: tenantId });
+    return await Site.countDocuments({ tenant_id: tenantId });
   }
 
   async getBuildingsCount(tenantId) {
-    return await Building.countDocuments({ customer_id: tenantId });
+    return await Building.countDocuments({ tenant_id: tenantId });
   }
 
   async getFloorsCount(tenantId) {
-    return await Floor.countDocuments({ customer_id: tenantId });
+    return await Floor.countDocuments({ tenant_id: tenantId });
   }
 
   async getAssetsCount(tenantId) {
-    return await Asset.countDocuments({ customer_id: tenantId });
+    return await Asset.countDocuments({ tenant_id: tenantId });
   }
 
   async getVendorsCount(tenantId) {
-    return await Vendor.countDocuments({ customer_id: tenantId });
+    return await Vendor.countDocuments({ tenant_id: tenantId });
   }
 
   async getStorageUsage(tenantId) {
-    // Calculate storage usage from documents (assuming file_size field exists)
+    // Calculate storage usage from documents by tenant_id
+    const mongoose = require('mongoose');
     const result = await Document.aggregate([
-      { $match: { customer_id: tenantId } },
+      { $match: { tenant_id: new mongoose.Types.ObjectId(tenantId) } },
       { $group: { _id: null, total: { $sum: { $ifNull: ['$file_size', 0] } } } }
     ]);
 
