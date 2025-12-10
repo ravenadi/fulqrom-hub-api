@@ -7,7 +7,7 @@ const { logCreate, logUpdate, logDelete } = require('../utils/auditLogger');
 
 const router = express.Router();
 
-// GET /api/tb-devices - List all ThingsBoard devices
+// GET /api/tb-devices - List all IoT devices
 router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
     if (!req.tenant || !req.tenant.tenantId) {
@@ -79,7 +79,7 @@ router.get('/', checkModulePermission('assets', 'view'), async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching ThingsBoard devices',
+      message: 'Error fetching IoT devices',
       error: error.message
     });
   }
@@ -148,7 +148,7 @@ router.get('/:id', checkModulePermission('assets', 'view'), async (req, res) => 
     if (!device) {
       return res.status(404).json({
         success: false,
-        message: 'ThingsBoard device not found'
+        message: 'IoT device not found'
       });
     }
 
@@ -165,7 +165,7 @@ router.get('/:id', checkModulePermission('assets', 'view'), async (req, res) => 
   }
 });
 
-// GET /api/tb-devices/by-tb-id/:tbDeviceId - Get device by ThingsBoard ID
+// GET /api/tb-devices/by-tb-id/:tbDeviceId - Get device by IoT platform ID
 router.get('/by-tb-id/:tbDeviceId', checkModulePermission('assets', 'view'), async (req, res) => {
   try {
     if (!req.tenant || !req.tenant.tenantId) {
@@ -184,7 +184,7 @@ router.get('/by-tb-id/:tbDeviceId', checkModulePermission('assets', 'view'), asy
     if (!device) {
       return res.status(404).json({
         success: false,
-        message: 'ThingsBoard device not found'
+        message: 'IoT device not found'
       });
     }
 
@@ -269,7 +269,7 @@ router.post('/', checkModulePermission('assets', 'create'), async (req, res) => 
 
     res.status(action === 'created' ? 201 : 200).json({
       success: true,
-      message: `ThingsBoard device ${action} successfully`,
+      message: `IoT device ${action} successfully`,
       action,
       data: device
     });
@@ -277,7 +277,7 @@ router.post('/', checkModulePermission('assets', 'create'), async (req, res) => 
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'Device with this ThingsBoard ID already exists',
+        message: 'Device with this IoT platform ID already exists',
         error: 'Duplicate tb_device_id'
       });
     }
@@ -400,7 +400,7 @@ router.put('/:id', checkModulePermission('assets', 'edit'), async (req, res) => 
     if (!device) {
       return res.status(404).json({
         success: false,
-        message: 'ThingsBoard device not found'
+        message: 'IoT device not found'
       });
     }
 
@@ -414,13 +414,55 @@ router.put('/:id', checkModulePermission('assets', 'edit'), async (req, res) => 
 
     res.status(200).json({
       success: true,
-      message: 'ThingsBoard device updated successfully',
+      message: 'IoT device updated successfully',
       data: device
     });
   } catch (error) {
     res.status(400).json({
       success: false,
       message: 'Error updating device',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/tb-devices/bulk - Bulk soft delete devices
+router.delete('/bulk', checkModulePermission('assets', 'delete'), async (req, res) => {
+  try {
+    if (!req.tenant || !req.tenant.tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tenant context found.'
+      });
+    }
+
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'ids array is required and must not be empty'
+      });
+    }
+
+    const result = await TbDevice.updateMany(
+      {
+        _id: { $in: ids },
+        tenant_id: req.tenant.tenantId,
+        is_delete: { $ne: true }
+      },
+      { is_delete: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `${result.modifiedCount} devices deleted successfully`,
+      data: { deleted_count: result.modifiedCount }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting devices',
       error: error.message
     });
   }
@@ -444,7 +486,7 @@ router.delete('/:id', checkModulePermission('assets', 'delete'), async (req, res
     if (!device) {
       return res.status(404).json({
         success: false,
-        message: 'ThingsBoard device not found'
+        message: 'IoT device not found'
       });
     }
 
@@ -467,7 +509,7 @@ router.delete('/:id', checkModulePermission('assets', 'delete'), async (req, res
 
     res.status(200).json({
       success: true,
-      message: 'ThingsBoard device deleted successfully'
+      message: 'IoT device deleted successfully'
     });
   } catch (error) {
     res.status(500).json({
@@ -497,7 +539,7 @@ router.post('/:id/telemetry', checkModulePermission('assets', 'create'), async (
     if (!device) {
       return res.status(404).json({
         success: false,
-        message: 'ThingsBoard device not found'
+        message: 'IoT device not found'
       });
     }
 
@@ -570,7 +612,7 @@ router.get('/:id/telemetry', checkModulePermission('assets', 'view'), async (req
     if (!device) {
       return res.status(404).json({
         success: false,
-        message: 'ThingsBoard device not found'
+        message: 'IoT device not found'
       });
     }
 
@@ -648,7 +690,7 @@ router.post('/:id/link-asset', checkModulePermission('assets', 'edit'), async (r
     if (!device) {
       return res.status(404).json({
         success: false,
-        message: 'ThingsBoard device not found'
+        message: 'IoT device not found'
       });
     }
 
