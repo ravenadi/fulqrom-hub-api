@@ -23,6 +23,7 @@ const notificationsRouter = require('../routes/notifications');
 const analyticsRouter = require('../routes/analytics');
 const auditLogsRouter = require('../routes/auditLogs');
 const adminRouter = require('../routes/admin');
+const tbDevicesRouter = require('../routes/tb-devices');
 
 /**
  * API routes registry
@@ -48,7 +49,8 @@ const apiRoutes = [
   { path: '/notifications', router: notificationsRouter, description: 'User notifications' },
   { path: '/analytics', router: analyticsRouter, description: 'Analytics (super admin)' },
   { path: '/audit-logs', router: auditLogsRouter, description: 'Audit logs management' },
-  { path: '/admin', router: adminRouter, description: 'Admin operations (super admin)' }
+  { path: '/admin', router: adminRouter, description: 'Admin operations (super admin)' },
+  { path: '/tb-devices', router: tbDevicesRouter, description: 'ThingsBoard IoT devices' }
 ];
 
 /**

@@ -25,8 +25,9 @@ const MODULE_MAP = {
   'roles': 'users', // roles are managed by users with user permissions
   'analytics': 'analytics',
   'hierarchy': 'customers', // hierarchy is customer-related
-  'organizations': 'organisations' ,// organization settings module
+  'organizations': 'organisations', // organization settings module
   'audit-logs': 'audit_logs', // audit logs require user management permissions
+  'tb-devices': 'assets', // ThingsBoard devices use assets permissions
 };
 
 // HTTP method to permission mapping
