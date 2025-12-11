@@ -91,6 +91,13 @@ const TbDeviceSchema = new mongoose.Schema({
     default: {}
   },
 
+  // Variable mappings from CSV (key -> {full_name, label, unit})
+  // Maps telemetry keys (e.g., "BV 67") to human-readable info
+  variable_mappings: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+
   // Import metadata
   import_metadata: {
     imported_at: {
