@@ -155,6 +155,19 @@ const OrganizationSchema = new mongoose.Schema({
     }
   },
 
+  // Storage Cache (for S3 bucket size tracking)
+  storage_cache: {
+    last_synced: {
+      type: Date,
+      default: null
+    },
+    source: {
+      type: String,
+      enum: ['s3', 'db', 'manual', ''],
+      default: ''
+    }
+  },
+
   // Branding & Customization
   branding: {
     logo_url: { type: String },
@@ -290,7 +303,9 @@ OrganizationSchema.pre('save', function(next) {
 
 // Instance method: Check if organization can add more users
 OrganizationSchema.methods.canAddUsers = function(count = 1) {
-  return this.current_usage.users + count <= this.limits.users;
+  // Unlimited users if limit is null, undefined, or 0
+  if (!this.limits?.users) return true;
+  return (this.current_usage?.users || 0) + count <= this.limits.users;
 };
 
 // Instance method: Check if organization can add more buildings
@@ -304,10 +319,11 @@ OrganizationSchema.methods.canAddSites = function(count = 1) {
 };
 
 // Instance method: Check if organization has storage available
-OrganizationSchema.methods.canAddStorage = function(bytes) {
-  const currentGb = this.current_usage.storage_bytes / (1024 * 1024 * 1024);
-  const additionalGb = bytes / (1024 * 1024 * 1024);
-  return currentGb + additionalGb <= this.limits.storage_gb;
+OrganizationSchema.methods.canAddStorage = function(bytes = 0) {
+  // Unlimited storage if limit is null, undefined, or 0
+  if (!this.limits?.storage_gb) return true;
+  const limitBytes = this.limits.storage_gb * 1024 * 1024 * 1024;
+  return (this.current_usage?.storage_bytes || 0) + bytes <= limitBytes;
 };
 
 // Instance method: Increment user count

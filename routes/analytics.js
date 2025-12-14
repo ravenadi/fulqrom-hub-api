@@ -19,6 +19,9 @@ const Floor = require('../models/Floor');
 const Asset = require('../models/Asset');
 const Vendor = require('../models/Vendor');
 const BuildingTenant = require('../models/BuildingTenant');
+const Organization = require('../models/Organization');
+const Tenant = require('../models/Tenant');
+const TenantS3Service = require('../services/tenantS3Service');
 
 const router = express.Router();
 
@@ -201,6 +204,17 @@ router.get('/dashboard', checkModulePermission('analytics', 'view'), applyScopeF
       })
     ]);
 
+    // Get organization for storage limits
+    const organization = await Organization.findOne({ tenant_id: tenantId });
+    const storageLimitGB = organization?.limits?.storage_gb || null;
+    const usagePercent = storageLimitGB ? Math.round((storageStats.totalSizeGB / storageLimitGB) * 100) : 0;
+
+    // Format storage display with limit
+    const limitDisplay = storageLimitGB ? `${storageLimitGB} GB` : 'Unlimited';
+    const storageLimitDisplay = storageLimitGB
+      ? `${storageStats.displaySize} / ${limitDisplay}`
+      : storageStats.displaySize;
+
     // Return optimized response
     res.status(200).json({
       success: true,
@@ -216,6 +230,9 @@ router.get('/dashboard', checkModulePermission('analytics', 'view'), applyScopeF
         storage_used_mb: storageStats.totalSizeMB,
         storage_used_gb: storageStats.totalSizeGB,
         storage_display: storageStats.displaySize,
+        storage_limit_gb: storageLimitGB,
+        storage_usage_percent: usagePercent,
+        storage_limit_display: storageLimitDisplay,
         storage_details: {
           total_size_bytes: storageStats.totalSizeBytes,
           documents_with_files: storageStats.documentsWithFiles,
@@ -391,6 +408,104 @@ router.get('/coordinates', checkModulePermission('analytics', 'view'), applyScop
     res.status(500).json({
       success: false,
       message: 'Error fetching site coordinates',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/analytics/storage - Get storage usage with plan limits
+router.get('/storage', checkModulePermission('analytics', 'view'), async (req, res) => {
+  try {
+    const tenantId = req.tenant?.tenantId;
+    const forceRefresh = req.query.refresh === 'true';
+
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required'
+      });
+    }
+
+    // Get organization with plan info
+    const organization = await Organization.findOne({ tenant_id: tenantId });
+    if (!organization) {
+      return res.status(404).json({
+        success: false,
+        message: 'Organization not found'
+      });
+    }
+
+    // Get tenant info for S3 bucket
+    const tenant = await Tenant.findById(tenantId);
+
+    let storageData = {
+      used_bytes: organization.current_usage?.storage_bytes || 0,
+      source: 'db'
+    };
+
+    // Try to get real S3 bucket size if tenant has a bucket
+    if (tenant?.s3_bucket_name && tenant?.s3_bucket_status === 'created') {
+      try {
+        const tenantS3Service = new TenantS3Service(tenantId);
+        const s3Size = await tenantS3Service.getBucketSize(tenant.s3_bucket_name, forceRefresh);
+
+        if (s3Size.success) {
+          storageData = {
+            used_bytes: s3Size.size_bytes,
+            source: s3Size.source,
+            object_count: s3Size.object_count,
+            last_checked: s3Size.last_checked
+          };
+
+          // Update organization storage cache if from S3
+          if (s3Size.source === 's3') {
+            organization.current_usage.storage_bytes = s3Size.size_bytes;
+            organization.storage_cache = {
+              last_synced: new Date(),
+              source: 's3'
+            };
+            await organization.save();
+          }
+        }
+      } catch (s3Error) {
+        console.error('S3 storage check failed, using DB value:', s3Error.message);
+        // Fall back to DB value
+      }
+    }
+
+    const usedGB = storageData.used_bytes / (1024 * 1024 * 1024);
+    const usedMB = storageData.used_bytes / (1024 * 1024);
+    const limitGB = organization.limits?.storage_gb || null;
+    const usagePercent = limitGB ? Math.round((usedGB / limitGB) * 100) : 0;
+
+    // Format display strings
+    const usedDisplay = usedGB >= 1 ? `${usedGB.toFixed(2)} GB` : `${usedMB.toFixed(2)} MB`;
+    const limitDisplay = limitGB ? (limitGB >= 1 ? `${limitGB} GB` : `${(limitGB * 1024).toFixed(0)} MB`) : 'Unlimited';
+    const combinedDisplay = limitGB ? `${usedDisplay} / ${limitDisplay}` : usedDisplay;
+
+    res.json({
+      success: true,
+      data: {
+        used_bytes: storageData.used_bytes,
+        used_mb: parseFloat(usedMB.toFixed(2)),
+        used_gb: parseFloat(usedGB.toFixed(4)),
+        limit_gb: limitGB,
+        usage_percent: usagePercent,
+        display: combinedDisplay,
+        used_display: usedDisplay,
+        limit_display: limitDisplay,
+        source: storageData.source,
+        object_count: storageData.object_count,
+        last_checked: storageData.last_checked || organization.storage_cache?.last_synced,
+        is_unlimited: !limitGB
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching storage analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching storage analytics',
       error: error.message
     });
   }

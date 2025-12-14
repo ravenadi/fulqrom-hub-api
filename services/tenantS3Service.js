@@ -1,5 +1,8 @@
-const { S3Client, CreateBucketCommand, PutBucketVersioningCommand, PutBucketLifecycleConfigurationCommand, HeadBucketCommand, PutBucketTaggingCommand, GetBucketTaggingCommand } = require('@aws-sdk/client-s3');
+const { S3Client, CreateBucketCommand, PutBucketVersioningCommand, PutBucketLifecycleConfigurationCommand, HeadBucketCommand, PutBucketTaggingCommand, GetBucketTaggingCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+
+// In-memory cache for bucket sizes (5-minute TTL)
+const bucketSizeCache = new Map();
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
@@ -555,6 +558,109 @@ class TenantS3Service {
         success: false,
         error: error.message
       };
+    }
+  }
+
+  /**
+   * Get bucket size from S3 using ListObjectsV2
+   * Uses 5-minute caching to reduce API calls
+   * @param {string} bucketName - Bucket name
+   * @param {boolean} forceRefresh - Force refresh cache
+   * @returns {Promise<Object>} - Bucket size info
+   */
+  async getBucketSize(bucketName, forceRefresh = false) {
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    const cacheKey = `bucket_size_${bucketName}`;
+
+    // Check cache first
+    if (!forceRefresh && bucketSizeCache.has(cacheKey)) {
+      const cached = bucketSizeCache.get(cacheKey);
+      if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return {
+          success: true,
+          ...cached.data,
+          source: 'cache'
+        };
+      }
+    }
+
+    try {
+      // Check if bucket exists
+      const exists = await this.bucketExists(bucketName);
+      if (!exists) {
+        return {
+          success: false,
+          error: 'Bucket does not exist',
+          bucket_name: bucketName
+        };
+      }
+
+      let totalSizeBytes = 0;
+      let objectCount = 0;
+      let continuationToken = null;
+
+      // Paginate through all objects
+      do {
+        const listCommand = new ListObjectsV2Command({
+          Bucket: bucketName,
+          ContinuationToken: continuationToken
+        });
+
+        const response = await s3Client.send(listCommand);
+
+        if (response.Contents) {
+          for (const obj of response.Contents) {
+            totalSizeBytes += obj.Size || 0;
+            objectCount++;
+          }
+        }
+
+        continuationToken = response.IsTruncated ? response.NextContinuationToken : null;
+      } while (continuationToken);
+
+      const sizeGB = totalSizeBytes / (1024 * 1024 * 1024);
+      const sizeMB = totalSizeBytes / (1024 * 1024);
+
+      const result = {
+        bucket_name: bucketName,
+        size_bytes: totalSizeBytes,
+        size_mb: parseFloat(sizeMB.toFixed(2)),
+        size_gb: parseFloat(sizeGB.toFixed(4)),
+        object_count: objectCount,
+        display: sizeGB >= 1 ? `${sizeGB.toFixed(2)} GB` : `${sizeMB.toFixed(2)} MB`,
+        last_checked: new Date().toISOString()
+      };
+
+      // Cache the result
+      bucketSizeCache.set(cacheKey, {
+        timestamp: Date.now(),
+        data: result
+      });
+
+      return {
+        success: true,
+        ...result,
+        source: 's3'
+      };
+    } catch (error) {
+      console.error(`Failed to get bucket size for ${bucketName}:`, error);
+      return {
+        success: false,
+        error: error.message,
+        bucket_name: bucketName
+      };
+    }
+  }
+
+  /**
+   * Clear bucket size cache for a specific bucket or all buckets
+   * @param {string} bucketName - Optional bucket name to clear
+   */
+  clearBucketSizeCache(bucketName = null) {
+    if (bucketName) {
+      bucketSizeCache.delete(`bucket_size_${bucketName}`);
+    } else {
+      bucketSizeCache.clear();
     }
   }
 }
