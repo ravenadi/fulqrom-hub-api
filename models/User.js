@@ -164,7 +164,8 @@ UserSchema.set('toObject', { virtuals: true });
 // SECURITY: Use autoFilter: false for User model
 // Users need to be looked up during authentication BEFORE we have tenant context
 // We'll manually apply tenant filtering where needed
-UserSchema.plugin(tenantPlugin, { autoFilter: false });
+// NOTE: required: false because super_admin users don't belong to any tenant
+UserSchema.plugin(tenantPlugin, { autoFilter: false, required: false });
 
 const User = mongoose.model('User', UserSchema);
 

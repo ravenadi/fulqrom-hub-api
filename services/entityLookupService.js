@@ -395,6 +395,65 @@ class EntityLookupService {
   }
 
   /**
+   * Batch fetch entity names for floors with flat structure (customer_id, site_id, building_id).
+   * Optimized for floor objects that have direct ID references rather than nested location structure.
+   *
+   * @param {Object[]} floors - Array of floor objects with customer_id, site_id, building_id
+   * @param {string} tenantId - The tenant ID for filtering
+   * @returns {Object[]} - Array of floors with populated customer_name, site_name, building_name
+   */
+  async batchFetchFloorEntityNames(floors, tenantId) {
+    if (!floors || floors.length === 0) {
+      return [];
+    }
+
+    const customerIds = new Set();
+    const siteIds = new Set();
+    const buildingIds = new Set();
+
+    floors.forEach(floor => {
+      if (floor.customer_id) customerIds.add(floor.customer_id.toString());
+      if (floor.site_id) siteIds.add(floor.site_id.toString());
+      if (floor.building_id) buildingIds.add(floor.building_id.toString());
+    });
+
+    const [customers, sites, buildings] = await Promise.all([
+      customerIds.size > 0
+        ? Customer.find({ _id: { $in: Array.from(customerIds) } })
+            .setOptions({ _tenantId: tenantId })
+            .select('_id customer_name organisation company_profile')
+            .lean()
+        : [],
+      siteIds.size > 0
+        ? Site.find({ _id: { $in: Array.from(siteIds) } })
+            .setOptions({ _tenantId: tenantId })
+            .select('_id site_name')
+            .lean()
+        : [],
+      buildingIds.size > 0
+        ? Building.find({ _id: { $in: Array.from(buildingIds) } })
+            .setOptions({ _tenantId: tenantId })
+            .select('_id building_name')
+            .lean()
+        : []
+    ]);
+
+    const customerMap = new Map(customers.map(c => [
+      c._id.toString(),
+      c.customer_name || c.organisation?.organisation_name || c.company_profile?.trading_name || 'Unknown Customer'
+    ]));
+    const siteMap = new Map(sites.map(s => [s._id.toString(), s.site_name]));
+    const buildingMap = new Map(buildings.map(b => [b._id.toString(), b.building_name]));
+
+    return floors.map(floor => ({
+      ...floor,
+      customer_name: floor.customer_id ? customerMap.get(floor.customer_id.toString()) : null,
+      site_name: floor.site_id ? siteMap.get(floor.site_id.toString()) : null,
+      building_name: floor.building_id ? buildingMap.get(floor.building_id.toString()) : null
+    }));
+  }
+
+  /**
    * Batch lookup multiple entities by their IDs
    * @param {string[]} ids - Array of entity IDs
    * @param {string} entityType - Type of entity ('customer', 'site', 'building', 'floor', 'asset', 'vendor', 'buildingTenant')

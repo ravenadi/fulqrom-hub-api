@@ -4,13 +4,12 @@ const SuperAdminTenantsController = require('../controllers/superAdminTenantsCon
 const SuperAdminUsersController = require('../controllers/superAdminUsersController');
 const SuperAdminRolesController = require('../controllers/superAdminRolesController');
 const SuperAdminPlansController = require('../controllers/superAdminPlansController');
-const authenticate = require('../middleware/authMiddleware');
 const { checkSuperAdmin } = require('../middleware/superAdmin');
 
 const router = express.Router();
 
-// Apply authentication and super admin middleware to all admin routes
-router.use(authenticate);
+// Super admin middleware only - authentication is already applied globally at server.js level
+// The global 'authenticate' middleware at server.js:185 handles Bearer token and session cookie auth
 router.use(checkSuperAdmin);
 
 /**

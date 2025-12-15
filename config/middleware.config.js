@@ -4,11 +4,13 @@
  */
 
 // Public routes that bypass authentication
-const PUBLIC_ROUTES = ['/auth', '/health', '/admin'];
+// NOTE: /admin routes require authentication + super admin check, so NOT public
+const PUBLIC_ROUTES = ['/auth', '/health'];
 
 // Routes accessible to all authenticated users (no specific permission required)
 // These routes require authentication but bypass role/permission checks
-const AUTHENTICATED_ONLY_ROUTES = ['dropdowns', 'notifications'];
+// Admin routes have their own checkSuperAdmin middleware, so they bypass normal permission checks
+const AUTHENTICATED_ONLY_ROUTES = ['dropdowns', 'notifications', 'admin'];
 
 // Module mapping: URL path -> module name for permission checking
 const MODULE_MAP = {

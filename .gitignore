@@ -3,6 +3,7 @@ node_modules/
 
 # Environment files
 .env
+.env.*
 .env.local
 .env.production
 .env.*.local
@@ -43,3 +44,5 @@ code-clean/
 # Coverage reports
 coverage/
 .nyc_output/
+
+fulqrom-rest-api-doc
