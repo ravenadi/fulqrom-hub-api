@@ -396,4 +396,222 @@ router.get('/coordinates', checkModulePermission('analytics', 'view'), applyScop
   }
 });
 
+// GET /api/analytics/buildings/coordinates - Lightweight endpoint for building coordinates (Building Manager map)
+// Note: This endpoint returns building coordinates for Building Manager role users
+router.get('/buildings/coordinates', checkModulePermission('buildings', 'view'), applyScopeFiltering('buildings'), async (req, res) => {
+  try {
+    // Get tenant context from authenticated user only
+    const tenantId = req.tenant?.tenantId;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required. User must be associated with a tenant.'
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User authentication required.'
+      });
+    }
+
+    // Build filter query based on tenant context
+    // IMPORTANT: Exclude soft-deleted buildings
+    let filterQuery = {
+      is_delete: { $ne: true }
+    };
+    if (tenantId) {
+      filterQuery.tenant_id = tenantId;
+    }
+
+    // Apply resource-level filtering based on user's resource_access
+    const user = await fetchUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if user is Admin (full access - no filtering needed)
+    if (!isUserAdmin(user)) {
+      // Get user's accessible building IDs from resource_access
+      const resourceIds = getAccessibleResourceIds(user, 'building');
+      const accessibleBuildingIds = resourceIds.building || [];
+
+      console.log('🔍 Building Coordinates - User Access Check:', {
+        userId: user._id,
+        isAdmin: isUserAdmin(user),
+        hasModuleAccess: hasModuleLevelAccess(user, 'buildings'),
+        accessibleBuildingIds,
+        buildingIdsCount: accessibleBuildingIds.length
+      });
+
+      // If user has specific building access restrictions, apply them
+      if (accessibleBuildingIds.length > 0) {
+        // Filter by accessible building IDs only
+        filterQuery._id = { $in: accessibleBuildingIds };
+        console.log('✅ Applying building ID filter:', accessibleBuildingIds);
+      } else if (!hasModuleLevelAccess(user, 'buildings')) {
+        // User has no module-level access AND no specific resource access
+        console.log('❌ User has no access to buildings');
+        return res.json({
+          success: true,
+          data: [],
+          count: 0,
+          message: 'No buildings accessible to this user'
+        });
+      } else {
+        console.log('✅ User has module-level access, showing all buildings in tenant');
+      }
+      // If user has module-level access and no specific restrictions, show all buildings in tenant
+    }
+
+    // Fetch buildings with address data for map display (filtered by permissions)
+    const buildings = await Building.find(filterQuery)
+      .select('_id building_name address site_id')
+      .populate({
+        path: 'site_id',
+        select: 'site_name is_delete',
+        match: { is_delete: { $ne: true } }
+      })
+      .lean();
+
+    // Transform to lightweight format for map - returns ALL buildings with address data
+    // Frontend will handle geocoding from address fields
+    // IMPORTANT: Filter out buildings whose site was deleted (will be null after populate match)
+    const coordinates = buildings
+      .filter(building => {
+        // Exclude buildings with deleted site (populated as null)
+        return building.site_id !== null;
+      })
+      .map(building => ({
+        id: building._id.toString(),
+        building_name: building.building_name,
+        address: building.address,
+        site_id: building.site_id ? {
+          _id: building.site_id._id,
+          site_name: building.site_id.site_name
+        } : null
+      }));
+
+    res.json({
+      success: true,
+      data: coordinates,
+      count: coordinates.length,
+      message: `Retrieved ${coordinates.length} building coordinates`
+    });
+
+  } catch (error) {
+    console.error('Error fetching building coordinates:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching building coordinates',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/analytics/storage - Get storage usage with plan limits
+router.get('/storage', checkModulePermission('analytics', 'view'), async (req, res) => {
+  try {
+    const tenantId = req.tenant?.tenantId;
+    const forceRefresh = req.query.refresh === 'true';
+
+    if (!tenantId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tenant context required'
+      });
+    }
+
+    // Get organization with plan info
+    const organization = await Organization.findOne({ tenant_id: tenantId });
+    if (!organization) {
+      return res.status(404).json({
+        success: false,
+        message: 'Organization not found'
+      });
+    }
+
+    // Get tenant info for S3 bucket
+    const tenant = await Tenant.findById(tenantId);
+
+    let storageData = {
+      used_bytes: organization.current_usage?.storage_bytes || 0,
+      source: 'db'
+    };
+
+    // Try to get real S3 bucket size if tenant has a bucket
+    if (tenant?.s3_bucket_name && tenant?.s3_bucket_status === 'created') {
+      try {
+        const tenantS3Service = new TenantS3Service(tenantId);
+        const s3Size = await tenantS3Service.getBucketSize(tenant.s3_bucket_name, forceRefresh);
+
+        if (s3Size.success) {
+          storageData = {
+            used_bytes: s3Size.size_bytes,
+            source: s3Size.source,
+            object_count: s3Size.object_count,
+            last_checked: s3Size.last_checked
+          };
+
+          // Update organization storage cache if from S3
+          if (s3Size.source === 's3') {
+            organization.current_usage.storage_bytes = s3Size.size_bytes;
+            organization.storage_cache = {
+              last_synced: new Date(),
+              source: 's3'
+            };
+            await organization.save();
+          }
+        }
+      } catch (s3Error) {
+        console.error('S3 storage check failed, using DB value:', s3Error.message);
+        // Fall back to DB value
+      }
+    }
+
+    const usedGB = storageData.used_bytes / (1024 * 1024 * 1024);
+    const usedMB = storageData.used_bytes / (1024 * 1024);
+    const limitGB = organization.limits?.storage_gb || null;
+    const usagePercent = limitGB ? Math.round((usedGB / limitGB) * 100) : 0;
+
+    // Format display strings
+    const usedDisplay = usedGB >= 1 ? `${usedGB.toFixed(2)} GB` : `${usedMB.toFixed(2)} MB`;
+    const limitDisplay = limitGB ? (limitGB >= 1 ? `${limitGB} GB` : `${(limitGB * 1024).toFixed(0)} MB`) : 'Unlimited';
+    const combinedDisplay = limitGB ? `${usedDisplay} / ${limitDisplay}` : usedDisplay;
+
+    res.json({
+      success: true,
+      data: {
+        used_bytes: storageData.used_bytes,
+        used_mb: parseFloat(usedMB.toFixed(2)),
+        used_gb: parseFloat(usedGB.toFixed(4)),
+        limit_gb: limitGB,
+        usage_percent: usagePercent,
+        display: combinedDisplay,
+        used_display: usedDisplay,
+        limit_display: limitDisplay,
+        source: storageData.source,
+        object_count: storageData.object_count,
+        last_checked: storageData.last_checked || organization.storage_cache?.last_synced,
+        is_unlimited: !limitGB
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching storage analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching storage analytics',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
